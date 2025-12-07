@@ -1,5 +1,5 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { query, mutation, QueryCtx } from "./_generated/server";
+import { query, mutation, QueryCtx, internalQuery, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { ROLES } from "./schema";
 
@@ -42,15 +42,37 @@ export const ensureRole = mutation({
 
     const user = await ctx.db.get(userId);
     if (user && !user.role) {
-      // First user becomes admin, others staff by default
-      const anyAdmin = await ctx.db
-        .query("users")
-        .filter((q) => q.eq(q.field("role"), ROLES.ADMIN))
-        .first();
-
+      // Check if username is "owner" (case insensitive)
+      const isOwner = user.email?.toLowerCase() === "owner";
+      
       await ctx.db.patch(userId, {
-        role: anyAdmin ? ROLES.STAFF : ROLES.ADMIN,
+        role: isOwner ? ROLES.ADMIN : ROLES.STAFF,
       });
     }
+  },
+});
+
+export const getUserByEmail = internalQuery({
+  args: { email: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", args.email))
+      .unique();
+  },
+});
+
+export const createUserWithRole = internalMutation({
+  args: {
+    email: v.string(),
+    name: v.string(),
+    role: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert("users", {
+      email: args.email,
+      name: args.name,
+      role: args.role as "admin" | "staff",
+    });
   },
 });

@@ -10,6 +10,7 @@
 
 import type * as auth from "../auth.js";
 import type * as auth_emailOtp from "../auth/emailOtp.js";
+import type * as auth_password from "../auth/password.js";
 import type * as campaigns from "../campaigns.js";
 import type * as http from "../http.js";
 import type * as leads from "../leads.js";
@@ -24,6 +25,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   "auth/emailOtp": typeof auth_emailOtp;
+  "auth/password": typeof auth_password;
   campaigns: typeof campaigns;
   http: typeof http;
   leads: typeof leads;
