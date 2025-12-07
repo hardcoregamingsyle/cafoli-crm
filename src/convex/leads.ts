@@ -105,7 +105,33 @@ export const updateLead = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Unauthorized");
     
-    // TODO: Add permission checks (e.g. staff can only update their own leads)
+    // Get the lead to check if it's assigned
+    const lead = await ctx.db.get(args.id);
+    if (!lead) throw new Error("Lead not found");
+
+    // Validate follow-up date constraints
+    if (args.patch.nextFollowUpDate !== undefined) {
+      const followUpDate = args.patch.nextFollowUpDate;
+      const now = Date.now();
+      const maxFutureDate = now + (31 * 24 * 60 * 60 * 1000); // 31 days from now
+
+      if (followUpDate <= now) {
+        throw new Error("Follow-up date must be in the future");
+      }
+
+      if (followUpDate > maxFutureDate) {
+        throw new Error("Follow-up date cannot be more than 31 days in the future");
+      }
+    }
+
+    // Check if lead is assigned and requires follow-up date
+    const isAssigned = args.patch.assignedTo !== undefined ? args.patch.assignedTo : lead.assignedTo;
+    if (isAssigned) {
+      const hasFollowUpDate = args.patch.nextFollowUpDate !== undefined ? args.patch.nextFollowUpDate : lead.nextFollowUpDate;
+      if (!hasFollowUpDate) {
+        throw new Error("Follow-up date is required for assigned leads");
+      }
+    }
 
     await ctx.db.patch(args.id, {
       ...args.patch,

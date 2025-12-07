@@ -6,12 +6,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
-import { MessageSquare, Phone, Mail, MapPin, User, Search, Plus } from "lucide-react";
+import { MessageSquare, Phone, Mail, MapPin, User, Search, Plus, Calendar, Save } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useLocation } from "react-router";
 import { toast } from "sonner";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 export default function Leads() {
   const location = useLocation();
@@ -30,6 +31,8 @@ export default function Leads() {
   const [searchQuery, setSearchQuery] = useState("");
   const [newComment, setNewComment] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedLead, setEditedLead] = useState<Partial<Doc<"leads">>>({});
 
   const comments = useQuery(api.leads.getComments, selectedLead ? { leadId: selectedLead._id } : "skip");
 
@@ -42,12 +45,14 @@ export default function Leads() {
   const handleStatusChange = async (status: string) => {
     if (!selectedLead) return;
     await updateLead({ id: selectedLead._id, patch: { status } });
+    setSelectedLead({ ...selectedLead, status });
     toast.success("Status updated");
   };
 
   const handleTypeChange = async (type: string) => {
     if (!selectedLead) return;
     await updateLead({ id: selectedLead._id, patch: { type } });
+    setSelectedLead({ ...selectedLead, type });
     toast.success("Type updated");
   };
 
@@ -76,6 +81,99 @@ export default function Leads() {
     } catch (error) {
       toast.error("Failed to create lead");
     }
+  };
+
+  const startEditing = () => {
+    if (!selectedLead) return;
+    setEditedLead({
+      name: selectedLead.name,
+      subject: selectedLead.subject,
+      mobile: selectedLead.mobile,
+      altMobile: selectedLead.altMobile,
+      email: selectedLead.email,
+      altEmail: selectedLead.altEmail,
+      agencyName: selectedLead.agencyName,
+      pincode: selectedLead.pincode,
+      state: selectedLead.state,
+      district: selectedLead.district,
+      station: selectedLead.station,
+      message: selectedLead.message,
+      nextFollowUpDate: selectedLead.nextFollowUpDate,
+    });
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setIsEditing(false);
+    setEditedLead({});
+  };
+
+  const saveEdits = async () => {
+    if (!selectedLead) return;
+
+    // Validate follow-up date if lead is assigned
+    if (selectedLead.assignedTo && editedLead.nextFollowUpDate) {
+      const followUpDate = editedLead.nextFollowUpDate;
+      const now = Date.now();
+      const maxFutureDate = now + (31 * 24 * 60 * 60 * 1000); // 31 days from now
+
+      if (followUpDate <= now) {
+        toast.error("Follow-up date must be in the future");
+        return;
+      }
+
+      if (followUpDate > maxFutureDate) {
+        toast.error("Follow-up date cannot be more than 31 days in the future");
+        return;
+      }
+    }
+
+    // Require follow-up date for assigned leads
+    if (selectedLead.assignedTo && !editedLead.nextFollowUpDate) {
+      toast.error("Follow-up date is required for assigned leads");
+      return;
+    }
+
+    try {
+      await updateLead({ 
+        id: selectedLead._id, 
+        patch: {
+          name: editedLead.name,
+          mobile: editedLead.mobile,
+          email: editedLead.email,
+          agencyName: editedLead.agencyName,
+          pincode: editedLead.pincode,
+          state: editedLead.state,
+          district: editedLead.district,
+          station: editedLead.station,
+          message: editedLead.message,
+          nextFollowUpDate: editedLead.nextFollowUpDate,
+        } 
+      });
+      setSelectedLead({ ...selectedLead, ...editedLead });
+      setIsEditing(false);
+      setEditedLead({});
+      toast.success("Lead updated successfully");
+    } catch (error) {
+      toast.error("Failed to update lead");
+    }
+  };
+
+  const getMinDateTime = () => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 1);
+    return now.toISOString().slice(0, 16);
+  };
+
+  const getMaxDateTime = () => {
+    const maxDate = new Date();
+    maxDate.setDate(maxDate.getDate() + 31);
+    return maxDate.toISOString().slice(0, 16);
+  };
+
+  const formatFollowUpDate = (timestamp?: number) => {
+    if (!timestamp) return "Not set";
+    return new Date(timestamp).toLocaleString();
   };
 
   return (
@@ -151,7 +249,11 @@ export default function Leads() {
                   className={`cursor-pointer transition-colors hover:bg-accent/50 ${
                     selectedLead?._id === lead._id ? "border-primary bg-accent/50" : ""
                   }`}
-                  onClick={() => setSelectedLead(lead)}
+                  onClick={() => {
+                    setSelectedLead(lead);
+                    setIsEditing(false);
+                    setEditedLead({});
+                  }}
                 >
                   <CardContent className="p-4">
                     <div className="flex justify-between items-start mb-2">
@@ -161,13 +263,18 @@ export default function Leads() {
                       </span>
                     </div>
                     <p className="text-sm text-muted-foreground truncate mb-2">{lead.subject}</p>
-                    <div className="flex gap-2 text-xs">
+                    <div className="flex gap-2 text-xs flex-wrap">
                       <span className="bg-secondary px-2 py-0.5 rounded-full">{lead.source}</span>
                       <span className={`px-2 py-0.5 rounded-full ${
                         lead.status === 'Hot' ? 'bg-red-100 text-red-700' :
                         lead.status === 'Mature' ? 'bg-green-100 text-green-700' :
                         'bg-gray-100 text-gray-700'
                       }`}>{lead.status}</span>
+                      {lead.nextFollowUpDate && lead.nextFollowUpDate < Date.now() && (
+                        <span className="bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+                          Overdue
+                        </span>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -191,7 +298,24 @@ export default function Leads() {
                   </div>
                   <p className="text-muted-foreground">{selectedLead.subject}</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
+                  {!isEditing && (
+                    <Button variant="outline" size="sm" onClick={startEditing}>
+                      <Save className="mr-2 h-4 w-4" />
+                      Edit
+                    </Button>
+                  )}
+                  {isEditing && (
+                    <>
+                      <Button variant="outline" size="sm" onClick={cancelEditing}>
+                        Cancel
+                      </Button>
+                      <Button size="sm" onClick={saveEdits}>
+                        <Save className="mr-2 h-4 w-4" />
+                        Save
+                      </Button>
+                    </>
+                  )}
                   <Select value={selectedLead.status || "Cold"} onValueChange={handleStatusChange}>
                     <SelectTrigger className="w-[120px]">
                       <SelectValue placeholder="Status" />
@@ -221,24 +345,60 @@ export default function Leads() {
                     <h3 className="font-semibold flex items-center gap-2">
                       <User className="h-4 w-4" /> Contact Details
                     </h3>
-                    <div className="grid gap-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4 text-muted-foreground" />
-                        <span>{selectedLead.mobile}</span>
-                        {selectedLead.altMobile && <span className="text-muted-foreground">({selectedLead.altMobile})</span>}
+                    <div className="grid gap-3 text-sm">
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Name</Label>
+                        {isEditing ? (
+                          <Input 
+                            value={editedLead.name || ""} 
+                            onChange={(e) => setEditedLead({ ...editedLead, name: e.target.value })}
+                            className="mt-1"
+                          />
+                        ) : (
+                          <p className="mt-1">{selectedLead.name}</p>
+                        )}
                       </div>
-                      {selectedLead.email && (
-                        <div className="flex items-center gap-2">
-                          <Mail className="h-4 w-4 text-muted-foreground" />
-                          <a href={`mailto:${selectedLead.email}`} className="hover:underline">{selectedLead.email}</a>
-                        </div>
-                      )}
-                      {selectedLead.agencyName && (
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">Agency:</span>
-                          <span>{selectedLead.agencyName}</span>
-                        </div>
-                      )}
+                      <div>
+                        <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Phone className="h-3 w-3" /> Mobile
+                        </Label>
+                        {isEditing ? (
+                          <Input 
+                            value={editedLead.mobile || ""} 
+                            onChange={(e) => setEditedLead({ ...editedLead, mobile: e.target.value })}
+                            className="mt-1"
+                          />
+                        ) : (
+                          <p className="mt-1">{selectedLead.mobile}</p>
+                        )}
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Mail className="h-3 w-3" /> Email
+                        </Label>
+                        {isEditing ? (
+                          <Input 
+                            value={editedLead.email || ""} 
+                            onChange={(e) => setEditedLead({ ...editedLead, email: e.target.value })}
+                            className="mt-1"
+                            type="email"
+                          />
+                        ) : (
+                          <p className="mt-1">{selectedLead.email || "Not provided"}</p>
+                        )}
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Agency Name</Label>
+                        {isEditing ? (
+                          <Input 
+                            value={editedLead.agencyName || ""} 
+                            onChange={(e) => setEditedLead({ ...editedLead, agencyName: e.target.value })}
+                            className="mt-1"
+                          />
+                        ) : (
+                          <p className="mt-1">{selectedLead.agencyName || "Not provided"}</p>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -246,17 +406,105 @@ export default function Leads() {
                     <h3 className="font-semibold flex items-center gap-2">
                       <MapPin className="h-4 w-4" /> Location
                     </h3>
-                    <div className="grid gap-2 text-sm">
-                      <p>{[selectedLead.station, selectedLead.district, selectedLead.state, selectedLead.pincode].filter(Boolean).join(", ")}</p>
+                    <div className="grid gap-3 text-sm">
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Station</Label>
+                        {isEditing ? (
+                          <Input 
+                            value={editedLead.station || ""} 
+                            onChange={(e) => setEditedLead({ ...editedLead, station: e.target.value })}
+                            className="mt-1"
+                          />
+                        ) : (
+                          <p className="mt-1">{selectedLead.station || "Not provided"}</p>
+                        )}
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">District</Label>
+                        {isEditing ? (
+                          <Input 
+                            value={editedLead.district || ""} 
+                            onChange={(e) => setEditedLead({ ...editedLead, district: e.target.value })}
+                            className="mt-1"
+                          />
+                        ) : (
+                          <p className="mt-1">{selectedLead.district || "Not provided"}</p>
+                        )}
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">State</Label>
+                        {isEditing ? (
+                          <Input 
+                            value={editedLead.state || ""} 
+                            onChange={(e) => setEditedLead({ ...editedLead, state: e.target.value })}
+                            className="mt-1"
+                          />
+                        ) : (
+                          <p className="mt-1">{selectedLead.state || "Not provided"}</p>
+                        )}
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Pincode</Label>
+                        {isEditing ? (
+                          <Input 
+                            value={editedLead.pincode || ""} 
+                            onChange={(e) => setEditedLead({ ...editedLead, pincode: e.target.value })}
+                            className="mt-1"
+                          />
+                        ) : (
+                          <p className="mt-1">{selectedLead.pincode || "Not provided"}</p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 <div className="mb-8">
+                  <h3 className="font-semibold mb-2 flex items-center gap-2">
+                    <Calendar className="h-4 w-4" /> Follow-up Date
+                    {selectedLead.assignedTo && <span className="text-xs text-red-500">(Required)</span>}
+                  </h3>
+                  {isEditing ? (
+                    <div className="space-y-2">
+                      <Input 
+                        type="datetime-local"
+                        value={editedLead.nextFollowUpDate ? new Date(editedLead.nextFollowUpDate).toISOString().slice(0, 16) : ""}
+                        onChange={(e) => setEditedLead({ ...editedLead, nextFollowUpDate: new Date(e.target.value).getTime() })}
+                        min={getMinDateTime()}
+                        max={getMaxDateTime()}
+                        className="max-w-md"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Must be between now and 31 days in the future
+                      </p>
+                    </div>
+                  ) : (
+                    <div className={`bg-muted/30 p-4 rounded-md text-sm ${
+                      selectedLead.nextFollowUpDate && selectedLead.nextFollowUpDate < Date.now() 
+                        ? 'border-2 border-orange-500' 
+                        : ''
+                    }`}>
+                      {formatFollowUpDate(selectedLead.nextFollowUpDate)}
+                      {selectedLead.nextFollowUpDate && selectedLead.nextFollowUpDate < Date.now() && (
+                        <span className="ml-2 text-orange-600 font-semibold">⚠ Overdue</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="mb-8">
                   <h3 className="font-semibold mb-2">Message</h3>
-                  <div className="bg-muted/30 p-4 rounded-md text-sm">
-                    {selectedLead.message || "No message content."}
-                  </div>
+                  {isEditing ? (
+                    <Textarea 
+                      value={editedLead.message || ""} 
+                      onChange={(e) => setEditedLead({ ...editedLead, message: e.target.value })}
+                      className="min-h-[100px]"
+                    />
+                  ) : (
+                    <div className="bg-muted/30 p-4 rounded-md text-sm">
+                      {selectedLead.message || "No message content."}
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-4">
