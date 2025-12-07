@@ -5,16 +5,26 @@ import { Infer, v } from "convex/values";
 // default user roles. can add / remove based on the project as needed
 export const ROLES = {
   ADMIN: "admin",
-  USER: "user",
-  MEMBER: "member",
+  STAFF: "staff",
 } as const;
 
 export const roleValidator = v.union(
   v.literal(ROLES.ADMIN),
-  v.literal(ROLES.USER),
-  v.literal(ROLES.MEMBER),
+  v.literal(ROLES.STAFF),
 );
 export type Role = Infer<typeof roleValidator>;
+
+export const LEAD_STATUS = {
+  COLD: "Cold",
+  HOT: "Hot",
+  MATURE: "Mature",
+} as const;
+
+export const LEAD_TYPE = {
+  TBD: "To be Decided",
+  RELEVANT: "Relevant",
+  IRRELEVANT: "Irrelevant",
+} as const;
 
 const schema = defineSchema(
   {
@@ -32,12 +42,68 @@ const schema = defineSchema(
       role: v.optional(roleValidator), // role of the user. do not remove
     }).index("email", ["email"]), // index for the email. do not remove or modify
 
-    // add other tables here
+    leads: defineTable({
+      name: v.string(),
+      subject: v.string(),
+      source: v.string(), // e.g., "Pharmavends", "IndiaMART", "Manual"
+      assignedTo: v.optional(v.id("users")),
+      
+      // Contact Info
+      mobile: v.string(),
+      altMobile: v.optional(v.string()),
+      email: v.optional(v.string()),
+      altEmail: v.optional(v.string()),
+      
+      // Details
+      agencyName: v.optional(v.string()),
+      pincode: v.optional(v.string()),
+      state: v.optional(v.string()),
+      district: v.optional(v.string()),
+      station: v.optional(v.string()),
+      message: v.optional(v.string()),
+      
+      // Status & Classification
+      status: v.optional(v.string()), // Cold, Hot, Mature
+      type: v.optional(v.string()), // To be Decided, Relevant, Irrelevant
+      
+      nextFollowUpDate: v.optional(v.number()),
+      lastActivity: v.number(),
+    })
+    .index("by_assigned_to", ["assignedTo"])
+    .index("by_status", ["status"])
+    .index("by_source", ["source"]),
 
-    // tableName: defineTable({
-    //   ...
-    //   // table fields
-    // }).index("by_field", ["field"])
+    comments: defineTable({
+      leadId: v.id("leads"),
+      userId: v.id("users"),
+      content: v.string(),
+    }).index("by_lead", ["leadId"]),
+
+    campaigns: defineTable({
+      name: v.string(),
+      type: v.string(), // Email, WhatsApp, etc.
+      status: v.string(), // Draft, Active, Completed
+      metrics: v.optional(v.object({
+        sent: v.number(),
+        opened: v.number(),
+        clicked: v.number(),
+      })),
+    }),
+
+    // For WhatsApp integration later
+    chats: defineTable({
+      leadId: v.id("leads"),
+      platform: v.string(), // "whatsapp"
+      externalId: v.string(), // WhatsApp phone number or chat ID
+      lastMessageAt: v.number(),
+    }).index("by_lead", ["leadId"]),
+
+    messages: defineTable({
+      chatId: v.id("chats"),
+      direction: v.string(), // "inbound", "outbound"
+      content: v.string(),
+      status: v.string(), // "sent", "delivered", "read"
+    }).index("by_chat", ["chatId"]),
   },
   {
     schemaValidation: false,

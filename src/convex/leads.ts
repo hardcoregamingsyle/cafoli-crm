@@ -1,0 +1,161 @@
+import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
+import { ROLES } from "./schema";
+import { getAuthUserId } from "@convex-dev/auth/server";
+
+// Helper to check permissions
+async function checkRole(ctx: any, allowedRoles: string[]) {
+  const userId = await getAuthUserId(ctx);
+  if (!userId) throw new Error("Unauthorized");
+  
+  const user = await ctx.db.get(userId);
+  if (!user || !user.role || !allowedRoles.includes(user.role)) {
+    // Allow if user is admin, they can do anything usually, but let's be strict
+    if (user?.role === ROLES.ADMIN) return user;
+    throw new Error("Permission denied");
+  }
+  return user;
+}
+
+export const getLeads = query({
+  args: {
+    filter: v.optional(v.string()), // "all", "unassigned", "mine"
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    
+    const user = await ctx.db.get(userId);
+    if (!user) return [];
+
+    let leads;
+
+    if (args.filter === "mine") {
+      leads = await ctx.db
+        .query("leads")
+        .withIndex("by_assigned_to", (q) => q.eq("assignedTo", userId))
+        .order("desc")
+        .collect();
+    } else if (args.filter === "unassigned") {
+      // Note: Convex doesn't support querying for null in index directly easily without a specific index or filter
+      // We will fetch all and filter for now, or use a custom index strategy. 
+      // For simplicity in this iteration, we'll filter in memory or use a "null" sentinel if needed, 
+      // but let's try filtering.
+      leads = await ctx.db.query("leads").order("desc").collect();
+      leads = leads.filter(l => !l.assignedTo);
+    } else if (args.filter === "all") {
+      if (user.role !== ROLES.ADMIN) throw new Error("Unauthorized");
+      leads = await ctx.db.query("leads").order("desc").collect();
+    } else {
+      // Default behavior for /leads page (unassigned)
+      leads = await ctx.db.query("leads").order("desc").collect();
+      leads = leads.filter(l => !l.assignedTo);
+    }
+
+    return leads;
+  },
+});
+
+export const createLead = mutation({
+  args: {
+    name: v.string(),
+    subject: v.string(),
+    source: v.string(),
+    mobile: v.string(),
+    email: v.optional(v.string()),
+    agencyName: v.optional(v.string()),
+    message: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
+    const leadId = await ctx.db.insert("leads", {
+      ...args,
+      status: "Cold", // Default
+      type: "To be Decided", // Default
+      lastActivity: Date.now(),
+    });
+    return leadId;
+  },
+});
+
+export const updateLead = mutation({
+  args: {
+    id: v.id("leads"),
+    patch: v.object({
+      status: v.optional(v.string()),
+      type: v.optional(v.string()),
+      assignedTo: v.optional(v.id("users")),
+      nextFollowUpDate: v.optional(v.number()),
+      message: v.optional(v.string()),
+      comments: v.optional(v.string()), // We'll handle comments separately but maybe update message
+      // Add other fields as needed
+      name: v.optional(v.string()),
+      mobile: v.optional(v.string()),
+      email: v.optional(v.string()),
+      agencyName: v.optional(v.string()),
+      pincode: v.optional(v.string()),
+      state: v.optional(v.string()),
+      district: v.optional(v.string()),
+      station: v.optional(v.string()),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+    
+    // TODO: Add permission checks (e.g. staff can only update their own leads)
+
+    await ctx.db.patch(args.id, {
+      ...args.patch,
+      lastActivity: Date.now(),
+    });
+  },
+});
+
+export const addComment = mutation({
+  args: {
+    leadId: v.id("leads"),
+    content: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
+    await ctx.db.insert("comments", {
+      leadId: args.leadId,
+      userId,
+      content: args.content,
+    });
+
+    await ctx.db.patch(args.leadId, {
+      lastActivity: Date.now(),
+    });
+  },
+});
+
+export const getComments = query({
+  args: { leadId: v.id("leads") },
+  handler: async (ctx, args) => {
+    const comments = await ctx.db
+      .query("comments")
+      .withIndex("by_lead", (q) => q.eq("leadId", args.leadId))
+      .order("desc")
+      .collect();
+
+    // Enrich with user info
+    const commentsWithUser = await Promise.all(
+      comments.map(async (c) => {
+        const user = await ctx.db.get(c.userId);
+        return {
+          ...c,
+          userName: user?.name || "Unknown",
+          userImage: user?.image,
+        };
+      })
+    );
+
+    return commentsWithUser;
+  },
+});

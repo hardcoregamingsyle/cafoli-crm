@@ -1,0 +1,6 @@
+    leads: defineTable({
+      // ...
+      assignedTo: v.optional(v.id("users")),
+      // ...
+    })
+    .index("by_assigned_to", ["assignedTo"])
