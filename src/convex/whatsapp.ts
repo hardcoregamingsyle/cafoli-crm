@@ -1,6 +1,6 @@
 "use node";
 
-import { action, internalMutation } from "./_generated/server";
+import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 
@@ -58,6 +58,51 @@ export const sendWhatsAppMessage = action({
     } catch (error) {
       console.error("WhatsApp send error:", error);
       throw new Error(`Failed to send WhatsApp message: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  },
+});
+
+// Handle incoming WhatsApp messages
+export const handleIncomingMessage = internalAction({
+  args: {
+    from: v.string(),
+    messageId: v.string(),
+    timestamp: v.string(),
+    text: v.string(),
+    type: v.string(),
+  },
+  handler: async (ctx, args) => {
+    try {
+      // Find lead by phone number
+      const allLeads = await ctx.runQuery(internal.whatsappMutations.getLeadsForMatching, {});
+      
+      // Clean phone number (remove + and spaces)
+      const cleanPhone = args.from.replace(/[\s+]/g, "");
+      
+      const matchingLeads = allLeads.filter(lead => {
+        const leadPhone = lead.mobile.replace(/[\s+]/g, "");
+        return leadPhone.includes(cleanPhone) || cleanPhone.includes(leadPhone);
+      });
+
+      if (matchingLeads && matchingLeads.length > 0) {
+        const leadId = matchingLeads[0]._id;
+
+        // Store incoming message
+        await ctx.runMutation(internal.whatsappMutations.storeMessage, {
+          leadId,
+          phoneNumber: args.from,
+          content: args.text,
+          direction: "inbound",
+          status: "received",
+          externalId: args.messageId,
+        });
+
+        console.log(`Stored incoming message from ${args.from} for lead ${leadId}`);
+      } else {
+        console.log(`No lead found for phone number: ${args.from}`);
+      }
+    } catch (error) {
+      console.error("Error handling incoming message:", error);
     }
   },
 });

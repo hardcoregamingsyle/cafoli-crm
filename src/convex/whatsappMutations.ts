@@ -1,4 +1,4 @@
-import { internalMutation } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 
 export const storeMessage = internalMutation({
@@ -40,5 +40,13 @@ export const storeMessage = internalMutation({
       content: args.content,
       status: args.status,
     });
+  },
+});
+
+// Helper query for lead matching
+export const getLeadsForMatching = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query("leads").collect();
   },
 });
