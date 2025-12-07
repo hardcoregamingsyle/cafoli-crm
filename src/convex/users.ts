@@ -90,3 +90,68 @@ export const getAllUsers = query({
     return await ctx.db.query("users").collect();
   },
 });
+
+export const createUser = mutation({
+  args: {
+    email: v.string(),
+    name: v.string(),
+    password: v.string(),
+    role: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+    
+    const currentUser = await ctx.db.get(userId);
+    if (currentUser?.role !== ROLES.ADMIN) {
+      throw new Error("Only admins can create users");
+    }
+
+    // Check if user already exists
+    const existingUser = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", args.email.toLowerCase()))
+      .unique();
+
+    if (existingUser) {
+      throw new Error("User with this email already exists");
+    }
+
+    // Create user in database
+    const newUserId = await ctx.db.insert("users", {
+      email: args.email.toLowerCase(),
+      name: args.name,
+      role: args.role as "admin" | "staff",
+    });
+
+    return newUserId;
+  },
+});
+
+export const deleteUser = mutation({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const currentUserId = await getAuthUserId(ctx);
+    if (!currentUserId) throw new Error("Unauthorized");
+    
+    const currentUser = await ctx.db.get(currentUserId);
+    if (currentUser?.role !== ROLES.ADMIN) {
+      throw new Error("Only admins can delete users");
+    }
+
+    // Prevent deleting yourself
+    if (currentUserId === args.userId) {
+      throw new Error("Cannot delete your own account");
+    }
+
+    // Check if user is the owner
+    const userToDelete = await ctx.db.get(args.userId);
+    if (userToDelete?.email?.toLowerCase() === "owner") {
+      throw new Error("Cannot delete the owner account");
+    }
+
+    await ctx.db.delete(args.userId);
+  },
+});
