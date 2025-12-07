@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
 import { useMutation, useQuery, useAction } from "convex/react";
-import { MessageSquare, Phone, Mail, MapPin, User, Search, Plus, Calendar, Save, UserPlus, Send } from "lucide-react";
+import { MessageSquare, Phone, Mail, MapPin, User, Search, Plus, Calendar, Save, UserPlus } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useLocation } from "react-router";
 import { toast } from "sonner";
@@ -30,7 +30,6 @@ export default function Leads() {
   const addComment = useMutation(api.leads.addComment);
   const createLead = useMutation(api.leads.createLead);
   const assignLead = useMutation(api.leads.assignLead);
-  const sendWhatsAppMessage = useAction(api.whatsapp.sendWhatsAppMessage);
 
   const [selectedLead, setSelectedLead] = useState<Doc<"leads"> | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -38,8 +37,6 @@ export default function Leads() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedLead, setEditedLead] = useState<Partial<Doc<"leads">>>({});
-  const [whatsappMessage, setWhatsappMessage] = useState("");
-  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
 
   const comments = useQuery(api.leads.getComments, selectedLead ? { leadId: selectedLead._id } : "skip");
 
@@ -65,28 +62,6 @@ export default function Leads() {
       toast.success("Lead assigned successfully");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to assign lead");
-    }
-  };
-
-  const handleSendWhatsApp = async () => {
-    if (!selectedLead || !whatsappMessage.trim()) {
-      toast.error("Please enter a message");
-      return;
-    }
-    
-    setIsSendingWhatsApp(true);
-    try {
-      await sendWhatsAppMessage({
-        phoneNumber: selectedLead.mobile,
-        message: whatsappMessage,
-        leadId: selectedLead._id,
-      });
-      setWhatsappMessage("");
-      toast.success("WhatsApp message sent");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to send WhatsApp message");
-    } finally {
-      setIsSendingWhatsApp(false);
     }
   };
 
@@ -594,28 +569,6 @@ export default function Leads() {
                       {selectedLead.message || "No message content."}
                     </div>
                   )}
-                </div>
-
-                <div className="mb-8">
-                  <h3 className="font-semibold mb-2 flex items-center gap-2">
-                    <MessageSquare className="h-4 w-4 text-green-600" /> Send WhatsApp Message
-                  </h3>
-                  <div className="space-y-2">
-                    <Textarea
-                      placeholder="Type your WhatsApp message..."
-                      value={whatsappMessage}
-                      onChange={(e) => setWhatsappMessage(e.target.value)}
-                      className="min-h-[100px]"
-                    />
-                    <Button 
-                      onClick={handleSendWhatsApp} 
-                      disabled={isSendingWhatsApp || !whatsappMessage.trim()}
-                      className="w-full"
-                    >
-                      <Send className="mr-2 h-4 w-4" />
-                      {isSendingWhatsApp ? "Sending..." : "Send WhatsApp Message"}
-                    </Button>
-                  </div>
                 </div>
 
                 <div className="space-y-4">
