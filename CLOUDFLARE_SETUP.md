@@ -8,7 +8,9 @@ Your Convex URL is: `https://polished-marmot-96.convex.cloud`
 
 ### 1. VITE_CONVEX_URL (Frontend Environment Variable - Cloudflare Pages)
 
-**CRITICAL FIX**: Cloudflare Pages requires environment variables to be set as **Build environment variables**, not just runtime variables.
+**CRITICAL FIX**: Cloudflare Pages requires environment variables to be set as **Build environment variables**, not just runtime variables. The variable must have an actual value, not be empty or undefined.
+
+**IMPORTANT**: Make sure the value field is not empty when you set the environment variable. The value should be exactly: `https://polished-marmot-96.convex.cloud` (without quotes, no trailing spaces).
 
 1. Go to your Cloudflare Pages dashboard
 2. Select your project (cafoli-crm or similar)
@@ -31,11 +33,16 @@ Your Convex URL is: `https://polished-marmot-96.convex.cloud`
 
 **Troubleshooting if still not working:**
 - Verify the variable name is exactly `VITE_CONVEX_URL` (case-sensitive)
+- **CRITICAL**: Verify the value field is not empty - it should contain: `https://polished-marmot-96.convex.cloud`
 - Check the deployment logs to confirm the variable is being set during build
 - Look for a line like: "Environment: VITE_CONVEX_URL=https://polished-marmot-96.convex.cloud"
 - Ensure you're checking the correct environment (Production vs Preview)
 - Try clearing Cloudflare's build cache and redeploying
-- Check browser console for the debug logs showing available environment variables
+- Check browser console for the debug logs showing:
+  - `convexUrl` value
+  - `convexUrlType` (should be "string")
+  - `convexUrlValue` (should show the actual URL)
+- **If the value shows as "undefined" (string)**: The environment variable is being set to the literal string "undefined" instead of the actual URL. Delete and recreate the variable in Cloudflare Pages.
 
 ### 2. JWT_PRIVATE_KEY (Backend Environment Variable - Convex Dashboard)
 
