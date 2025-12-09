@@ -28,7 +28,9 @@ function RouteLoading() {
   );
 }
 
-const convexUrl = import.meta.env.VITE_CONVEX_URL;
+// WORKAROUND: Fallback to hardcoded URL if env var is missing or empty
+// This fixes the issue where Cloudflare Pages build environment variables are sometimes empty
+const convexUrl = import.meta.env.VITE_CONVEX_URL || "https://polished-marmot-96.convex.cloud";
 
 // Debug logging to help troubleshoot
 console.log("Environment check:", {
