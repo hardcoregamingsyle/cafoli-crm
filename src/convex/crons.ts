@@ -3,12 +3,12 @@ import { internal } from "./_generated/api";
 
 const crons = cronJobs();
 
-// Fetch Pharmavends leads every 5 minutes
-crons.interval(
-  "fetch_pharmavends_leads",
-  { minutes: 5 },
-  internal.pharmavends.fetchPharmavendsLeads,
-  {}
-);
+// Temporarily disabled until pharmavends module is properly set up
+// crons.interval(
+//   "fetch_pharmavends_leads",
+//   { minutes: 5 },
+//   internal.pharmavends.fetchPharmavendsLeads,
+//   {}
+// );
 
 export default crons;

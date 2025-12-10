@@ -25,18 +25,24 @@ http.route({
         receivedToken: token, 
         expectedToken: verifyToken,
         challenge,
-        tokensMatch: token === verifyToken
+        tokensMatch: token === verifyToken,
+        url: req.url
       });
 
+      // Meta requires exact match and challenge to be returned as-is
       if (mode === "subscribe" && token === verifyToken) {
-        console.log("✅ Webhook verified successfully");
-        return new Response(challenge || "", { 
+        if (!challenge) {
+          console.error("❌ No challenge provided");
+          return new Response("Bad Request", { status: 400 });
+        }
+        console.log("✅ Webhook verified successfully, returning challenge:", challenge);
+        return new Response(challenge, { 
           status: 200,
           headers: { "Content-Type": "text/plain" }
         });
       } else {
         console.error("❌ Webhook verification failed:", { 
-          mode, 
+          modeCorrect: mode === "subscribe",
           tokenMatch: token === verifyToken,
           hasChallenge: !!challenge 
         });
