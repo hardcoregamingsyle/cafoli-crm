@@ -37,6 +37,9 @@ export default function Leads() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedLead, setEditedLead] = useState<Partial<Doc<"leads">>>({});
+  const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+  const [leadToAssign, setLeadToAssign] = useState<string | null>(null);
+  const [followUpDate, setFollowUpDate] = useState<string>("");
 
   const comments = useQuery(api.leads.getComments, selectedLead ? { leadId: selectedLead._id } : "skip");
 
@@ -48,9 +51,32 @@ export default function Leads() {
 
   const handleAssignToSelf = async (leadId: string) => {
     if (!user) return;
+    setLeadToAssign(leadId);
+    setFollowUpDate("");
+    setIsAssignDialogOpen(true);
+  };
+
+  const confirmAssignToSelf = async () => {
+    if (!user || !leadToAssign) return;
+    
+    if (!followUpDate) {
+      toast.error("Setting follow-up date is compulsory");
+      return;
+    }
+    
+    const followUpTimestamp = new Date(followUpDate).getTime();
+    
     try {
-      await assignLead({ leadId: leadId as any, userId: user._id, adminId: user._id });
-      toast.success("Lead assigned to you");
+      await assignLead({ 
+        leadId: leadToAssign as any, 
+        userId: user._id, 
+        adminId: user._id,
+        nextFollowUpDate: followUpTimestamp
+      });
+      toast.success("Lead assigned to you with follow-up date set");
+      setIsAssignDialogOpen(false);
+      setLeadToAssign(null);
+      setFollowUpDate("");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to assign lead");
     }
@@ -255,6 +281,47 @@ export default function Leads() {
                   </div>
                   <Button type="submit" className="w-full">Create Lead</Button>
                 </form>
+              </DialogContent>
+            </Dialog>
+
+            {/* Follow-up Date Assignment Dialog */}
+            <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Set Follow-up Date</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="followUpDate">Follow-up Date & Time</Label>
+                    <Input
+                      id="followUpDate"
+                      type="datetime-local"
+                      value={followUpDate}
+                      onChange={(e) => setFollowUpDate(e.target.value)}
+                      min={getMinDateTime()}
+                      max={getMaxDateTime()}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Must be between now and 31 days in the future
+                    </p>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setIsAssignDialogOpen(false);
+                        setLeadToAssign(null);
+                        setFollowUpDate("");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button onClick={confirmAssignToSelf}>
+                      Assign Lead
+                    </Button>
+                  </div>
+                </div>
               </DialogContent>
             </Dialog>
           </div>

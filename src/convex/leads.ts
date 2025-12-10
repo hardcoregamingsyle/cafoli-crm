@@ -154,6 +154,7 @@ export const assignLead = mutation({
     leadId: v.id("leads"),
     userId: v.id("users"),
     adminId: v.id("users"),
+    nextFollowUpDate: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const currentUserId = args.adminId;
@@ -169,8 +170,27 @@ export const assignLead = mutation({
       throw new Error("Staff can only assign leads to themselves");
     }
     
+    // Require follow-up date when assigning
+    if (!args.nextFollowUpDate) {
+      throw new Error("Follow-up date is required when assigning a lead");
+    }
+    
+    // Validate follow-up date constraints
+    const followUpDate = args.nextFollowUpDate;
+    const now = Date.now();
+    const maxFutureDate = now + (31 * 24 * 60 * 60 * 1000); // 31 days from now
+
+    if (followUpDate <= now) {
+      throw new Error("Follow-up date must be in the future");
+    }
+
+    if (followUpDate > maxFutureDate) {
+      throw new Error("Follow-up date cannot be more than 31 days in the future");
+    }
+    
     await ctx.db.patch(args.leadId, {
       assignedTo: args.userId,
+      nextFollowUpDate: args.nextFollowUpDate,
       lastActivity: Date.now(),
     });
   },
