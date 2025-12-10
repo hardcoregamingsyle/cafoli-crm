@@ -14,6 +14,7 @@ import type * as auth_password from "../auth/password.js";
 import type * as campaigns from "../campaigns.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
+import type * as indiamartMutations from "../indiamartMutations.js";
 import type * as leads from "../leads.js";
 import type * as lib_passwordUtils from "../lib/passwordUtils.js";
 import type * as pharmavends from "../pharmavends.js";
@@ -35,6 +36,7 @@ declare const fullApi: ApiFromModules<{
   campaigns: typeof campaigns;
   crons: typeof crons;
   http: typeof http;
+  indiamartMutations: typeof indiamartMutations;
   leads: typeof leads;
   "lib/passwordUtils": typeof lib_passwordUtils;
   pharmavends: typeof pharmavends;

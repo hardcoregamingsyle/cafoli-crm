@@ -81,11 +81,23 @@ const schema = defineSchema(
         profession: v.string(),
         experience: v.string(),
       })),
+      
+      // IndiaMART specific fields
+      indiamartUniqueId: v.optional(v.string()),
+      indiamartMetadata: v.optional(v.object({
+        queryTime: v.string(),
+        queryType: v.string(),
+        mcatName: v.string(),
+        productName: v.string(),
+        countryIso: v.string(),
+        callDuration: v.optional(v.string()),
+      })),
     })
     .index("by_assigned_to", ["assignedTo"])
     .index("by_status", ["status"])
     .index("by_source", ["source"])
-    .index("by_pharmavends_uid", ["pharmavendsUid"]),
+    .index("by_pharmavends_uid", ["pharmavendsUid"])
+    .index("by_indiamart_unique_id", ["indiamartUniqueId"]),
 
     comments: defineTable({
       leadId: v.id("leads"),

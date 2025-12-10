@@ -68,4 +68,82 @@ http.route({
   }),
 });
 
+// IndiaMART webhook for incoming leads (POST)
+http.route({
+  path: "/webhooks/indiamart",
+  method: "POST",
+  handler: httpAction(async (ctx, req) => {
+    try {
+      const body = await req.json();
+      
+      console.log("Received IndiaMART webhook:", JSON.stringify(body, null, 2));
+
+      // Validate response structure
+      if (body.CODE !== 200 || body.STATUS !== "SUCCESS" || !body.RESPONSE) {
+        console.error("Invalid IndiaMART webhook payload");
+        return new Response(JSON.stringify({ error: "Invalid payload" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const response = body.RESPONSE;
+      const uniqueQueryId = response.UNIQUE_QUERY_ID;
+
+      // Check if lead already exists
+      const exists = await ctx.runQuery(internal.indiamartMutations.checkIndiamartLeadExists, {
+        uniqueQueryId,
+      });
+
+      if (exists) {
+        console.log(`IndiaMART lead ${uniqueQueryId} already exists, skipping`);
+        return new Response(JSON.stringify({ success: true, message: "Lead already exists" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // Create the lead
+      await ctx.runMutation(internal.indiamartMutations.createIndiamartLead, {
+        uniqueQueryId,
+        name: response.SENDER_NAME,
+        subject: response.SUBJECT,
+        mobile: response.SENDER_MOBILE || "",
+        altMobile: response.SENDER_MOBILE_ALT,
+        email: response.SENDER_EMAIL,
+        altEmail: response.SENDER_EMAIL_ALT,
+        phone: response.SENDER_PHONE,
+        altPhone: response.SENDER_PHONE_ALT,
+        agencyName: response.SENDER_COMPANY,
+        address: response.SENDER_ADDRESS,
+        city: response.SENDER_CITY,
+        state: response.SENDER_STATE,
+        pincode: response.SENDER_PINCODE,
+        message: response.QUERY_MESSAGE,
+        metadata: {
+          queryTime: response.QUERY_TIME,
+          queryType: response.QUERY_TYPE,
+          mcatName: response.QUERY_MCAT_NAME,
+          productName: response.QUERY_PRODUCT_NAME,
+          countryIso: response.SENDER_COUNTRY_ISO,
+          callDuration: response.CALL_DURATION || undefined,
+        },
+      });
+
+      console.log(`IndiaMART lead ${uniqueQueryId} created successfully`);
+
+      return new Response(JSON.stringify({ success: true, message: "Lead created" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("IndiaMART webhook processing error:", error);
+      return new Response(JSON.stringify({ error: "Internal server error" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }),
+});
+
 export default http;
