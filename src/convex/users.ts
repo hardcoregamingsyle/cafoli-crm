@@ -2,6 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { query, mutation, QueryCtx, internalQuery, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { ROLES } from "./schema";
+import { hashPassword, verifyPassword } from "./lib/passwordUtils";
 
 /**
  * Get the current signed in user. Returns null if the user is not signed in.
@@ -55,7 +56,6 @@ export const login = mutation({
       }
 
       // Create the owner account if it doesn't exist
-      const { hashPassword } = await import("./lib/passwordUtils");
       const passwordHash = hashPassword(args.password);
       
       const newUserId = await ctx.db.insert("users", {
@@ -76,7 +76,6 @@ export const login = mutation({
       return null;
     }
 
-    const { verifyPassword } = await import("./lib/passwordUtils");
     if (verifyPassword(args.password, user.passwordHash)) {
       return user._id;
     }
@@ -198,7 +197,6 @@ export const createUser = mutation({
     }
 
     // Hash the password before storing
-    const { hashPassword } = await import("./lib/passwordUtils");
     const passwordHash = hashPassword(args.password);
 
     // Create user in database
