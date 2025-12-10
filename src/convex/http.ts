@@ -20,12 +20,12 @@ http.route({
 
       const verifyToken = process.env.WEBHOOK_VERIFICATION_TOKEN || "cafoli_webhook_verify_2025";
 
-      console.log("WhatsApp webhook verification:", { 
+      console.log("WhatsApp webhook verification attempt:", { 
         mode, 
         receivedToken: token, 
         expectedToken: verifyToken,
         challenge,
-        match: token === verifyToken
+        tokensMatch: token === verifyToken
       });
 
       if (mode === "subscribe" && token === verifyToken) {
@@ -40,11 +40,11 @@ http.route({
           tokenMatch: token === verifyToken,
           hasChallenge: !!challenge 
         });
-        return new Response("Verification failed", { status: 403 });
+        return new Response("Forbidden", { status: 403 });
       }
     } catch (error) {
       console.error("Webhook verification error:", error);
-      return new Response("Internal error", { status: 500 });
+      return new Response("Internal Server Error", { status: 500 });
     }
   }),
 });
