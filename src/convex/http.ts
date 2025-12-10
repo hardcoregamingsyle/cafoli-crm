@@ -19,11 +19,16 @@ http.route({
 
     const verifyToken = process.env.WEBHOOK_VERIFICATION_TOKEN || "cafoli_webhook_verify_2025";
 
+    console.log("Webhook verification attempt:", { mode, token, verifyToken, challenge });
+
     if (mode === "subscribe" && token === verifyToken) {
       console.log("Webhook verified successfully");
-      return new Response(challenge, { status: 200 });
+      return new Response(challenge, { 
+        status: 200,
+        headers: { "Content-Type": "text/plain" }
+      });
     } else {
-      console.error("Webhook verification failed");
+      console.error("Webhook verification failed", { mode, token, verifyToken });
       return new Response("Forbidden", { status: 403 });
     }
   }),
