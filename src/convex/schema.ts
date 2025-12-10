@@ -69,10 +69,23 @@ const schema = defineSchema(
       
       nextFollowUpDate: v.optional(v.number()),
       lastActivity: v.number(),
+      
+      // Pharmavends specific fields
+      pharmavendsUid: v.optional(v.string()),
+      pharmavendsMetadata: v.optional(v.object({
+        gstNo: v.string(),
+        drugLicence: v.string(),
+        receivedOn: v.string(),
+        requirementType: v.string(),
+        timeToCall: v.string(),
+        profession: v.string(),
+        experience: v.string(),
+      })),
     })
     .index("by_assigned_to", ["assignedTo"])
     .index("by_status", ["status"])
-    .index("by_source", ["source"]),
+    .index("by_source", ["source"])
+    .index("by_pharmavends_uid", ["pharmavendsUid"]),
 
     comments: defineTable({
       leadId: v.id("leads"),
