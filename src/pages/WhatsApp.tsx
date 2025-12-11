@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MessageSquare, Send, Search, Phone, Video, MoreVertical } from "lucide-react";
+import { MessageSquare, Send, Search, Phone, Video, MoreVertical, Check, CheckCheck, Paperclip, Smile, Image as ImageIcon } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -90,6 +90,53 @@ export default function WhatsApp() {
       minute: "2-digit",
       hour12: true 
     });
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "sent":
+        return <Check className="h-3 w-3 inline ml-1 text-gray-500" />;
+      case "delivered":
+        return <CheckCheck className="h-3 w-3 inline ml-1 text-gray-500" />;
+      case "read":
+        return <CheckCheck className="h-3 w-3 inline ml-1 text-blue-500" />;
+      default:
+        return null;
+    }
+  };
+
+  const renderMessageContent = (message: any) => {
+    if (message.messageType === "image" && message.mediaUrl) {
+      return (
+        <div className="space-y-2">
+          <img 
+            src={message.mediaUrl} 
+            alt={message.mediaName || "Image"} 
+            className="rounded-lg max-w-full h-auto max-h-64 object-cover"
+          />
+          {message.content && <p className="text-sm text-gray-900">{message.content}</p>}
+        </div>
+      );
+    }
+    
+    if (message.messageType === "file" && message.mediaUrl) {
+      return (
+        <div className="space-y-2">
+          <a 
+            href={message.mediaUrl} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 p-2 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+          >
+            <Paperclip className="h-4 w-4" />
+            <span className="text-sm font-medium">{message.mediaName || "File"}</span>
+          </a>
+          {message.content && <p className="text-sm text-gray-900">{message.content}</p>}
+        </div>
+      );
+    }
+    
+    return <p className="text-sm text-gray-900 whitespace-pre-wrap break-words">{message.content}</p>;
   };
 
   return (
@@ -212,9 +259,10 @@ export default function WhatsApp() {
                                 : "bg-white"
                             }`}
                           >
-                            <p className="text-sm text-gray-900 whitespace-pre-wrap break-words">{message.content}</p>
-                            <div className="text-[11px] mt-1 text-gray-500 text-right">
+                            {renderMessageContent(message)}
+                            <div className="text-[11px] mt-1 text-gray-500 text-right flex items-center justify-end gap-1">
                               {formatTime(message._creationTime)}
+                              {message.direction === "outbound" && getStatusIcon(message.status)}
                             </div>
                           </div>
                         </div>
@@ -227,14 +275,32 @@ export default function WhatsApp() {
                 {/* Message Input */}
                 <div className="border-t p-4">
                   <div className="flex items-end gap-2">
-                    <Input
-                      placeholder="Type a message..."
-                      value={whatsappMessage}
-                      onChange={(e) => setWhatsappMessage(e.target.value)}
-                      onKeyPress={handleKeyPress}
-                      className="flex-1"
-                      disabled={isSending}
-                    />
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      className="h-10 w-10 text-muted-foreground hover:text-foreground"
+                      title="Attach file"
+                    >
+                      <Paperclip className="h-5 w-5" />
+                    </Button>
+                    <div className="flex-1 relative">
+                      <Input
+                        placeholder="Type a message..."
+                        value={whatsappMessage}
+                        onChange={(e) => setWhatsappMessage(e.target.value)}
+                        onKeyPress={handleKeyPress}
+                        className="pr-10"
+                        disabled={isSending}
+                      />
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 text-muted-foreground hover:text-foreground"
+                        title="Add emoji"
+                      >
+                        <Smile className="h-5 w-5" />
+                      </Button>
+                    </div>
                     <Button 
                       onClick={handleSendWhatsApp} 
                       disabled={isSending || !whatsappMessage.trim()}

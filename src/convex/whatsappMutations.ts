@@ -9,6 +9,10 @@ export const storeMessage = internalMutation({
     direction: v.string(),
     status: v.string(),
     externalId: v.string(),
+    messageType: v.optional(v.string()),
+    mediaUrl: v.optional(v.string()),
+    mediaName: v.optional(v.string()),
+    mediaMimeType: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // Find or create chat
@@ -39,6 +43,10 @@ export const storeMessage = internalMutation({
       direction: args.direction,
       content: args.content,
       status: args.status,
+      messageType: args.messageType,
+      mediaUrl: args.mediaUrl,
+      mediaName: args.mediaName,
+      mediaMimeType: args.mediaMimeType,
     });
   },
 });

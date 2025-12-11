@@ -129,6 +129,10 @@ const schema = defineSchema(
       direction: v.string(), // "inbound", "outbound"
       content: v.string(),
       status: v.string(), // "sent", "delivered", "read"
+      messageType: v.optional(v.string()), // "text", "image", "file"
+      mediaUrl: v.optional(v.string()), // URL for images/files
+      mediaName: v.optional(v.string()), // Original filename
+      mediaMimeType: v.optional(v.string()), // MIME type
     }).index("by_chat", ["chatId"]),
   },
   {
