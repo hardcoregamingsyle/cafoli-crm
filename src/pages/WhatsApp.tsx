@@ -183,8 +183,16 @@ export default function WhatsApp() {
                 </CardHeader>
 
                 {/* Messages Area */}
-                <ScrollArea className="flex-1 p-4 bg-muted/20">
-                  <div className="space-y-4">
+                <ScrollArea className="flex-1 p-4 bg-[#efeae2] relative overflow-hidden">
+                  {/* WhatsApp background pattern */}
+                  <div 
+                    className="absolute inset-0 opacity-[0.06]" 
+                    style={{
+                      backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+                      backgroundSize: '60px 60px'
+                    }}
+                  />
+                  <div className="space-y-4 relative z-10">
                     {messages.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-full text-center py-12">
                         <MessageSquare className="h-16 w-16 text-muted-foreground/30 mb-4" />
@@ -198,20 +206,14 @@ export default function WhatsApp() {
                           className={`flex ${message.direction === "outbound" ? "justify-end" : "justify-start"}`}
                         >
                           <div
-                            className={`max-w-[70%] rounded-lg px-4 py-2 ${
+                            className={`max-w-[70%] rounded-lg px-3 py-2 shadow-sm ${
                               message.direction === "outbound"
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-card border"
+                                ? "bg-[#d9fdd3]"
+                                : "bg-white"
                             }`}
                           >
-                            <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
-                            <div
-                              className={`text-xs mt-1 ${
-                                message.direction === "outbound"
-                                  ? "text-primary-foreground/70"
-                                  : "text-muted-foreground"
-                              }`}
-                            >
+                            <p className="text-sm text-gray-900 whitespace-pre-wrap break-words">{message.content}</p>
+                            <div className="text-[11px] mt-1 text-gray-500 text-right">
                               {formatTime(message._creationTime)}
                             </div>
                           </div>
