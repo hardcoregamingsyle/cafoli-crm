@@ -207,8 +207,8 @@ export default function WhatsApp() {
 
   return (
     <AppLayout>
-      <div className="h-[calc(100vh-8rem)] flex flex-col">
-        <div className="mb-4">
+      <div className="flex flex-col h-[calc(100vh-4rem)]">
+        <div className="flex-shrink-0 p-6 pb-4">
           <h1 className="text-3xl font-bold tracking-tight">WhatsApp Messaging</h1>
           <p className="text-muted-foreground">
             {user?.role === ROLES.ADMIN 
@@ -217,10 +217,10 @@ export default function WhatsApp() {
           </p>
         </div>
 
-        <div className="flex-1 grid md:grid-cols-[350px_1fr] gap-4 overflow-hidden">
+        <div className="flex-1 grid md:grid-cols-[350px_1fr] gap-4 px-6 pb-6 min-h-0">
           {/* Contacts List */}
-          <Card className="flex flex-col border-r">
-            <CardHeader className="pb-3">
+          <Card className="flex flex-col border-r overflow-hidden">
+            <CardHeader className="pb-3 flex-shrink-0">
               <div className="relative">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -264,11 +264,11 @@ export default function WhatsApp() {
           </Card>
 
           {/* Chat Area */}
-          <Card className="flex flex-col">
+          <Card className="flex flex-col overflow-hidden">
             {selectedLead ? (
               <>
                 {/* Chat Header */}
-                <CardHeader className="border-b py-3">
+                <CardHeader className="border-b py-3 flex-shrink-0">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-10 w-10">
@@ -296,7 +296,7 @@ export default function WhatsApp() {
                 </CardHeader>
 
                 {/* Messages Area */}
-                <ScrollArea className="flex-1 p-4 bg-[#efeae2] relative overflow-hidden">
+                <ScrollArea className="flex-1 p-4 bg-[#efeae2] relative">
                   {/* WhatsApp background pattern */}
                   <div 
                     className="absolute inset-0 opacity-[0.06]" 
@@ -339,7 +339,7 @@ export default function WhatsApp() {
                 </ScrollArea>
 
                 {/* Message Input */}
-                <div className="border-t p-4">
+                <div className="border-t p-4 flex-shrink-0">
                   {selectedFile && (
                     <div className="mb-2 flex items-center gap-2 p-2 bg-muted rounded-lg">
                       <Paperclip className="h-4 w-4" />
