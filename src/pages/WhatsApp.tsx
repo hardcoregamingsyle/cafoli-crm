@@ -217,9 +217,9 @@ export default function WhatsApp() {
           </p>
         </div>
 
-        <div className="flex-1 grid md:grid-cols-[350px_1fr] gap-4 px-6 pb-6 min-h-0">
+        <div className="flex-1 grid md:grid-cols-[350px_1fr] gap-4 px-6 pb-6 min-h-0 overflow-hidden">
           {/* Contacts List */}
-          <Card className="flex flex-col border-r overflow-hidden">
+          <Card className="flex flex-col border-r h-full overflow-hidden">
             <CardHeader className="pb-3 flex-shrink-0">
               <div className="relative">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -231,7 +231,7 @@ export default function WhatsApp() {
                 />
               </div>
             </CardHeader>
-            <ScrollArea className="flex-1">
+            <div className="flex-1 overflow-y-auto min-h-0">
               <div className="space-y-1 px-2 pb-2">
                 {filteredLeads.map((lead) => (
                   <div
@@ -260,11 +260,11 @@ export default function WhatsApp() {
                   </div>
                 )}
               </div>
-            </ScrollArea>
+            </div>
           </Card>
 
           {/* Chat Area */}
-          <Card className="flex flex-col overflow-hidden">
+          <Card className="flex flex-col h-full overflow-hidden">
             {selectedLead ? (
               <>
                 {/* Chat Header */}
@@ -295,8 +295,8 @@ export default function WhatsApp() {
                   </div>
                 </CardHeader>
 
-                {/* Messages Area */}
-                <ScrollArea className="flex-1 p-4 bg-[#efeae2] relative">
+                {/* Messages Area - with overflow scroll */}
+                <div className="flex-1 overflow-y-auto p-4 bg-[#efeae2] relative min-h-0">
                   {/* WhatsApp background pattern */}
                   <div 
                     className="absolute inset-0 opacity-[0.06]" 
@@ -336,10 +336,10 @@ export default function WhatsApp() {
                     )}
                     <div ref={messagesEndRef} />
                   </div>
-                </ScrollArea>
+                </div>
 
-                {/* Message Input */}
-                <div className="border-t p-4 flex-shrink-0">
+                {/* Message Input - Fixed at bottom */}
+                <div className="border-t p-4 flex-shrink-0 bg-background">
                   {selectedFile && (
                     <div className="mb-2 flex items-center gap-2 p-2 bg-muted rounded-lg">
                       <Paperclip className="h-4 w-4" />
