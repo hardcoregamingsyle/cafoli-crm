@@ -87,19 +87,18 @@ export const createLead = mutation({
     });
     
     // Send welcome email for manually created leads if email is provided
-    // Temporarily disabled to allow type generation
-    // if (args.email) {
-    //   try {
-    //     await ctx.scheduler.runAfter(0, internal.brevo.sendWelcomeEmail, {
-    //       leadName: args.name,
-    //       leadEmail: args.email,
-    //       source: args.source,
-    //     });
-    //   } catch (error) {
-    //     console.error("Failed to schedule welcome email:", error);
-    //     // Don't throw - lead creation should succeed even if email fails
-    //   }
-    // }
+    if (args.email) {
+      try {
+        await ctx.scheduler.runAfter(0, internal.brevo.sendWelcomeEmail, {
+          leadName: args.name,
+          leadEmail: args.email,
+          source: args.source,
+        });
+      } catch (error) {
+        console.error("Failed to schedule welcome email:", error);
+        // Don't throw - lead creation should succeed even if email fails
+      }
+    }
     
     return leadId;
   },

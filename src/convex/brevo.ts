@@ -1,7 +1,30 @@
 "use node";
 
-import { action } from "./_generated/server";
+import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
+
+// Hardcoded Brevo API keys with rotation support
+const BREVO_API_KEYS = [
+  "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",
+  "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",
+  "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",
+  "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",
+  "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",
+];
+
+let currentKeyIndex = 0;
+
+// Get next API key in rotation
+function getNextApiKey(): string {
+  const key = BREVO_API_KEYS[currentKeyIndex];
+  currentKeyIndex = (currentKeyIndex + 1) % BREVO_API_KEYS.length;
+  return key;
+}
+
+// Fallback to environment variable if needed
+function getApiKey(): string {
+  return process.env.BREVO_API_KEY || getNextApiKey();
+}
 
 interface BrevoEmailParams {
   to: string;
@@ -19,12 +42,7 @@ export const sendEmail = action({
     textContent: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const apiKey = process.env.BREVO_API_KEY;
-    
-    if (!apiKey) {
-      console.error("BREVO_API_KEY not configured");
-      throw new Error("Email service not configured. Please set BREVO_API_KEY in backend environment variables.");
-    }
+    const apiKey = getApiKey();
 
     try {
       const response = await fetch("https://api.brevo.com/v3/smtp/email", {
@@ -67,19 +85,14 @@ export const sendEmail = action({
   },
 });
 
-export const sendWelcomeEmail = action({
+export const sendWelcomeEmail = internalAction({
   args: {
     leadName: v.string(),
     leadEmail: v.string(),
     source: v.string(),
   },
   handler: async (ctx, args) => {
-    const apiKey = process.env.BREVO_API_KEY;
-    
-    if (!apiKey) {
-      console.error("BREVO_API_KEY not configured");
-      throw new Error("Email service not configured. Please set BREVO_API_KEY in backend environment variables.");
-    }
+    const apiKey = getApiKey();
 
     const htmlContent = `
       <!DOCTYPE html>
