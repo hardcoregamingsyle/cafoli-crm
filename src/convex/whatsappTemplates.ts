@@ -11,8 +11,19 @@ export const syncTemplates = action({
     const accessToken = process.env.CLOUD_API_ACCESS_TOKEN;
     const businessAccountId = process.env.WA_BUSINESS_ACCOUNT_ID;
     
-    if (!accessToken || !businessAccountId) {
-      throw new Error("WhatsApp API not configured. Please set CLOUD_API_ACCESS_TOKEN and WA_BUSINESS_ACCOUNT_ID.");
+    console.log("Environment check:", {
+      hasAccessToken: !!accessToken,
+      accessTokenLength: accessToken?.length || 0,
+      hasBusinessAccountId: !!businessAccountId,
+      businessAccountIdLength: businessAccountId?.length || 0,
+    });
+    
+    if (!accessToken || accessToken.trim() === "") {
+      throw new Error("CLOUD_API_ACCESS_TOKEN is not set or is empty. Please configure it in Convex backend environment variables.");
+    }
+    
+    if (!businessAccountId || businessAccountId.trim() === "") {
+      throw new Error("WA_BUSINESS_ACCOUNT_ID is not set or is empty. Please configure it in Convex backend environment variables.");
     }
 
     try {
@@ -29,6 +40,7 @@ export const syncTemplates = action({
       const data = await response.json();
       
       if (!response.ok) {
+        console.error("Meta API error response:", data);
         throw new Error(`Meta API error: ${JSON.stringify(data)}`);
       }
 
@@ -86,8 +98,19 @@ export const createTemplate = action({
     const accessToken = process.env.CLOUD_API_ACCESS_TOKEN;
     const businessAccountId = process.env.WA_BUSINESS_ACCOUNT_ID;
     
-    if (!accessToken || !businessAccountId) {
-      throw new Error("WhatsApp API not configured.");
+    console.log("Create template environment check:", {
+      hasAccessToken: !!accessToken,
+      accessTokenLength: accessToken?.length || 0,
+      hasBusinessAccountId: !!businessAccountId,
+      businessAccountIdLength: businessAccountId?.length || 0,
+    });
+    
+    if (!accessToken || accessToken.trim() === "") {
+      throw new Error("CLOUD_API_ACCESS_TOKEN is not set or is empty. Please configure it in Convex backend environment variables.");
+    }
+    
+    if (!businessAccountId || businessAccountId.trim() === "") {
+      throw new Error("WA_BUSINESS_ACCOUNT_ID is not set or is empty. Please configure it in Convex backend environment variables.");
     }
 
     try {
@@ -122,6 +145,7 @@ export const createTemplate = action({
       const data = await response.json();
       
       if (!response.ok) {
+        console.error("Meta API error response:", data);
         throw new Error(`Meta API error: ${JSON.stringify(data)}`);
       }
 
