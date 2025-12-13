@@ -165,9 +165,16 @@ export function TemplatesDialog({ selectedLeadId }: TemplatesDialogProps) {
       return;
     }
 
+    // Ensure leads are loaded
+    if (!leads || leads.length === 0) {
+      toast.error("Loading contacts...");
+      return;
+    }
+
     const lead = leads.find(l => l._id === targetLeadId);
     if (!lead) {
-      toast.error("Lead not found");
+      console.error("Lead not found:", { targetLeadId, availableLeads: leads.map(l => l._id) });
+      toast.error("Contact not found. Please try again.");
       return;
     }
 
