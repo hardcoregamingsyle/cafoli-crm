@@ -223,8 +223,8 @@ export const deleteTemplate = action({
   },
 });
 
-// Send a template message to a contact
-export const sendTemplateMessage = action({
+// Send a template message to a contact - changed to internalAction
+export const sendTemplateMessage = internalAction({
   args: {
     phoneNumber: v.string(),
     templateName: v.string(),
