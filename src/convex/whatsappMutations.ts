@@ -73,9 +73,37 @@ export const markChatAsRead = mutation({
       .first();
 
     if (chat) {
+      // Reset unread count
       await ctx.db.patch(chat._id, {
         unreadCount: 0,
       });
+
+      // Find unread inbound messages
+      // We look for messages with status "received" which implies they haven't been read yet
+      const unreadMessages = await ctx.db
+        .query("messages")
+        .withIndex("by_chat_status", (q) => q.eq("chatId", chat._id).eq("status", "received"))
+        .collect();
+
+      if (unreadMessages.length > 0) {
+        const messageIds: string[] = [];
+        
+        for (const msg of unreadMessages) {
+          // Update status in DB to "read"
+          await ctx.db.patch(msg._id, { status: "read" });
+          
+          if (msg.externalId) {
+            messageIds.push(msg.externalId);
+          }
+        }
+
+        // Schedule action to mark as read on WhatsApp
+        if (messageIds.length > 0) {
+          await ctx.scheduler.runAfter(0, internal.whatsapp.markMessagesAsRead, {
+            messageIds,
+          });
+        }
+      }
     }
   },
 });

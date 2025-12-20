@@ -159,7 +159,9 @@ const schema = defineSchema(
       mediaMimeType: v.optional(v.string()), // MIME type
       externalId: v.optional(v.string()), // WhatsApp message ID for status tracking
       quotedMessageId: v.optional(v.id("messages")), // ID of the message being replied to
-    }).index("by_chat", ["chatId"]),
+    })
+    .index("by_chat", ["chatId"])
+    .index("by_chat_status", ["chatId", "status"]),
   },
   {
     schemaValidation: false,
