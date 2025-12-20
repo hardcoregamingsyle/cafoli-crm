@@ -95,7 +95,7 @@ export const sendWelcomeTemplate = internalMutation({
       await ctx.scheduler.runAfter(0, api.whatsappTemplates.sendTemplateMessage, {
         phoneNumber: args.phoneNumber,
         templateName: "cafoliwelcomemessage",
-        languageCode: "en",
+        languageCode: "en_US",
         leadId: args.leadId,
       });
       console.log(`Scheduled welcome template for lead ${args.leadId}`);

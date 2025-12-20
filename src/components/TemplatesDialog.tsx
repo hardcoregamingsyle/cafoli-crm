@@ -13,12 +13,15 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { Id } from "@/convex/_generated/dataModel";
+import { useAuth } from "@/hooks/use-auth";
+import { ROLES } from "@/convex/schema";
 
 interface TemplatesDialogProps {
   selectedLeadId?: Id<"leads"> | null;
 }
 
 export function TemplatesDialog({ selectedLeadId }: TemplatesDialogProps) {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -26,7 +29,10 @@ export function TemplatesDialog({ selectedLeadId }: TemplatesDialogProps) {
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
   
   const templates = useQuery(api.whatsappTemplatesQueries.getTemplates) || [];
-  const leads = useQuery(api.leads.getLeads, { filter: "all" }) || [];
+  // Determine filter based on user role to ensure staff can see their assigned leads
+  const filter = user?.role === ROLES.ADMIN ? "all" : "mine";
+  const leads = useQuery(api.leads.getLeads, { filter, userId: user?._id }) || [];
+  
   const syncTemplates = useAction(api.whatsappTemplates.syncTemplates);
   const createTemplate = useAction(api.whatsappTemplates.createTemplate);
   const deleteTemplate = useAction(api.whatsappTemplates.deleteTemplate);
