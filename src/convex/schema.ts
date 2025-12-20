@@ -143,7 +143,10 @@ const schema = defineSchema(
       platform: v.string(), // "whatsapp"
       externalId: v.string(), // WhatsApp phone number or chat ID
       lastMessageAt: v.number(),
-    }).index("by_lead", ["leadId"]),
+      unreadCount: v.optional(v.number()),
+    })
+    .index("by_lead", ["leadId"])
+    .index("by_last_message", ["lastMessageAt"]),
 
     messages: defineTable({
       chatId: v.id("chats"),
@@ -155,6 +158,7 @@ const schema = defineSchema(
       mediaName: v.optional(v.string()), // Original filename
       mediaMimeType: v.optional(v.string()), // MIME type
       externalId: v.optional(v.string()), // WhatsApp message ID for status tracking
+      quotedMessageId: v.optional(v.id("messages")), // ID of the message being replied to
     }).index("by_chat", ["chatId"]),
   },
   {

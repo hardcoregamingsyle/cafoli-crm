@@ -321,9 +321,7 @@ export function TemplatesDialog({ selectedLeadId }: TemplatesDialogProps) {
                             className="h-8 w-8"
                             onClick={() => {
                               if (selectedLeadId) {
-                                if (confirm(`Send template "${template.name}" to selected contact?`)) {
-                                  quickSendTemplate(template, selectedLeadId);
-                                }
+                                quickSendTemplate(template, selectedLeadId);
                               } else {
                                 setSelectedTemplate(template);
                                 setSendFormData({ leadId: "" });

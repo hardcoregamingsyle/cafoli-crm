@@ -9,6 +9,8 @@ export const sendWhatsAppMessage = action({
     phoneNumber: v.string(),
     message: v.string(),
     leadId: v.id("leads"),
+    quotedMessageId: v.optional(v.id("messages")),
+    quotedMessageExternalId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // Check if WhatsApp is configured
@@ -20,6 +22,21 @@ export const sendWhatsAppMessage = action({
     }
 
     try {
+      // Prepare message payload
+      const payload: any = {
+        messaging_product: "whatsapp",
+        to: args.phoneNumber,
+        type: "text",
+        text: { body: args.message },
+      };
+
+      // Add context for reply if quoted
+      if (args.quotedMessageExternalId) {
+        payload.context = {
+          message_id: args.quotedMessageExternalId
+        };
+      }
+
       // Send message via WhatsApp Cloud API
       const response = await fetch(
         `https://graph.facebook.com/v16.0/${phoneNumberId}/messages`,
@@ -29,12 +46,7 @@ export const sendWhatsAppMessage = action({
             "Authorization": `Bearer ${accessToken}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            messaging_product: "whatsapp",
-            to: args.phoneNumber,
-            type: "text",
-            text: { body: args.message },
-          }),
+          body: JSON.stringify(payload),
         }
       );
 
@@ -52,6 +64,7 @@ export const sendWhatsAppMessage = action({
         direction: "outbound",
         status: "sent",
         externalId: data.messages?.[0]?.id || "",
+        quotedMessageId: args.quotedMessageId,
       });
 
       return { success: true, messageId: data.messages?.[0]?.id };

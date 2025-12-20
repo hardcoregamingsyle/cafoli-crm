@@ -1,4 +1,4 @@
-import { internalMutation, internalQuery } from "./_generated/server";
+import { mutation, internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 
@@ -14,6 +14,7 @@ export const storeMessage = internalMutation({
     mediaUrl: v.optional(v.string()),
     mediaName: v.optional(v.string()),
     mediaMimeType: v.optional(v.string()),
+    quotedMessageId: v.optional(v.id("messages")),
   },
   handler: async (ctx, args) => {
     // Find or create chat
@@ -28,12 +29,19 @@ export const storeMessage = internalMutation({
         platform: "whatsapp",
         externalId: args.phoneNumber,
         lastMessageAt: Date.now(),
+        unreadCount: args.direction === "inbound" ? 1 : 0,
       });
       chat = await ctx.db.get(chatId);
     } else {
-      await ctx.db.patch(chat._id, {
+      const updates: any = {
         lastMessageAt: Date.now(),
-      });
+      };
+      
+      if (args.direction === "inbound") {
+        updates.unreadCount = (chat.unreadCount || 0) + 1;
+      }
+      
+      await ctx.db.patch(chat._id, updates);
     }
 
     if (!chat) throw new Error("Failed to create chat");
@@ -49,7 +57,26 @@ export const storeMessage = internalMutation({
       mediaName: args.mediaName,
       mediaMimeType: args.mediaMimeType,
       externalId: args.externalId,
+      quotedMessageId: args.quotedMessageId,
     });
+  },
+});
+
+export const markChatAsRead = mutation({
+  args: {
+    leadId: v.id("leads"),
+  },
+  handler: async (ctx, args) => {
+    const chat = await ctx.db
+      .query("chats")
+      .withIndex("by_lead", (q) => q.eq("leadId", args.leadId))
+      .first();
+
+    if (chat) {
+      await ctx.db.patch(chat._id, {
+        unreadCount: 0,
+      });
+    }
   },
 });
 

@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MessageSquare, Send, Search, Phone, Video, MoreVertical, Check, CheckCheck, Paperclip, Smile, Image as ImageIcon } from "lucide-react";
+import { MessageSquare, Send, Search, Phone, Video, MoreVertical, Check, CheckCheck, Paperclip, Smile, Image as ImageIcon, Reply, X } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useAction, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -14,17 +14,21 @@ import { ROLES } from "@/convex/schema";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { TemplatesDialog } from "@/components/TemplatesDialog";
+import { Badge } from "@/components/ui/badge";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 export default function WhatsApp() {
   const { user } = useAuth();
   
   // Determine filter based on user role
   const filter = user?.role === ROLES.ADMIN ? "all" : "mine";
-  const leads = useQuery(api.leads.getLeads, { filter, userId: user?._id }) || [];
+  // Use new query that includes chat status and sorting
+  const leads = useQuery(api.whatsappQueries.getLeadsWithChatStatus, { filter, userId: user?._id }) || [];
   
   const sendWhatsAppMessage = useAction(api.whatsapp.sendWhatsAppMessage);
   const sendWhatsAppMedia = useAction(api.whatsapp.sendWhatsAppMedia);
   const generateUploadUrl = useMutation(api.whatsappStorage.generateUploadUrl);
+  const markChatAsRead = useMutation(api.whatsappMutations.markChatAsRead);
   
   const [selectedLeadId, setSelectedLeadId] = useState<Id<"leads"> | null>(null);
   const [whatsappMessage, setWhatsappMessage] = useState("");
@@ -32,6 +36,9 @@ export default function WhatsApp() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<any>(null);
+  const [unreadFilter, setUnreadFilter] = useState<string>("all"); // "all" or "unread"
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -41,15 +48,27 @@ export default function WhatsApp() {
     selectedLeadId ? { leadId: selectedLeadId } : "skip"
   ) || [];
   
-  const filteredLeads = leads.filter(lead => 
-    lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    lead.mobile.includes(searchQuery)
-  );
+  const filteredLeads = leads.filter(lead => {
+    const matchesSearch = lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      lead.mobile.includes(searchQuery);
+    
+    if (unreadFilter === "unread") {
+      return matchesSearch && (lead.unreadCount > 0);
+    }
+    return matchesSearch;
+  });
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, replyingTo]);
+
+  // Mark as read when selecting a lead
+  useEffect(() => {
+    if (selectedLeadId && (selectedLead?.unreadCount ?? 0) > 0) {
+      markChatAsRead({ leadId: selectedLeadId });
+    }
+  }, [selectedLeadId, selectedLead?.unreadCount]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -124,8 +143,11 @@ export default function WhatsApp() {
         phoneNumber: selectedLead.mobile,
         message: whatsappMessage,
         leadId: selectedLead._id,
+        quotedMessageId: replyingTo?._id,
+        quotedMessageExternalId: replyingTo?.externalId,
       });
       setWhatsappMessage("");
+      setReplyingTo(null);
       toast.success("Message sent");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to send message");
@@ -223,7 +245,7 @@ export default function WhatsApp() {
         <div className="flex-1 grid md:grid-cols-[350px_1fr] gap-4 px-6 pb-6 min-h-0 overflow-hidden">
           {/* Contacts List */}
           <Card className="flex flex-col border-r h-full overflow-hidden">
-            <CardHeader className="pb-3 flex-shrink-0">
+            <CardHeader className="pb-3 flex-shrink-0 space-y-3">
               <div className="relative">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -233,6 +255,10 @@ export default function WhatsApp() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
+              <ToggleGroup type="single" value={unreadFilter} onValueChange={(val) => val && setUnreadFilter(val)} className="justify-start">
+                <ToggleGroupItem value="all" size="sm" className="text-xs">All</ToggleGroupItem>
+                <ToggleGroupItem value="unread" size="sm" className="text-xs">Unread</ToggleGroupItem>
+              </ToggleGroup>
             </CardHeader>
             <div className="flex-1 overflow-y-auto min-h-0">
               <div className="space-y-1 px-2 pb-2">
@@ -244,13 +270,29 @@ export default function WhatsApp() {
                     }`}
                     onClick={() => setSelectedLeadId(lead._id)}
                   >
-                    <Avatar className="h-12 w-12">
-                      <AvatarFallback className="bg-primary/10 text-primary">
-                        {getInitials(lead.name)}
-                      </AvatarFallback>
-                    </Avatar>
+                    <div className="relative">
+                      <Avatar className="h-12 w-12">
+                        <AvatarFallback className="bg-primary/10 text-primary">
+                          {getInitials(lead.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      {lead.unreadCount > 0 && (
+                        <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center rounded-full p-0 text-[10px] border-2 border-background">
+                          {lead.unreadCount}
+                        </Badge>
+                      )}
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-semibold truncate">{lead.name}</div>
+                      <div className="flex justify-between items-start">
+                        <div className="font-semibold truncate">{lead.name}</div>
+                        {lead.lastMessageAt > 0 && (
+                          <span className="text-[10px] text-muted-foreground whitespace-nowrap ml-2">
+                            {new Date(lead.lastMessageAt).toLocaleDateString() === new Date().toLocaleDateString()
+                              ? new Date(lead.lastMessageAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                              : new Date(lead.lastMessageAt).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
                       <div className="text-sm text-muted-foreground truncate">
                         {lead.mobile}
                       </div>
@@ -298,9 +340,8 @@ export default function WhatsApp() {
                   </div>
                 </CardHeader>
 
-                {/* Messages Area - with overflow scroll */}
+                {/* Messages Area */}
                 <div className="flex-1 overflow-y-auto p-4 bg-[#efeae2] relative min-h-0">
-                  {/* WhatsApp background pattern */}
                   <div 
                     className="absolute inset-0 opacity-[0.06]" 
                     style={{
@@ -319,20 +360,52 @@ export default function WhatsApp() {
                       messages.map((message) => (
                         <div
                           key={message._id}
-                          className={`flex ${message.direction === "outbound" ? "justify-end" : "justify-start"}`}
+                          className={`flex ${message.direction === "outbound" ? "justify-end" : "justify-start"} group`}
                         >
-                          <div
-                            className={`max-w-[70%] rounded-lg px-3 py-2 shadow-sm ${
-                              message.direction === "outbound"
-                                ? "bg-[#d9fdd3]"
-                                : "bg-white"
-                            }`}
-                          >
-                            {renderMessageContent(message)}
-                            <div className="text-[11px] mt-1 text-gray-500 text-right flex items-center justify-end gap-1">
-                              {formatTime(message._creationTime)}
-                              {message.direction === "outbound" && getStatusIcon(message.status)}
+                          <div className="flex items-end gap-2 max-w-[70%]">
+                            {message.direction === "inbound" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => setReplyingTo(message)}
+                                title="Reply"
+                              >
+                                <Reply className="h-3 w-3" />
+                              </Button>
+                            )}
+                            <div
+                              className={`rounded-lg px-3 py-2 shadow-sm w-full ${
+                                message.direction === "outbound"
+                                  ? "bg-[#d9fdd3]"
+                                  : "bg-white"
+                              }`}
+                            >
+                              {message.quotedMessage && (
+                                <div className="mb-2 p-2 bg-black/5 rounded border-l-4 border-primary/50 text-xs">
+                                  <p className="font-semibold text-primary/80">
+                                    {message.quotedMessage.direction === "outbound" ? "You" : selectedLead.name}
+                                  </p>
+                                  <p className="truncate opacity-70">{message.quotedMessage.content || "Media"}</p>
+                                </div>
+                              )}
+                              {renderMessageContent(message)}
+                              <div className="text-[11px] mt-1 text-gray-500 text-right flex items-center justify-end gap-1">
+                                {formatTime(message._creationTime)}
+                                {message.direction === "outbound" && getStatusIcon(message.status)}
+                              </div>
                             </div>
+                            {message.direction === "outbound" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => setReplyingTo(message)}
+                                title="Reply"
+                              >
+                                <Reply className="h-3 w-3" />
+                              </Button>
+                            )}
                           </div>
                         </div>
                       ))
@@ -341,8 +414,29 @@ export default function WhatsApp() {
                   </div>
                 </div>
 
-                {/* Message Input - Fixed at bottom */}
+                {/* Message Input */}
                 <div className="border-t p-4 flex-shrink-0 bg-background">
+                  {replyingTo && (
+                    <div className="mb-2 flex items-center gap-2 p-2 bg-muted rounded-lg border-l-4 border-primary">
+                      <div className="flex-1 overflow-hidden">
+                        <p className="text-xs font-semibold text-primary">
+                          Replying to {replyingTo.direction === "outbound" ? "yourself" : selectedLead.name}
+                        </p>
+                        <p className="text-sm truncate text-muted-foreground">
+                          {replyingTo.content || (replyingTo.mediaName ? "File/Media" : "Message")}
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => setReplyingTo(null)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                  
                   {selectedFile && (
                     <div className="mb-2 flex items-center gap-2 p-2 bg-muted rounded-lg">
                       <Paperclip className="h-4 w-4" />
