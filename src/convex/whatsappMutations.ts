@@ -131,3 +131,24 @@ export const sendWelcomeTemplate = internalMutation({
     }
   },
 });
+
+export const createLeadFromWhatsApp = internalMutation({
+  args: {
+    phoneNumber: v.string(),
+    name: v.optional(v.string()),
+    message: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const leadId = await ctx.db.insert("leads", {
+      name: args.name || args.phoneNumber,
+      subject: "New WhatsApp Lead",
+      source: "WhatsApp",
+      mobile: args.phoneNumber,
+      status: "Cold",
+      type: "To be Decided",
+      lastActivity: Date.now(),
+      message: args.message,
+    });
+    return leadId;
+  },
+});

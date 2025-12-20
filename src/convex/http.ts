@@ -79,9 +79,15 @@ http.route({
 
       // Process incoming messages
       if (body.entry?.[0]?.changes?.[0]?.value?.messages) {
-        const messages = body.entry[0].changes[0].value.messages;
+        const value = body.entry[0].changes[0].value;
+        const messages = value.messages;
+        const contacts = value.contacts || [];
         
         for (const message of messages) {
+          // Extract sender name from contacts
+          const contact = contacts.find((c: any) => c.wa_id === message.from);
+          const senderName = contact?.profile?.name;
+
           // Extract media information based on message type
           let mediaId = null;
           let mediaCaption = null;
@@ -115,6 +121,7 @@ http.route({
             mediaId: mediaId || undefined,
             mediaMimeType: mediaMimeType || undefined,
             mediaFilename: mediaFilename || undefined,
+            senderName,
           });
         }
       }

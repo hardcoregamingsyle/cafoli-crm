@@ -208,6 +208,7 @@ export const handleIncomingMessage = internalAction({
     mediaId: v.optional(v.string()),
     mediaMimeType: v.optional(v.string()),
     mediaFilename: v.optional(v.string()),
+    senderName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     try {
@@ -222,9 +223,20 @@ export const handleIncomingMessage = internalAction({
         return leadPhone.includes(cleanPhone) || cleanPhone.includes(leadPhone);
       });
 
-      if (matchingLeads && matchingLeads.length > 0) {
-        const leadId = matchingLeads[0]._id;
+      let leadId;
 
+      if (matchingLeads && matchingLeads.length > 0) {
+        leadId = matchingLeads[0]._id;
+      } else {
+        console.log(`No lead found for phone number: ${args.from}. Creating new lead.`);
+        leadId = await ctx.runMutation(internal.whatsappMutations.createLeadFromWhatsApp, {
+          phoneNumber: args.from,
+          name: args.senderName,
+          message: args.text,
+        });
+      }
+
+      if (leadId) {
         // Download media if present
         let mediaUrl = null;
         if (args.mediaId) {
@@ -290,8 +302,6 @@ export const handleIncomingMessage = internalAction({
         });
 
         console.log(`Stored incoming message from ${args.from} for lead ${leadId}`);
-      } else {
-        console.log(`No lead found for phone number: ${args.from}`);
       }
     } catch (error) {
       console.error("Error handling incoming message:", error);
