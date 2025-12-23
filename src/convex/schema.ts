@@ -97,7 +97,12 @@ const schema = defineSchema(
     .index("by_status", ["status"])
     .index("by_source", ["source"])
     .index("by_pharmavends_uid", ["pharmavendsUid"])
-    .index("by_indiamart_unique_id", ["indiamartUniqueId"]),
+    .index("by_indiamart_unique_id", ["indiamartUniqueId"])
+    .index("by_mobile", ["mobile"])
+    .searchIndex("search_name", {
+      searchField: "name",
+      filterFields: ["assignedTo"],
+    }),
 
     comments: defineTable({
       leadId: v.id("leads"),

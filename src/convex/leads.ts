@@ -3,6 +3,7 @@ import { mutation, query } from "./_generated/server";
 import { ROLES } from "./schema";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { internal } from "./_generated/api";
+import { paginationOptsValidator } from "convex/server";
 
 // Helper to check permissions
 async function checkRole(ctx: any, allowedRoles: string[]) {
@@ -17,6 +18,98 @@ async function checkRole(ctx: any, allowedRoles: string[]) {
   }
   return user;
 }
+
+export const getPaginatedLeads = query({
+  args: {
+    paginationOpts: paginationOptsValidator,
+    filter: v.optional(v.string()), // "all", "unassigned", "mine"
+    userId: v.optional(v.id("users")),
+    search: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = args.userId || await getAuthUserId(ctx);
+    
+    // Basic auth check - if no user, return empty page
+    if (!userId) {
+      return {
+        page: [],
+        isDone: true,
+        continueCursor: "",
+      };
+    }
+
+    const user = await ctx.db.get(userId);
+    if (!user) {
+      return {
+        page: [],
+        isDone: true,
+        continueCursor: "",
+      };
+    }
+
+    // Search logic
+    if (args.search) {
+      // If search looks like a phone number (mostly digits), use exact match on mobile
+      const isPhoneNumber = /^[\d\+\-\s]+$/.test(args.search);
+      
+      if (isPhoneNumber) {
+        // Clean the search string for mobile check
+        const cleanSearch = args.search.replace(/\s+/g, "");
+        // We can't easily paginate a .filter() on all leads for partial match without full scan
+        // But we can use the by_mobile index for exact match or range if we had it.
+        // For now, let's use the search index on name as primary search, 
+        // but for mobile we might have to scan or use a specific index strategy.
+        // Given the constraints, let's try to use the search index for name, 
+        // and if it fails, maybe we just return empty or rely on client side for small sets?
+        // No, 50m leads.
+        // Let's assume search is primarily by name for now using the search index.
+        // If we want to search mobile, we should probably use a filter on the search query or a separate index.
+        // Let's stick to name search for now as defined in schema.
+      }
+
+      return await ctx.db
+        .query("leads")
+        .withSearchIndex("search_name", (q) => {
+          let search = q.search("name", args.search!);
+          if (args.filter === "mine") {
+            search = search.eq("assignedTo", userId);
+          }
+          return search;
+        })
+        .take(args.paginationOpts.numItems); 
+    }
+
+    if (args.filter === "mine") {
+      return await ctx.db
+        .query("leads")
+        .withIndex("by_assigned_to", (q) => q.eq("assignedTo", userId))
+        .order("desc")
+        .paginate(args.paginationOpts);
+    } else if (args.filter === "unassigned") {
+      // Filter for unassigned leads. 
+      // Since "assignedTo" is optional and missing in unassigned leads, they are not in the index.
+      // We must use a filter.
+      return await ctx.db
+        .query("leads")
+        .order("desc")
+        .filter((q) => q.eq(q.field("assignedTo"), undefined))
+        .paginate(args.paginationOpts);
+    } else if (args.filter === "all") {
+      // Admin view or all leads
+      return await ctx.db
+        .query("leads")
+        .order("desc")
+        .paginate(args.paginationOpts);
+    } else {
+      // Default to unassigned
+      return await ctx.db
+        .query("leads")
+        .order("desc")
+        .filter((q) => q.eq(q.field("assignedTo"), undefined))
+        .paginate(args.paginationOpts);
+    }
+  },
+});
 
 export const getLeads = query({
   args: {

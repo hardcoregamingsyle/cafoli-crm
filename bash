@@ -1,1 +1,1 @@
-pnpm install esbuild
+npx convex dev --once && npx tsc -b --noEmit

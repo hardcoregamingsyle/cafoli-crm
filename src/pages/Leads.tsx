@@ -5,15 +5,16 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
-import { useMutation, useQuery, useAction } from "convex/react";
-import { MessageSquare, Phone, Mail, MapPin, User, Search, Plus, Calendar, Save, UserPlus } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useMutation, useQuery, useAction, usePaginatedQuery } from "convex/react";
+import { MessageSquare, Phone, Mail, MapPin, User, Search, Plus, Calendar, Save, UserPlus, Loader2 } from "lucide-react";
+import { useState, type FormEvent, useEffect } from "react";
 import { useLocation } from "react-router";
 import { toast } from "sonner";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
+import { useInView } from "react-intersection-observer";
 
 export default function Leads() {
   const location = useLocation();
@@ -24,7 +25,40 @@ export default function Leads() {
   const filter = path === "/my_leads" ? "mine" : path === "/all_leads" ? "all" : "unassigned";
   const title = path === "/my_leads" ? "My Leads" : path === "/all_leads" ? "All Leads" : "Unassigned Leads";
 
-  const leads = useQuery(api.leads.getLeads, user ? { filter, userId: user._id } : "skip") || [];
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const { 
+    results: leads, 
+    status, 
+    loadMore, 
+    isLoading 
+  } = usePaginatedQuery(
+    api.leads.getPaginatedLeads, 
+    { 
+      filter, 
+      userId: user?._id,
+      search: debouncedSearch || undefined
+    }, 
+    { initialNumItems: 20 }
+  );
+
+  const { ref, inView } = useInView();
+
+  useEffect(() => {
+    if (inView && status === "CanLoadMore") {
+      loadMore(20);
+    }
+  }, [inView, status, loadMore]);
+
   const allUsers = useQuery(api.users.getAllUsers, user ? { userId: user._id } : "skip") || [];
   const updateLead = useMutation(api.leads.updateLead);
   const addComment = useMutation(api.leads.addComment);
@@ -32,7 +66,6 @@ export default function Leads() {
   const assignLead = useMutation(api.leads.assignLead);
 
   const [selectedLead, setSelectedLead] = useState<Doc<"leads"> | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
   const [newComment, setNewComment] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -42,12 +75,6 @@ export default function Leads() {
   const [followUpDate, setFollowUpDate] = useState<string>("");
 
   const comments = useQuery(api.leads.getComments, selectedLead ? { leadId: selectedLead._id } : "skip");
-
-  const filteredLeads = leads.filter(lead => 
-    lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    lead.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    lead.mobile.includes(searchQuery)
-  );
 
   const handleAssignToSelf = async (leadId: string) => {
     if (!user) return;
@@ -340,7 +367,7 @@ export default function Leads() {
               />
             </div>
             <div className="flex-1 overflow-y-auto space-y-2 pr-2">
-              {filteredLeads.map((lead) => (
+              {leads?.map((lead) => (
                 <Card
                   key={lead._id}
                   className={`cursor-pointer transition-colors hover:bg-accent/50 ${
@@ -414,6 +441,22 @@ export default function Leads() {
                   </CardContent>
                 </Card>
               ))}
+              
+              {/* Loading indicator and infinite scroll trigger */}
+              <div ref={ref} className="py-4 flex justify-center">
+                {status === "LoadingMore" && (
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                )}
+                {status === "Exhausted" && leads?.length > 0 && (
+                  <span className="text-xs text-muted-foreground">No more leads</span>
+                )}
+                {status === "LoadingFirstPage" && (
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                )}
+                {status === "Exhausted" && leads?.length === 0 && (
+                  <span className="text-sm text-muted-foreground">No leads found</span>
+                )}
+              </div>
             </div>
           </div>
 
