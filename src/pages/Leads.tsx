@@ -10,7 +10,7 @@ import { Search, Plus, UserPlus, Loader2 } from "lucide-react";
 import { useState, type FormEvent, useEffect } from "react";
 import { useLocation } from "react-router";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
 import { useInView } from "react-intersection-observer";
@@ -51,6 +51,18 @@ export default function Leads() {
     }, 
     { initialNumItems: 20 }
   );
+
+  // Overdue Leads Popup Logic
+  const overdueLeads = useQuery(api.leads.getOverdueLeads, filter === "mine" && user ? { userId: user._id } : "skip");
+  const [isOverduePopupOpen, setIsOverduePopupOpen] = useState(false);
+  const [hasShownOverduePopup, setHasShownOverduePopup] = useState(false);
+
+  useEffect(() => {
+    if (filter === "mine" && overdueLeads && overdueLeads.length > 0 && !hasShownOverduePopup) {
+      setIsOverduePopupOpen(true);
+      setHasShownOverduePopup(true);
+    }
+  }, [filter, overdueLeads, hasShownOverduePopup]);
 
   const { ref, inView } = useInView();
 
@@ -153,6 +165,43 @@ export default function Leads() {
   return (
     <AppLayout>
       <div className="flex flex-col h-[calc(100vh-8rem)]">
+        {/* Overdue Leads Popup */}
+        <Dialog open={isOverduePopupOpen} onOpenChange={setIsOverduePopupOpen}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-red-600 flex items-center gap-2">
+                ⚠️ Overdue Follow-ups ({overdueLeads?.length})
+              </DialogTitle>
+              <DialogDescription>
+                You have the following leads with overdue follow-ups. Please take action.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 mt-4">
+              {overdueLeads?.map((lead) => (
+                <div 
+                  key={lead._id} 
+                  className="p-3 border border-red-200 bg-red-50 rounded-lg flex justify-between items-center cursor-pointer hover:bg-red-100 transition-colors"
+                  onClick={() => {
+                    setSelectedLeadId(lead._id);
+                    setIsOverduePopupOpen(false);
+                  }}
+                >
+                  <div>
+                    <h4 className="font-semibold text-red-900">{lead.name}</h4>
+                    <p className="text-sm text-red-700">{lead.subject}</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs font-bold text-red-600">
+                      {lead.nextFollowUpDate ? new Date(lead.nextFollowUpDate).toLocaleString() : "Unknown"}
+                    </div>
+                    <div className="text-xs text-red-500">Click to view</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </DialogContent>
+        </Dialog>
+
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">
@@ -272,6 +321,8 @@ export default function Leads() {
                   key={lead._id}
                   className={`cursor-pointer transition-colors hover:bg-accent/50 ${
                     selectedLeadId === lead._id ? "border-primary bg-accent/50" : ""
+                  } ${
+                    lead.nextFollowUpDate && lead.nextFollowUpDate < Date.now() ? "border-red-300 bg-red-50/50" : ""
                   }`}
                   onClick={() => setSelectedLeadId(lead._id)}
                 >
@@ -298,7 +349,7 @@ export default function Leads() {
                       )}
 
                       {lead.nextFollowUpDate && lead.nextFollowUpDate < Date.now() && (
-                        <span className="bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+                        <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium border border-red-200">
                           Overdue
                         </span>
                       )}

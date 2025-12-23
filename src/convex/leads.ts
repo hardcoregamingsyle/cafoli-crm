@@ -86,12 +86,48 @@ export const getPaginatedLeads = query({
     }
 
     if (args.filter === "mine") {
-      return await ctx.db
+      // Custom sorting for "mine":
+      // 1. Overdue leads (Furthest Followup to Closest Followup) -> Ascending Date
+      // 2. Upcoming leads (Closest Followup to Furthest Followup) -> Ascending Date
+      // 3. No Followup Date -> Bottom
+      
+      const allLeads = await ctx.db
         .query("leads")
         .withIndex("by_assigned_to", (q) => q.eq("assignedTo", userId))
-        .order("desc")
-        .filter((q) => q.neq(q.field("type"), "Irrelevant"))
-        .paginate(args.paginationOpts);
+        .collect();
+
+      // Filter out irrelevant leads unless specifically asked (though "mine" usually excludes them in previous logic)
+      const activeLeads = allLeads.filter(l => l.type !== "Irrelevant");
+
+      const sortedLeads = activeLeads.sort((a, b) => {
+        const dateA = a.nextFollowUpDate;
+        const dateB = b.nextFollowUpDate;
+        
+        // If both have dates, sort ascending (Oldest/Overdue first, then Upcoming)
+        if (dateA && dateB) {
+          return dateA - dateB;
+        }
+        
+        // If one has date and other doesn't, put the one with date first
+        if (dateA) return -1;
+        if (dateB) return 1;
+        
+        // If neither has date, sort by creation time desc
+        return b._creationTime - a._creationTime;
+      });
+
+      // Manual pagination
+      const { numItems, cursor } = args.paginationOpts;
+      const offset = cursor ? parseInt(cursor) : 0;
+      const page = sortedLeads.slice(offset, offset + numItems);
+      const isDone = offset + numItems >= sortedLeads.length;
+      const continueCursor = isDone ? "" : (offset + numItems).toString();
+
+      return {
+        page,
+        isDone,
+        continueCursor,
+      };
     } else if (args.filter === "unassigned") {
       // Filter for unassigned leads. 
       // Since "assignedTo" is optional and missing in unassigned leads, they are not in the index.
@@ -135,6 +171,24 @@ export const getPaginatedLeads = query({
         .paginate(args.paginationOpts);
     }
   },
+});
+
+export const getOverdueLeads = query({
+  args: { userId: v.optional(v.id("users")) },
+  handler: async (ctx, args) => {
+    const userId = args.userId || await getAuthUserId(ctx);
+    if (!userId) return [];
+
+    const now = Date.now();
+    const leads = await ctx.db
+      .query("leads")
+      .withIndex("by_assigned_to", (q) => q.eq("assignedTo", userId))
+      .collect();
+    
+    return leads
+      .filter(l => l.type !== "Irrelevant" && l.nextFollowUpDate && l.nextFollowUpDate < now)
+      .sort((a, b) => (a.nextFollowUpDate || 0) - (b.nextFollowUpDate || 0));
+  }
 });
 
 export const getLeads = query({

@@ -350,12 +350,12 @@ export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
           ) : (
             <div className={`bg-muted/30 p-4 rounded-md text-sm ${
               lead.nextFollowUpDate && lead.nextFollowUpDate < Date.now() 
-                ? 'border-2 border-orange-500' 
+                ? 'border-2 border-red-500 bg-red-50' 
                 : ''
             }`}>
               {formatFollowUpDate(lead.nextFollowUpDate)}
               {lead.nextFollowUpDate && lead.nextFollowUpDate < Date.now() && (
-                <span className="ml-2 text-orange-600 font-semibold">⚠ Overdue</span>
+                <span className="ml-2 text-red-600 font-bold">⚠ Overdue</span>
               )}
             </div>
           )}

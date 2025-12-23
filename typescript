@@ -1,1 +1,9 @@
-await ctx.scheduler.runAfter(0, internal.whatsappTemplates.sendTemplateMessage, {...});
+// Search logic
+if (args.search) {
+  // ...
+  return { ... };
+}
+
+if (args.filter === "mine") {
+  // ...
+}
