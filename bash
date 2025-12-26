@@ -1,1 +1,1 @@
-npx convex dev --once && npx tsc -b --noEmit
+npx convex run migrations:backfillSearchText

@@ -95,6 +95,9 @@ const schema = defineSchema(
         countryIso: v.string(),
         callDuration: v.optional(v.string()),
       })),
+      
+      // Combined search field
+      searchText: v.optional(v.string()),
     })
     .index("by_assigned_to", ["assignedTo"])
     .index("by_status", ["status"])
@@ -104,6 +107,10 @@ const schema = defineSchema(
     .index("by_mobile", ["mobile"])
     .searchIndex("search_name", {
       searchField: "name",
+      filterFields: ["assignedTo"],
+    })
+    .searchIndex("search_all", {
+      searchField: "searchText",
       filterFields: ["assignedTo"],
     }),
 

@@ -18,6 +18,7 @@ import type * as http from "../http.js";
 import type * as indiamartMutations from "../indiamartMutations.js";
 import type * as leads from "../leads.js";
 import type * as lib_passwordUtils from "../lib/passwordUtils.js";
+import type * as migrations from "../migrations.js";
 import type * as pharmavends from "../pharmavends.js";
 import type * as pharmavendsMutations from "../pharmavendsMutations.js";
 import type * as users from "../users.js";
@@ -46,6 +47,7 @@ declare const fullApi: ApiFromModules<{
   indiamartMutations: typeof indiamartMutations;
   leads: typeof leads;
   "lib/passwordUtils": typeof lib_passwordUtils;
+  migrations: typeof migrations;
   pharmavends: typeof pharmavends;
   pharmavendsMutations: typeof pharmavendsMutations;
   users: typeof users;

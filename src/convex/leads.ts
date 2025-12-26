@@ -19,6 +19,26 @@ async function checkRole(ctx: any, allowedRoles: string[]) {
   return user;
 }
 
+function generateSearchText(data: {
+  name?: string;
+  subject?: string;
+  mobile?: string;
+  altMobile?: string;
+  email?: string;
+  altEmail?: string;
+  message?: string;
+}) {
+  return [
+    data.name,
+    data.subject,
+    data.mobile,
+    data.altMobile,
+    data.email,
+    data.altEmail,
+    data.message
+  ].filter(Boolean).join(" ");
+}
+
 export const getPaginatedLeads = query({
   args: {
     paginationOpts: paginationOptsValidator,
@@ -49,28 +69,10 @@ export const getPaginatedLeads = query({
 
     // Search logic
     if (args.search) {
-      // If search looks like a phone number (mostly digits), use exact match on mobile
-      const isPhoneNumber = /^[\d\+\-\s]+$/.test(args.search);
-      
-      if (isPhoneNumber) {
-        // Clean the search string for mobile check
-        const cleanSearch = args.search.replace(/\s+/g, "");
-        // We can't easily paginate a .filter() on all leads for partial match without full scan
-        // But we can use the by_mobile index for exact match or range if we had it.
-        // For now, let's use the search index on name as primary search, 
-        // but for mobile we might have to scan or use a specific index strategy.
-        // Given the constraints, let's try to use the search index for name, 
-        // and if it fails, maybe we just return empty or rely on client side for small sets?
-        // No, 50m leads.
-        // Let's assume search is primarily by name for now using the search index.
-        // If we want to search mobile, we should probably use a filter on the search query or a separate index.
-        // Let's stick to name search for now as defined in schema.
-      }
-
       const results = await ctx.db
         .query("leads")
-        .withSearchIndex("search_name", (q) => {
-          let search = q.search("name", args.search!);
+        .withSearchIndex("search_all", (q) => {
+          let search = q.search("searchText", args.search!);
           if (args.filter === "mine") {
             search = search.eq("assignedTo", userId);
           }
@@ -260,6 +262,14 @@ export const createLead = mutation({
     const userId = args.userId;
     if (!userId) throw new Error("Unauthorized");
 
+    const searchText = generateSearchText({
+      name: args.name,
+      subject: args.subject,
+      mobile: args.mobile,
+      email: args.email,
+      message: args.message,
+    });
+
     const leadId = await ctx.db.insert("leads", {
       name: args.name,
       subject: args.subject,
@@ -271,6 +281,7 @@ export const createLead = mutation({
       status: "Cold",
       type: "To be Decided",
       lastActivity: Date.now(),
+      searchText,
     });
     
     // Send welcome email for manually created leads if email is provided
@@ -356,8 +367,21 @@ export const updateLead = mutation({
       }
     }
 
+    // Calculate new search text
+    const merged = {
+      name: args.patch.name ?? lead.name,
+      subject: lead.subject, // subject is not in patch currently
+      mobile: args.patch.mobile ?? lead.mobile,
+      altMobile: lead.altMobile, // altMobile is not in patch currently
+      email: args.patch.email ?? lead.email,
+      altEmail: lead.altEmail, // altEmail is not in patch currently
+      message: args.patch.message ?? lead.message,
+    };
+    const searchText = generateSearchText(merged);
+
     await ctx.db.patch(args.id, {
       ...args.patch,
+      searchText,
       lastActivity: Date.now(),
     });
   },
