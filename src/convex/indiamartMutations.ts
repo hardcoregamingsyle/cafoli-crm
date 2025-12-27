@@ -32,6 +32,87 @@ export const reactivateLead = internalMutation({
   },
 });
 
+export const mergeIndiamartLead = internalMutation({
+  args: {
+    id: v.id("leads"),
+    uniqueQueryId: v.string(),
+    name: v.string(),
+    subject: v.string(),
+    mobile: v.string(),
+    altMobile: v.optional(v.string()),
+    email: v.string(),
+    altEmail: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    altPhone: v.optional(v.string()),
+    agencyName: v.optional(v.string()),
+    address: v.optional(v.string()),
+    city: v.optional(v.string()),
+    state: v.optional(v.string()),
+    pincode: v.optional(v.string()),
+    message: v.string(),
+    metadata: v.object({
+      queryTime: v.string(),
+      queryType: v.string(),
+      mcatName: v.string(),
+      productName: v.string(),
+      countryIso: v.string(),
+      callDuration: v.optional(v.string()),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const lead = await ctx.db.get(args.id);
+    if (!lead) return;
+
+    const now = Date.now();
+    const updates: any = {
+      lastActivity: now,
+    };
+
+    // If assigned, bump to top of my_leads by setting nextFollowUpDate to now
+    if (lead.assignedTo) {
+      updates.nextFollowUpDate = now;
+    }
+
+    // Merge fields
+    if (args.name) updates.name = args.name;
+    if (args.mobile) updates.mobile = args.mobile;
+    if (args.email) updates.email = args.email;
+    if (args.agencyName) updates.agencyName = args.agencyName;
+    if (args.pincode) updates.pincode = args.pincode;
+    if (args.state) updates.state = args.state;
+    
+    // Update search text
+    const merged = {
+      name: updates.name || lead.name,
+      subject: lead.subject,
+      mobile: updates.mobile || lead.mobile,
+      altMobile: lead.altMobile,
+      email: updates.email || lead.email,
+      altEmail: lead.altEmail,
+      message: lead.message,
+    };
+    
+    updates.searchText = [
+      merged.name,
+      merged.subject,
+      merged.mobile,
+      merged.altMobile,
+      merged.email,
+      merged.altEmail,
+      merged.message
+    ].filter(Boolean).join(" ");
+
+    await ctx.db.patch(args.id, updates);
+
+    // Add system comment
+    await ctx.db.insert("comments", {
+      leadId: args.id,
+      content: `Lead reposted from IndiaMART.\nNew Message: ${args.message || "No message"}\nSubject: ${args.subject}`,
+      isSystem: true,
+    });
+  },
+});
+
 export const createIndiamartLead = internalMutation({
   args: {
     uniqueQueryId: v.string(),

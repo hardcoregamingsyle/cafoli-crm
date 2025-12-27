@@ -87,7 +87,25 @@ export const fetchPharmavendsLeads = internalAction({
             console.log(`Reactivated irrelevant lead: ${uid}`);
             newLeadsCount++; 
           } else {
-            duplicatesCount++;
+            // Merge duplicate lead
+            await ctx.runMutation(internal.pharmavendsMutations.mergePharmavendsLead, {
+              id: existing._id,
+              uid: uid,
+              name: cleanValue(item["Column C"] || item["Query_Name"] || item["Name"] || "Unknown"),
+              subject: String(item["Column D"] || item["Subject"] || "No Subject"),
+              mobile: cleanValue(item["Column F"] || item["Mobile No."] || item["Mobile"] || ""),
+              altMobile: cleanValue(item["Alt_Mobile"] || item["Alt Mobile"]),
+              email: cleanValue(item["Column E"] || item["Email"]),
+              altEmail: cleanValue(item["Alt_Email"] || item["Alt Email"]),
+              agencyName: cleanValue(item["Agency Name"] || item["Agency_Name"]),
+              pincode: String(item["Pincode"] || item["pincode"] || ""),
+              state: cleanValue(item["State"] || item["state"]),
+              district: cleanValue(item["District"] || item["district"]),
+              station: cleanValue(item["Station"] || item["station"]),
+              message: cleanValue(item["Column G"] || item["Message"] || item["message"]),
+            });
+            console.log(`Merged duplicate lead: ${uid}`);
+            duplicatesCount++; // Still count as duplicate for stats, or maybe separate? Keeping as duplicate for now.
           }
           continue;
         }

@@ -132,8 +132,8 @@ export const getPaginatedLeads = query({
         if (dateA) return -1;
         if (dateB) return 1;
         
-        // If neither has date, sort by creation time desc
-        return b._creationTime - a._creationTime;
+        // If neither has date, sort by lastActivity desc (was creationTime)
+        return b.lastActivity - a.lastActivity;
       });
 
       // Manual pagination
@@ -152,6 +152,7 @@ export const getPaginatedLeads = query({
       // Database query for other views
       return await ctx.db
         .query("leads")
+        .withIndex("by_last_activity")
         .order("desc")
         .filter((q) => {
           let predicate;
@@ -486,11 +487,21 @@ export const getComments = query({
     // Enrich with user info
     const commentsWithUser = await Promise.all(
       comments.map(async (c) => {
-        const user = await ctx.db.get(c.userId);
+        let userName = "System";
+        let userImage = undefined;
+
+        if (c.userId) {
+          const user = await ctx.db.get(c.userId);
+          userName = user?.name || "Unknown";
+          userImage = user?.image;
+        } else if (c.isSystem) {
+          userName = "System";
+        }
+
         return {
           ...c,
-          userName: user?.name || "Unknown",
-          userImage: user?.image,
+          userName,
+          userImage,
         };
       })
     );

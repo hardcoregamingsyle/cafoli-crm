@@ -180,8 +180,36 @@ http.route({
           });
         }
 
-        console.log(`IndiaMART lead ${uniqueQueryId} already exists, skipping`);
-        return new Response(JSON.stringify({ success: true, message: "Lead already exists" }), {
+        // Merge duplicate lead
+        await ctx.runMutation(internal.indiamartMutations.mergeIndiamartLead, {
+          id: existing._id,
+          uniqueQueryId,
+          name: response.SENDER_NAME,
+          subject: response.SUBJECT,
+          mobile: response.SENDER_MOBILE || "",
+          altMobile: response.SENDER_MOBILE_ALT,
+          email: response.SENDER_EMAIL,
+          altEmail: response.SENDER_EMAIL_ALT,
+          phone: response.SENDER_PHONE,
+          altPhone: response.SENDER_PHONE_ALT,
+          agencyName: response.SENDER_COMPANY,
+          address: response.SENDER_ADDRESS,
+          city: response.SENDER_CITY,
+          state: response.SENDER_STATE,
+          pincode: response.SENDER_PINCODE,
+          message: response.QUERY_MESSAGE,
+          metadata: {
+            queryTime: response.QUERY_TIME,
+            queryType: response.QUERY_TYPE,
+            mcatName: response.QUERY_MCAT_NAME,
+            productName: response.QUERY_PRODUCT_NAME,
+            countryIso: response.SENDER_COUNTRY_ISO,
+            callDuration: response.CALL_DURATION || undefined,
+          },
+        });
+
+        console.log(`IndiaMART lead ${uniqueQueryId} merged successfully`);
+        return new Response(JSON.stringify({ success: true, message: "Lead merged" }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });
