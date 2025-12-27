@@ -27,16 +27,26 @@ export const getReportStats = query({
         q.gte("_creationTime", args.startDate).lte("_creationTime", args.endDate)
       );
     
-    const leads = await leadsQuery.collect();
+    let leads = await leadsQuery.collect();
+
+    // If not admin, filter leads to only those assigned to the user
+    if (!isAdmin) {
+      leads = leads.filter(l => l.assignedTo === userId);
+    }
 
     // Fetch follow-ups in the date range (scheduled or completed)
     // We'll look at scheduledAt for punctuality stats in this period
-    const followups = await ctx.db
+    let followups = await ctx.db
       .query("followups")
       .withIndex("by_scheduled_at", (q) => 
         q.gte("scheduledAt", args.startDate).lte("scheduledAt", args.endDate)
       )
       .collect();
+
+    // If not admin, filter followups to only those assigned to the user
+    if (!isAdmin) {
+      followups = followups.filter(f => f.assignedTo === userId);
+    }
 
     // Aggregation Helpers
     const countBy = (items: any[], key: string) => {
@@ -132,14 +142,18 @@ export const getLeadsByFilter = query({
     const userId = args.userId || await getAuthUserId(ctx);
     if (!userId) return [];
 
+    const user = await ctx.db.get(userId);
+    if (!user) return [];
+    const isAdmin = user.role === ROLES.ADMIN;
+
     // Resolve user ID if filtering by assignment
     let targetUserId: string | undefined;
     if (args.filterType === "assignedTo" && args.filterValue !== "Unassigned") {
-      const user = await ctx.db
+      const targetUser = await ctx.db
         .query("users")
         .filter(q => q.eq(q.field("name"), args.filterValue))
         .first();
-      if (user) targetUserId = user._id;
+      if (targetUser) targetUserId = targetUser._id;
     }
 
     const leads = await ctx.db
@@ -153,6 +167,9 @@ export const getLeadsByFilter = query({
     // In a real app with millions of rows, we'd use specific indexes
     
     return leads.filter(l => {
+      // Security check: if not admin, only show assigned leads
+      if (!isAdmin && l.assignedTo !== userId) return false;
+
       if (args.filterType === "source") return l.source === args.filterValue;
       if (args.filterType === "status") return l.status === args.filterValue;
       if (args.filterType === "type") return l.type === args.filterValue;
