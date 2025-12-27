@@ -65,10 +65,11 @@ export const getReportStats = query({
       // Pre-fetch user names for better display
       const userIds = Array.from(new Set(leads.map(l => l.assignedTo).filter((id): id is Id<"users"> => !!id)));
       const usersMap = new Map<string, string>();
-      for (const uid of userIds) {
-        const u = await ctx.db.get(uid);
-        if (u && u.name) usersMap.set(uid, u.name);
-      }
+      
+      const users = await Promise.all(userIds.map(uid => ctx.db.get(uid)));
+      users.forEach((u, i) => {
+        if (u && u.name) usersMap.set(userIds[i], u.name);
+      });
 
       leads.forEach(l => {
         const name = l.assignedTo ? (usersMap.get(l.assignedTo) || "Unknown User") : "Unassigned";

@@ -69,7 +69,6 @@ const schema = defineSchema(
       
       nextFollowUpDate: v.optional(v.number()),
       lastActivity: v.number(),
-      _creationTime: v.number(), // Add creation time field
 
       // Special flags
       adminAssignmentRequired: v.optional(v.boolean()),

@@ -70,8 +70,12 @@ export default function Reports() {
     } : "skip"
   );
 
-  if (!stats) {
+  if (stats === undefined) {
     return <div className="p-8 text-center">Loading reports...</div>;
+  }
+
+  if (stats === null) {
+    return <div className="p-8 text-center">Unable to load reports. Please try refreshing the page.</div>;
   }
 
   // Filter data based on checkboxes
