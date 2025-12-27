@@ -29,6 +29,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Pie, PieChart, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
+import { useAuth } from "@/hooks/use-auth";
 
 // Colors for charts
 const COLORS = [
@@ -36,6 +37,7 @@ const COLORS = [
 ];
 
 export default function Reports() {
+  const { user } = useAuth();
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [selectedSlice, setSelectedSlice] = useState<{ type: string, value: string } | null>(null);
   
@@ -58,15 +60,18 @@ export default function Reports() {
   const startDate = date ? startOfDay(date).getTime() : startOfDay(new Date()).getTime();
   const endDate = date ? endOfDay(date).getTime() : endOfDay(new Date()).getTime();
 
-  const stats = useQuery(api.reports.getReportStats, { startDate, endDate });
+  const stats = useQuery(api.reports.getReportStats, 
+    user?._id ? { startDate, endDate, userId: user._id } : "skip"
+  );
   
   // Query for details when a slice is clicked
   const detailsLeads = useQuery(api.reports.getLeadsByFilter, 
-    selectedSlice ? {
+    (selectedSlice && user?._id) ? {
       startDate,
       endDate,
       filterType: selectedSlice.type,
-      filterValue: selectedSlice.value
+      filterValue: selectedSlice.value,
+      userId: user._id
     } : "skip"
   );
 

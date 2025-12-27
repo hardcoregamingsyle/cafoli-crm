@@ -126,8 +126,12 @@ export const getLeadsByFilter = query({
     endDate: v.number(),
     filterType: v.string(), // "source", "status", "type", "assignedTo"
     filterValue: v.string(),
+    userId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
+    const userId = args.userId || await getAuthUserId(ctx);
+    if (!userId) return [];
+
     // Resolve user ID if filtering by assignment
     let targetUserId: string | undefined;
     if (args.filterType === "assignedTo" && args.filterValue !== "Unassigned") {
@@ -154,14 +158,8 @@ export const getLeadsByFilter = query({
       if (args.filterType === "type") return l.type === args.filterValue;
       if (args.filterType === "assignedTo") {
         if (args.filterValue === "Unassigned") return !l.assignedTo;
-        
-        // We need to find the user ID for the given name
-        // This is inefficient but works for small datasets. 
-        // Ideally we'd pass ID from the frontend.
-        // Since we can't easily get the ID from the name here without querying users,
-        // and we are inside a filter loop (which is synchronous), we can't await.
-        // So we have to filter *after* fetching users or fetch users *before*.
-        return true; // Placeholder: filtering by specific user name is not supported in this view yet
+        if (targetUserId) return l.assignedTo === targetUserId;
+        return false;
       }
       return true;
     });
