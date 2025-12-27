@@ -39,7 +39,7 @@ export const sendWhatsAppMessage = action({
 
       // Send message via WhatsApp Cloud API
       const response = await fetch(
-        `https://graph.facebook.com/v16.0/${phoneNumberId}/messages`,
+        `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
         {
           method: "POST",
           headers: {
@@ -106,7 +106,7 @@ export const sendWhatsAppMedia = action({
 
       // Send media via WhatsApp Cloud API
       const response = await fetch(
-        `https://graph.facebook.com/v16.0/${phoneNumberId}/messages`,
+        `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
         {
           method: "POST",
           headers: {
@@ -170,7 +170,7 @@ export const markMessageAsRead = internalAction({
 
     try {
       const response = await fetch(
-        `https://graph.facebook.com/v16.0/${phoneNumberId}/messages`,
+        `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
         {
           method: "POST",
           headers: {
@@ -214,7 +214,7 @@ export const markMessagesAsRead = internalAction({
     await Promise.all(args.messageIds.map(async (messageId) => {
       try {
         const response = await fetch(
-          `https://graph.facebook.com/v16.0/${phoneNumberId}/messages`,
+          `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
           {
             method: "POST",
             headers: {
@@ -291,7 +291,7 @@ export const handleIncomingMessage = internalAction({
             
             // Get media URL from WhatsApp
             const mediaResponse = await fetch(
-              `https://graph.facebook.com/v16.0/${args.mediaId}`,
+              `https://graph.facebook.com/v20.0/${args.mediaId}`,
               {
                 headers: {
                   "Authorization": `Bearer ${accessToken}`,
@@ -405,7 +405,7 @@ export const updateWhatsAppInterface = action({
       };
 
       const cmdResponse = await fetch(
-        `https://graph.facebook.com/v16.0/${phoneNumberId}/commands`,
+        `https://graph.facebook.com/v20.0/${phoneNumberId}/commands`,
         {
           method: "POST",
           headers: {
@@ -432,12 +432,13 @@ export const updateWhatsAppInterface = action({
         prompts: [
           "What are your business hours?",
           "Where are you located?",
-          "I want to see your catalog"
+          "I want to see your catalog",
+          "What services do you offer?"
         ]
       };
       
       const ibResponse = await fetch(
-        `https://graph.facebook.com/v16.0/${phoneNumberId}/conversational_automation`,
+        `https://graph.facebook.com/v20.0/${phoneNumberId}/conversational_automation`,
         {
           method: "POST",
           headers: {

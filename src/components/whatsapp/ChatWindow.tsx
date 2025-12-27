@@ -368,6 +368,10 @@ export function ChatWindow({ selectedLeadId, selectedLead }: ChatWindowProps) {
                     <HelpCircle className="mr-2 h-4 w-4" />
                     <span>Pricing</span>
                   </CommandItem>
+                  <CommandItem onSelect={() => handleCommandSelect("faq", "We offer a wide range of services including consulting, development, and support.")} className="cursor-pointer">
+                    <HelpCircle className="mr-2 h-4 w-4" />
+                    <span>Services</span>
+                  </CommandItem>
                 </CommandGroup>
               </CommandList>
             </Command>
