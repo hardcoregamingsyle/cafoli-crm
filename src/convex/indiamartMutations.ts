@@ -2,16 +2,34 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 
+function standardizePhoneNumber(phone: string): string {
+  if (!phone) return "";
+  
+  // Remove all non-digit characters and spaces
+  const cleaned = phone.replace(/\D/g, "");
+  
+  // If 10 digits, prepend '91'
+  if (cleaned.length === 10) {
+    return "91" + cleaned;
+  }
+  
+  // If 11+ digits, return as-is
+  return cleaned;
+}
+
 export const checkIndiamartLeadExists = internalQuery({
   args: { 
     uniqueQueryId: v.string(),
     mobile: v.string(),
   },
   handler: async (ctx, args) => {
+    // Standardize the mobile number before checking
+    const standardizedMobile = standardizePhoneNumber(args.mobile);
+    
     // First check by mobile number (primary deduplication)
     const leadByMobile = await ctx.db
       .query("leads")
-      .withIndex("by_mobile", (q) => q.eq("mobile", args.mobile))
+      .withIndex("by_mobile", (q) => q.eq("mobile", standardizedMobile))
       .first();
     
     if (leadByMobile) {
@@ -90,7 +108,6 @@ export const mergeIndiamartLead = internalMutation({
       updates.nextFollowUpDate = now;
       
       // Also update follow-up history
-      // Mark previous pending as completed (overdue/timely)
       const pending = await ctx.db
         .query("followups")
         .withIndex("by_lead", (q) => q.eq("leadId", args.id))
@@ -115,10 +132,15 @@ export const mergeIndiamartLead = internalMutation({
       });
     }
 
+    // Standardize phone numbers before merging
+    const standardizedMobile = standardizePhoneNumber(args.mobile);
+    const standardizedAltMobile = args.altMobile ? standardizePhoneNumber(args.altMobile) : undefined;
+
     // Merge fields
     if (args.name) updates.name = args.name;
-    if (args.mobile) updates.mobile = args.mobile;
+    if (standardizedMobile) updates.mobile = standardizedMobile;
     if (args.email) updates.email = args.email;
+    if (standardizedAltMobile) updates.altMobile = standardizedAltMobile;
     if (args.agencyName) updates.agencyName = args.agencyName;
     if (args.pincode) updates.pincode = args.pincode;
     if (args.state) updates.state = args.state;
@@ -128,7 +150,7 @@ export const mergeIndiamartLead = internalMutation({
       name: updates.name || lead.name,
       subject: lead.subject,
       mobile: updates.mobile || lead.mobile,
-      altMobile: lead.altMobile,
+      altMobile: updates.altMobile || lead.altMobile,
       email: updates.email || lead.email,
       altEmail: lead.altEmail,
       message: lead.message,
@@ -149,7 +171,7 @@ export const mergeIndiamartLead = internalMutation({
     // Add system comment
     await ctx.db.insert("comments", {
       leadId: args.id,
-      content: `Lead reposted from IndiaMART.\nNew Message: ${args.message || "No message"}\nSubject: ${args.subject}`,
+      content: `Lead reposted from IndiaMART.\\nNew Message: ${args.message || "No message"}\\nSubject: ${args.subject}`,
       isSystem: true,
     });
   },
@@ -182,12 +204,16 @@ export const createIndiamartLead = internalMutation({
     }),
   },
   handler: async (ctx, args) => {
+    // Standardize phone numbers before creating
+    const standardizedMobile = standardizePhoneNumber(args.mobile);
+    const standardizedAltMobile = args.altMobile ? standardizePhoneNumber(args.altMobile) : undefined;
+
     const leadId = await ctx.db.insert("leads", {
       name: args.name,
       subject: args.subject,
       source: "IndiaMART",
-      mobile: args.mobile,
-      altMobile: args.altMobile,
+      mobile: standardizedMobile,
+      altMobile: standardizedAltMobile,
       email: args.email,
       altEmail: args.altEmail,
       agencyName: args.agencyName,
@@ -211,7 +237,6 @@ export const createIndiamartLead = internalMutation({
         });
       } catch (error) {
         console.error("Failed to schedule welcome email:", error);
-        // Don't throw - lead creation should succeed even if email fails
       }
     }
     

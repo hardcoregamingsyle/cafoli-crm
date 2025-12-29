@@ -3,6 +3,22 @@ import { action, internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 
+// Add phone number standardization utility
+function standardizePhoneNumber(phone: string): string {
+  if (!phone) return "";
+  
+  // Remove all non-digit characters and spaces
+  const cleaned = phone.replace(/\D/g, "");
+  
+  // If 10 digits, prepend '91'
+  if (cleaned.length === 10) {
+    return "91" + cleaned;
+  }
+  
+  // If 11+ digits, return as-is
+  return cleaned;
+}
+
 export const fetchPharmavendsLeads = internalAction({
   args: {},
   handler: async (ctx) => {
@@ -48,15 +64,6 @@ export const fetchPharmavendsLeads = internalAction({
       
       // Process each lead
       for (const item of data) {
-        // Map fields based on the logs which show "Column A", "Column B", etc.
-        // Column A: UID
-        // Column B: Source
-        // Column C: Name
-        // Column D: Subject
-        // Column E: Email
-        // Column F: Mobile
-        // Column G: Message
-        
         const uid = String(
           item["Column A"] || 
           item["Query No."] || 
@@ -73,10 +80,14 @@ export const fetchPharmavendsLeads = internalAction({
           continue;
         }
 
+        // Extract and standardize mobile number
+        const rawMobile = cleanValue(item["Column F"] || item["Mobile No."] || item["Mobile"] || "");
+        const standardizedMobile = standardizePhoneNumber(rawMobile);
+
         // Check if lead already exists by mobile number (primary) or uid (fallback)
         const existing = await ctx.runQuery(internal.pharmavendsMutations.checkLeadExists, {
           uid: uid,
-          mobile: cleanValue(item["Column F"] || item["Mobile No."] || item["Mobile"] || ""),
+          mobile: standardizedMobile,
         });
         
         if (existing) {
@@ -94,7 +105,7 @@ export const fetchPharmavendsLeads = internalAction({
               uid: uid,
               name: cleanValue(item["Column C"] || item["Query_Name"] || item["Name"] || "Unknown"),
               subject: String(item["Column D"] || item["Subject"] || "No Subject"),
-              mobile: cleanValue(item["Column F"] || item["Mobile No."] || item["Mobile"] || ""),
+              mobile: rawMobile,
               altMobile: cleanValue(item["Alt_Mobile"] || item["Alt Mobile"]),
               email: cleanValue(item["Column E"] || item["Email"]),
               altEmail: cleanValue(item["Alt_Email"] || item["Alt Email"]),
@@ -106,7 +117,7 @@ export const fetchPharmavendsLeads = internalAction({
               message: cleanValue(item["Column G"] || item["Message"] || item["message"]),
             });
             console.log(`Merged duplicate lead: ${uid}`);
-            duplicatesCount++; // Still count as duplicate for stats, or maybe separate? Keeping as duplicate for now.
+            duplicatesCount++;
           }
           continue;
         }
@@ -116,7 +127,7 @@ export const fetchPharmavendsLeads = internalAction({
           uid: uid,
           name: cleanValue(item["Column C"] || item["Query_Name"] || item["Name"] || "Unknown"),
           subject: String(item["Column D"] || item["Subject"] || "No Subject"),
-          mobile: cleanValue(item["Column F"] || item["Mobile No."] || item["Mobile"] || ""),
+          mobile: rawMobile,
           altMobile: cleanValue(item["Alt_Mobile"] || item["Alt Mobile"]),
           email: cleanValue(item["Column E"] || item["Email"]),
           altEmail: cleanValue(item["Alt_Email"] || item["Alt Email"]),
