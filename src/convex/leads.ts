@@ -102,6 +102,26 @@ export const getPaginatedLeads = query({
       };
     }
 
+    // Helper function to enrich leads with assigned user names
+    const enrichLeadsWithUserNames = async (leads: any[]) => {
+      return await Promise.all(
+        leads.map(async (lead) => {
+          if (lead.assignedTo) {
+            const assignedUser = await ctx.db.get(lead.assignedTo);
+            // Type guard to ensure we have a user document
+            if (assignedUser && '_id' in assignedUser) {
+              const userName = (assignedUser as any).name || (assignedUser as any).email || "Unknown User";
+              return {
+                ...lead,
+                assignedToName: userName,
+              };
+            }
+          }
+          return lead;
+        })
+      );
+    };
+
     // Search logic
     if (args.search) {
       let results = await ctx.db
@@ -123,8 +143,11 @@ export const getPaginatedLeads = query({
         results = results.filter(l => l.source === args.source);
       }
 
+      // Enrich with user names
+      const enrichedResults = await enrichLeadsWithUserNames(results);
+
       return {
-        page: results,
+        page: enrichedResults,
         isDone: true,
         continueCursor: "",
       };
@@ -176,14 +199,17 @@ export const getPaginatedLeads = query({
       const isDone = offset + numItems >= sortedLeads.length;
       const continueCursor = isDone ? "" : (offset + numItems).toString();
 
+      // Enrich with user names
+      const enrichedPage = await enrichLeadsWithUserNames(page);
+
       return {
-        page,
+        page: enrichedPage,
         isDone,
         continueCursor,
       };
     } else {
       // Database query for other views
-      return await ctx.db
+      const result = await ctx.db
         .query("leads")
         .withIndex("by_last_activity")
         .order("desc")
@@ -214,6 +240,14 @@ export const getPaginatedLeads = query({
           return predicate;
         })
         .paginate(args.paginationOpts);
+
+      // Enrich with user names
+      const enrichedPage = await enrichLeadsWithUserNames(result.page);
+
+      return {
+        ...result,
+        page: enrichedPage,
+      };
     }
   },
 });

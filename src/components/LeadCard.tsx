@@ -64,6 +64,12 @@ export function LeadCard({
               Overdue
             </span>
           )}
+          
+          {(lead as any).assignedToName && (
+            <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs">
+              👤 {(lead as any).assignedToName}
+            </span>
+          )}
           {isUnassignedView && !lead.assignedTo && !viewIrrelevant && (
             <>
               {!isAdmin ? (
