@@ -552,3 +552,37 @@ export const getComments = query({
     return commentsWithUser;
   },
 });
+
+export const getAllLeadsForExport = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const userId = args.userId;
+    if (!userId) throw new Error("Unauthorized");
+    
+    const user = await ctx.db.get(userId);
+    if (user?.role !== ROLES.ADMIN) {
+      throw new Error("Only admins can export all leads");
+    }
+
+    // Fetch all leads
+    const leads = await ctx.db.query("leads").collect();
+    
+    // Enrich with assigned user names
+    const enrichedLeads = await Promise.all(
+      leads.map(async (lead) => {
+        let assignedToName = "";
+        if (lead.assignedTo) {
+          const assignedUser = await ctx.db.get(lead.assignedTo);
+          assignedToName = assignedUser?.name || "";
+        }
+        
+        return {
+          ...lead,
+          assignedToName,
+        };
+      })
+    );
+
+    return enrichedLeads;
+  },
+});
