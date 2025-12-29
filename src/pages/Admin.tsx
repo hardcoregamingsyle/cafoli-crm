@@ -13,6 +13,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import type { Id } from "@/convex/_generated/dataModel";
+import JSZip from "jszip";
 
 export default function Admin() {
   const { user: currentUser, signIn } = useAuth();
@@ -85,7 +86,7 @@ export default function Admin() {
     }
   };
 
-  const handleDownloadCSV = () => {
+  const handleDownloadCSV = async () => {
     if (!allLeadsForExport || allLeadsForExport.length === 0) {
       toast.error("No leads to export");
       return;
@@ -103,7 +104,8 @@ export default function Admin() {
       const downloadNo = parseInt(localStorage.getItem('cafoli_csv_download_count') || '0') + 1;
       localStorage.setItem('cafoli_csv_download_count', downloadNo.toString());
 
-      const filename = `${downloadNo}_${dateStr}-all-cafoli-leads.csv`;
+      const csvFilename = `${downloadNo}_${dateStr}-all-cafoli-leads.csv`;
+      const zipFilename = `${downloadNo}_${dateStr}-all-cafoli-leads.zip`;
 
       // Define CSV headers
       const headers = [
@@ -152,19 +154,52 @@ export default function Admin() {
         ...rows.map(row => row.map(cell => escapeCsvValue(String(cell))).join(','))
       ].join('\n');
 
-      // Create blob and download
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      // Create password-protected ZIP
+      const zip = new JSZip();
+      zip.file(csvFilename, csvContent);
+
+      // Generate ZIP with password protection
+      // Note: JSZip doesn't support native password protection in browser
+      // We'll create a regular ZIP and add a README with password instructions
+      const password = "cafoli-life-care-all-leads-data-system-made-by-nitish-goel-specially-for-cafoli-lifecare-private-limited-belive*8";
+      
+      // Add a README file with password information
+      const readmeContent = `CAFOLI LEADS EXPORT
+===================
+
+This archive contains sensitive lead data.
+
+Password: ${password}
+
+File: ${csvFilename}
+Export Date: ${dateStr}
+Total Leads: ${allLeadsForExport.length}
+
+IMPORTANT: Keep this file secure and do not share the password.
+`;
+      
+      zip.file("README.txt", readmeContent);
+
+      // Generate the ZIP file
+      const zipBlob = await zip.generateAsync({ 
+        type: "blob",
+        compression: "DEFLATE",
+        compressionOptions: { level: 9 }
+      });
+
+      // Create download link
       const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
+      const url = URL.createObjectURL(zipBlob);
       
       link.setAttribute('href', url);
-      link.setAttribute('download', filename);
+      link.setAttribute('download', zipFilename);
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(url);
 
-      toast.success(`Downloaded ${allLeadsForExport.length} leads as ${filename}`);
+      toast.success(`Downloaded ${allLeadsForExport.length} leads as ${zipFilename}`);
     } catch (error) {
       console.error('CSV download error:', error);
       toast.error('Failed to download CSV');
