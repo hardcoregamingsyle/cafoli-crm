@@ -163,9 +163,10 @@ http.route({
       const response = body.RESPONSE;
       const uniqueQueryId = response.UNIQUE_QUERY_ID;
 
-      // Check if lead already exists
+      // Check if lead already exists by mobile number (primary) or unique query ID (fallback)
       const existing = await ctx.runQuery(internal.indiamartMutations.checkIndiamartLeadExists, {
         uniqueQueryId,
+        mobile: response.SENDER_MOBILE || "",
       });
 
       if (existing) {

@@ -73,9 +73,10 @@ export const fetchPharmavendsLeads = internalAction({
           continue;
         }
 
-        // Check if lead already exists by uid
+        // Check if lead already exists by mobile number (primary) or uid (fallback)
         const existing = await ctx.runQuery(internal.pharmavendsMutations.checkLeadExists, {
           uid: uid,
+          mobile: cleanValue(item["Column F"] || item["Mobile No."] || item["Mobile"] || ""),
         });
         
         if (existing) {

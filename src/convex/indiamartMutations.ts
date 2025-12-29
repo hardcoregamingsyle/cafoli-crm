@@ -3,18 +3,35 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 
 export const checkIndiamartLeadExists = internalQuery({
-  args: { uniqueQueryId: v.string() },
+  args: { 
+    uniqueQueryId: v.string(),
+    mobile: v.string(),
+  },
   handler: async (ctx, args) => {
-    const lead = await ctx.db
+    // First check by mobile number (primary deduplication)
+    const leadByMobile = await ctx.db
+      .query("leads")
+      .withIndex("by_mobile", (q) => q.eq("mobile", args.mobile))
+      .first();
+    
+    if (leadByMobile) {
+      return {
+        _id: leadByMobile._id,
+        type: leadByMobile.type,
+      };
+    }
+
+    // Fallback: check by unique query ID (for legacy data)
+    const leadByQueryId = await ctx.db
       .query("leads")
       .filter((q) => q.eq(q.field("indiamartUniqueId"), args.uniqueQueryId))
       .first();
     
-    if (!lead) return null;
+    if (!leadByQueryId) return null;
 
     return {
-      _id: lead._id,
-      type: lead.type,
+      _id: leadByQueryId._id,
+      type: leadByQueryId.type,
     };
   },
 });
