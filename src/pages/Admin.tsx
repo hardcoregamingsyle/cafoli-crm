@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Shield, Users, UserPlus, Trash2, LogIn, Download } from "lucide-react";
+import { Shield, Users, UserPlus, Trash2, LogIn, Download, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -23,8 +23,10 @@ export default function Admin() {
   const createUser = useMutation(api.users.createUser);
   const deleteUser = useMutation(api.users.deleteUser);
   const logExport = useMutation(api.leads.logExport);
+  const standardizePhoneNumbers = useMutation(api.leads.standardizeAllPhoneNumbers);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isStandardizing, setIsStandardizing] = useState(false);
   const [newUserData, setNewUserData] = useState({
     email: "",
     name: "",
@@ -85,6 +87,25 @@ export default function Admin() {
       toast.success(`Logged in as ${email}`);
     } catch (error) {
       toast.error("Failed to log in as user. Please use their actual credentials.");
+    }
+  };
+
+  const handleStandardizePhoneNumbers = async () => {
+    if (!currentUser) {
+      toast.error("You must be logged in");
+      return;
+    }
+
+    setIsStandardizing(true);
+    try {
+      const result = await standardizePhoneNumbers({ adminId: currentUser._id });
+      toast.success(
+        `Phone numbers standardized successfully!\n${result.updatedCount} leads updated, ${result.duplicatesFound} duplicates flagged for review.`
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to standardize phone numbers");
+    } finally {
+      setIsStandardizing(false);
     }
   };
 
@@ -227,6 +248,15 @@ export default function Admin() {
           </div>
           
           <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={handleStandardizePhoneNumbers}
+              disabled={isStandardizing}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${isStandardizing ? 'animate-spin' : ''}`} />
+              {isStandardizing ? "Standardizing..." : "Standardize Phone Numbers"}
+            </Button>
+
             <Button variant="outline" onClick={handleDownloadCSV}>
               <Download className="mr-2 h-4 w-4" />
               Download All Leads CSV

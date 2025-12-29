@@ -616,3 +616,69 @@ export const logExport = mutation({
     });
   },
 });
+
+export const standardizeAllPhoneNumbers = mutation({
+  args: { adminId: v.id("users") },
+  handler: async (ctx, args) => {
+    // Check admin permission
+    const admin = await ctx.db.get(args.adminId);
+    if (!admin || admin.role !== ROLES.ADMIN) {
+      throw new Error("Only admins can standardize phone numbers");
+    }
+
+    // Helper function to standardize phone numbers
+    function standardizePhoneNumber(phone: string): string {
+      if (!phone) return "";
+      const cleaned = phone.replace(/\D/g, "");
+      if (cleaned.length === 10) {
+        return "91" + cleaned;
+      }
+      return cleaned;
+    }
+
+    // Fetch all leads
+    const allLeads = await ctx.db.query("leads").collect();
+    
+    let updatedCount = 0;
+    let mergedCount = 0;
+    const processedMobiles = new Set<string>();
+
+    for (const lead of allLeads) {
+      const originalMobile = lead.mobile;
+      const standardizedMobile = standardizePhoneNumber(originalMobile);
+      
+      // Skip if already standardized
+      if (originalMobile === standardizedMobile) {
+        continue;
+      }
+
+      // Check if this standardized number already exists in another lead
+      if (processedMobiles.has(standardizedMobile)) {
+        // This is a duplicate - we'll handle it by marking for manual review
+        await ctx.db.insert("comments", {
+          leadId: lead._id,
+          content: `Duplicate phone number detected after standardization: ${standardizedMobile}. Please review and merge manually.`,
+          isSystem: true,
+        });
+        mergedCount++;
+        continue;
+      }
+
+      // Update the lead with standardized mobile
+      await ctx.db.patch(lead._id, {
+        mobile: standardizedMobile,
+        lastActivity: Date.now(),
+      });
+
+      processedMobiles.add(standardizedMobile);
+      updatedCount++;
+    }
+
+    return {
+      success: true,
+      updatedCount,
+      duplicatesFound: mergedCount,
+      totalLeads: allLeads.length,
+    };
+  },
+});
