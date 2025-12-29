@@ -100,27 +100,15 @@ const router = createBrowserRouter([
   },
   {
     path: "/campaigns",
-    element: (
-      <AppLayout>
-        <Campaigns />
-      </AppLayout>
-    ),
+    element: <Campaigns />,
   },
   {
     path: "/reports",
-    element: (
-      <AppLayout>
-        <Reports />
-      </AppLayout>
-    ),
+    element: <Reports />,
   },
   {
     path: "/whatsapp",
-    element: (
-      <AppLayout>
-        <WhatsApp />
-      </AppLayout>
-    ),
+    element: <WhatsApp />,
   },
   {
     path: "/admin",
