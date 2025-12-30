@@ -10,15 +10,18 @@ import {
   UserSquare2,
   Menu,
   X,
-  PieChart
+  PieChart,
+  Download
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { Button } from "./ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import JSZip from "jszip";
+import { toast } from "sonner";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -35,7 +38,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
   }, [user, ensureRole]);
 
   const location = useLocation();
-  const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const isAdmin = user?.role === "admin";
@@ -51,7 +53,116 @@ export default function AppLayout({ children }: AppLayoutProps) {
     ...(isAdmin ? [{ name: "Admin", href: "/admin", icon: Settings }] : []),
   ];
 
-  const SidebarContent = () => (
+  // Export Logic
+  const [isExporting, setIsExporting] = useState(false);
+  const allLeadsForExport = useQuery(api.leads.getAllLeadsForExport, isExporting && user ? { userId: user._id } : "skip");
+  const nextDownloadNumber = useQuery(api.leads.getNextDownloadNumber);
+  const logExport = useMutation(api.leads.logExport);
+
+  useEffect(() => {
+    const performExport = async () => {
+      if (isExporting && allLeadsForExport && nextDownloadNumber && user) {
+        try {
+          const now = new Date();
+          const day = String(now.getDate()).padStart(2, '0');
+          const month = String(now.getMonth() + 1).padStart(2, '0');
+          const year = now.getFullYear();
+          const dateStr = `${day}-${month}-${year}`;
+
+          const downloadNo = nextDownloadNumber;
+          const csvFilename = `${downloadNo}_${dateStr}-all-cafoli-leads.csv`;
+          const zipFilename = `${downloadNo}_${dateStr}-all-cafoli-leads.zip`;
+
+          const headers = [
+            'Name', 'Subject', 'Source', 'Mobile', 'Alt Mobile', 'Email', 'Alt Email',
+            'Agency Name', 'Pincode', 'State', 'District', 'Station', 'Message',
+            'Status', 'Type', 'Assigned To', 'Next Follow Up Date', 'Last Activity',
+            'Pharmavends UID', 'IndiaMART Unique ID', 'Created At'
+          ];
+
+          const rows = allLeadsForExport.map((lead: any) => [
+            lead.name || '',
+            lead.subject || '',
+            lead.source || '',
+            lead.mobile || '',
+            lead.altMobile || '',
+            lead.email || '',
+            lead.altEmail || '',
+            lead.agencyName || '',
+            lead.pincode || '',
+            lead.state || '',
+            lead.district || '',
+            lead.station || '',
+            lead.message || '',
+            lead.status || '',
+            lead.type || '',
+            lead.assignedToName || '',
+            lead.nextFollowUpDate ? new Date(lead.nextFollowUpDate).toLocaleString() : '',
+            new Date(lead.lastActivity).toLocaleString(),
+            lead.pharmavendsUid || '',
+            lead.indiamartUniqueId || '',
+            new Date(lead._creationTime).toLocaleString()
+          ]);
+
+          const escapeCsvValue = (value: string) => {
+            if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+              return `"${value.replace(/"/g, '""')}"`;
+            }
+            return value;
+          };
+
+          const csvContent = [
+            headers.map(escapeCsvValue).join(','),
+            ...rows.map(row => row.map((cell: any) => escapeCsvValue(String(cell))).join(','))
+          ].join('\n');
+
+          const zip = new JSZip();
+          zip.file(csvFilename, csvContent);
+
+          const zipBlob = await zip.generateAsync({ 
+            type: "blob",
+            compression: "DEFLATE",
+            compressionOptions: { level: 9 }
+          });
+
+          const link = document.createElement('a');
+          const url = URL.createObjectURL(zipBlob);
+          
+          link.setAttribute('href', url);
+          link.setAttribute('download', zipFilename);
+          link.style.visibility = 'hidden';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+
+          await logExport({
+            userId: user._id,
+            downloadNumber: downloadNo,
+            fileName: zipFilename,
+            leadCount: allLeadsForExport.length,
+          });
+
+          toast.success(`Downloaded ${allLeadsForExport.length} leads`);
+        } catch (error) {
+          console.error('Export error:', error);
+          toast.error('Failed to download leads');
+        } finally {
+          setIsExporting(false);
+        }
+      }
+    };
+
+    performExport();
+  }, [isExporting, allLeadsForExport, nextDownloadNumber, logExport, user]);
+
+  const handleExportClick = () => {
+    if (!isAdmin) return;
+    setIsExporting(true);
+    toast.info("Preparing download...");
+  };
+
+  const renderSidebarContent = () => (
     <div className="flex flex-col h-full bg-sidebar border-r border-sidebar-border">
       <div className="p-6">
         <div className="flex items-center gap-2 font-bold text-xl text-sidebar-primary">
@@ -85,6 +196,18 @@ export default function AppLayout({ children }: AppLayoutProps) {
       </div>
 
       <div className="p-4 border-t border-sidebar-border">
+        {isAdmin && (
+          <Button 
+            variant="outline" 
+            className="w-full justify-start gap-2 mb-4"
+            onClick={handleExportClick}
+            disabled={isExporting}
+          >
+            <Download className={`h-4 w-4 ${isExporting ? 'animate-spin' : ''}`} />
+            {isExporting ? "Exporting..." : "Download All Leads"}
+          </Button>
+        )}
+
         <div className="flex items-center gap-3 mb-4 px-2">
           <Avatar className="h-8 w-8">
             <AvatarImage src={user?.image} />
@@ -114,7 +237,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
     <div className="min-h-screen bg-background flex">
       {/* Desktop Sidebar */}
       <div className="hidden md:block w-64 fixed inset-y-0 z-50">
-        <SidebarContent />
+        {renderSidebarContent()}
       </div>
 
       {/* Mobile Header */}
@@ -127,7 +250,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="p-0 w-64">
-            <SidebarContent />
+            {renderSidebarContent()}
           </SheetContent>
         </Sheet>
       </div>
