@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Clock, Mail, MessageSquare, GitBranch, Shuffle, Tag, TagIcon, Filter, X, ArrowLeft, Save } from "lucide-react";
+import { Plus, Clock, Mail, MessageSquare, GitBranch, Shuffle, Tag, TagIcon, Filter, X, ArrowLeft, Save, Move } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -37,6 +37,9 @@ export default function CampaignBuilderPage() {
   const [connections, setConnections] = useState<CampaignConnection[]>([]);
   const [selectedBlock, setSelectedBlock] = useState<string | null>(null);
   const [showBlockMenu, setShowBlockMenu] = useState(false);
+  const [draggingBlock, setDraggingBlock] = useState<string | null>(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const canvasRef = useRef<HTMLDivElement>(null);
   
   // Lead selection state
   const [leadSelectionType, setLeadSelectionType] = useState<"all" | "filtered">("all");
@@ -75,6 +78,12 @@ export default function CampaignBuilderPage() {
     setBlocks([...blocks, newBlock]);
     setShowBlockMenu(false);
     setSelectedBlock(newBlock.id);
+    
+    // Auto-connect to previous block if exists
+    if (blocks.length > 0) {
+      const lastBlock = blocks[blocks.length - 1];
+      setConnections([...connections, { from: lastBlock.id, to: newBlock.id }]);
+    }
   };
 
   const getDefaultBlockData = (type: string): any => {
@@ -108,6 +117,39 @@ export default function CampaignBuilderPage() {
     setBlocks(blocks.filter(b => b.id !== blockId));
     setConnections(connections.filter(c => c.from !== blockId && c.to !== blockId));
     if (selectedBlock === blockId) setSelectedBlock(null);
+  };
+
+  const handleMouseDown = (e: React.MouseEvent, blockId: string) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+    
+    const block = blocks.find(b => b.id === blockId);
+    if (!block) return;
+    
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setDragOffset({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    });
+    setDraggingBlock(blockId);
+    setSelectedBlock(blockId);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!draggingBlock || !canvasRef.current) return;
+    
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    const newX = e.clientX - canvasRect.left - dragOffset.x;
+    const newY = e.clientY - canvasRect.top - dragOffset.y;
+    
+    setBlocks(blocks.map(b => 
+      b.id === draggingBlock 
+        ? { ...b, position: { x: Math.max(0, newX), y: Math.max(0, newY) } }
+        : b
+    ));
+  };
+
+  const handleMouseUp = () => {
+    setDraggingBlock(null);
   };
 
   const handleSave = async () => {
@@ -160,6 +202,49 @@ export default function CampaignBuilderPage() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to save campaign");
     }
+  };
+
+  // Draw connections on canvas
+  const renderConnections = () => {
+    return connections.map((conn, idx) => {
+      const fromBlock = blocks.find(b => b.id === conn.from);
+      const toBlock = blocks.find(b => b.id === conn.to);
+      
+      if (!fromBlock || !toBlock) return null;
+      
+      const fromX = fromBlock.position.x + 100;
+      const fromY = fromBlock.position.y + 60;
+      const toX = toBlock.position.x + 100;
+      const toY = toBlock.position.y;
+      
+      return (
+        <svg
+          key={`conn-${idx}`}
+          className="absolute top-0 left-0 pointer-events-none"
+          style={{ width: '100%', height: '100%', zIndex: 0 }}
+        >
+          <defs>
+            <marker
+              id={`arrowhead-${idx}`}
+              markerWidth="10"
+              markerHeight="10"
+              refX="9"
+              refY="3"
+              orient="auto"
+            >
+              <polygon points="0 0, 10 3, 0 6" fill="hsl(var(--primary))" />
+            </marker>
+          </defs>
+          <path
+            d={`M ${fromX} ${fromY} Q ${fromX} ${(fromY + toY) / 2}, ${toX} ${toY}`}
+            stroke="hsl(var(--primary))"
+            strokeWidth="2"
+            fill="none"
+            markerEnd={`url(#arrowhead-${idx})`}
+          />
+        </svg>
+      );
+    });
   };
 
   const selectedBlockData = blocks.find(b => b.id === selectedBlock);
@@ -338,10 +423,21 @@ export default function CampaignBuilderPage() {
           <div className="lg:col-span-2">
             <Card className="h-[calc(100vh-12rem)]">
               <CardHeader className="border-b">
-                <CardTitle className="text-sm">Campaign Flow</CardTitle>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Move className="h-4 w-4" />
+                  Campaign Flow (Drag blocks to arrange)
+                </CardTitle>
               </CardHeader>
               <CardContent className="p-0 h-full overflow-auto bg-muted/20">
-                <div className="relative min-h-full min-w-full p-8">
+                <div 
+                  ref={canvasRef}
+                  className="relative min-h-full min-w-full p-8"
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseUp}
+                >
+                  {renderConnections()}
+                  
                   {blocks.length === 0 ? (
                     <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
                       <div className="text-center">
@@ -354,9 +450,16 @@ export default function CampaignBuilderPage() {
                       return (
                         <Card
                           key={block.id}
-                          className={`absolute cursor-pointer transition-all ${selectedBlock === block.id ? 'ring-2 ring-primary shadow-lg' : 'hover:shadow-md'}`}
-                          style={{ left: block.position.x, top: block.position.y, width: '200px' }}
-                          onClick={() => setSelectedBlock(block.id)}
+                          className={`absolute cursor-move transition-all ${
+                            selectedBlock === block.id ? 'ring-2 ring-primary shadow-lg' : 'hover:shadow-md'
+                          } ${draggingBlock === block.id ? 'opacity-70' : ''}`}
+                          style={{ 
+                            left: block.position.x, 
+                            top: block.position.y, 
+                            width: '200px',
+                            zIndex: selectedBlock === block.id ? 10 : 1
+                          }}
+                          onMouseDown={(e) => handleMouseDown(e, block.id)}
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
