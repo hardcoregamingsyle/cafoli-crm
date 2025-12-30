@@ -27,4 +27,12 @@ crons.cron(
   {}
 );
 
+// Process campaign executions every 5 minutes
+crons.interval(
+  "process_campaign_executions",
+  { minutes: 5 },
+  internal.campaignExecutor.processCampaignExecutions,
+  {}
+);
+
 export default crons;

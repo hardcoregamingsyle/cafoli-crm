@@ -227,7 +227,7 @@ export default function CampaignBuilderPage() {
     }
   };
 
-  // Draw connections on canvas
+  // Draw connections on canvas - simple straight lines
   const renderConnections = () => {
     return connections.map((conn, idx) => {
       const fromBlock = blocks.find(b => b.id === conn.from);
@@ -235,13 +235,11 @@ export default function CampaignBuilderPage() {
       
       if (!fromBlock || !toBlock) return null;
       
+      // Calculate connection points (center bottom of from block to center top of to block)
       const fromX = fromBlock.position.x + 100;
       const fromY = fromBlock.position.y + 60;
       const toX = toBlock.position.x + 100;
       const toY = toBlock.position.y;
-      
-      const midX = fromX;
-      const midY = (fromY + toY) / 2;
       
       return (
         <g key={`conn-${idx}`}>
@@ -257,11 +255,14 @@ export default function CampaignBuilderPage() {
               <polygon points="0 0, 10 3, 0 6" fill="hsl(var(--primary))" />
             </marker>
           </defs>
-          <path
-            d={`M ${fromX} ${fromY} Q ${midX} ${midY}, ${toX} ${toY}`}
+          {/* Straight line connection */}
+          <line
+            x1={fromX}
+            y1={fromY}
+            x2={toX}
+            y2={toY}
             stroke="hsl(var(--primary))"
-            strokeWidth="2"
-            fill="none"
+            strokeWidth="3"
             markerEnd={`url(#arrowhead-${idx})`}
             className="cursor-pointer hover:stroke-destructive transition-colors"
             style={{ pointerEvents: 'stroke' }}
@@ -272,14 +273,15 @@ export default function CampaignBuilderPage() {
               }
             }}
           />
+          {/* Label in the middle of the line */}
           {conn.label && (
             <text
-              x={midX}
-              y={midY}
+              x={(fromX + toX) / 2}
+              y={(fromY + toY) / 2}
               fill="hsl(var(--primary))"
               fontSize="12"
               textAnchor="middle"
-              className="pointer-events-none"
+              className="pointer-events-none bg-background px-1"
             >
               {conn.label}
             </text>
