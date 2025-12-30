@@ -32,7 +32,7 @@ export const syncTemplates = action({
     try {
       // Fetch templates from Meta API
       const response = await fetch(
-        `https://graph.facebook.com/v16.0/${businessAccountId}/message_templates`,
+        `https://graph.facebook.com/v20.0/${businessAccountId}/message_templates`,
         {
           headers: {
             "Authorization": `Bearer ${accessToken}`,
@@ -122,7 +122,7 @@ export const createTemplate = action({
     try {
       // Create template via Meta API
       const response = await fetch(
-        `https://graph.facebook.com/v16.0/${businessAccountId}/message_templates`,
+        `https://graph.facebook.com/v20.0/${businessAccountId}/message_templates`,
         {
           method: "POST",
           headers: {
@@ -194,7 +194,7 @@ export const deleteTemplate = action({
     try {
       // Delete from Meta API
       const response = await fetch(
-        `https://graph.facebook.com/v16.0/${businessAccountId}/message_templates?name=${args.templateName}`,
+        `https://graph.facebook.com/v20.0/${businessAccountId}/message_templates?name=${args.templateName}`,
         {
           method: "DELETE",
           headers: {
@@ -241,7 +241,7 @@ export const sendTemplateMessage = action({
 
     try {
       const response = await fetch(
-        `https://graph.facebook.com/v16.0/${phoneNumberId}/messages`,
+        `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
         {
           method: "POST",
           headers: {

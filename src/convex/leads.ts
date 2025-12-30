@@ -5,6 +5,16 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { internal } from "./_generated/api";
 import { paginationOptsValidator } from "convex/server";
 
+// Helper to standardize phone numbers
+function standardizePhoneNumber(phone: string): string {
+  if (!phone) return "";
+  const cleaned = phone.replace(/\D/g, "");
+  if (cleaned.length === 10) {
+    return "91" + cleaned;
+  }
+  return cleaned;
+}
+
 // Helper to check permissions
 async function checkRole(ctx: any, allowedRoles: string[]) {
   const userId = await getAuthUserId(ctx);
@@ -339,10 +349,12 @@ export const createLead = mutation({
     const userId = args.userId;
     if (!userId) throw new Error("Unauthorized");
 
+    const mobile = standardizePhoneNumber(args.mobile);
+
     const searchText = generateSearchText({
       name: args.name,
       subject: args.subject,
-      mobile: args.mobile,
+      mobile: mobile,
       email: args.email,
       message: args.message,
     });
@@ -351,7 +363,7 @@ export const createLead = mutation({
       name: args.name,
       subject: args.subject,
       source: args.source,
-      mobile: args.mobile,
+      mobile: mobile,
       email: args.email,
       agencyName: args.agencyName,
       message: args.message,
@@ -381,7 +393,7 @@ export const createLead = mutation({
     try {
       await ctx.scheduler.runAfter(0, internal.whatsappMutations.sendWelcomeTemplate, {
         leadId: leadId,
-        phoneNumber: args.mobile,
+        phoneNumber: mobile,
       });
     } catch (error) {
       console.error("Failed to schedule welcome WhatsApp template:", error);
@@ -451,11 +463,17 @@ export const updateLead = mutation({
       }
     }
 
+    // Standardize mobile if present
+    let mobile = lead.mobile;
+    if (args.patch.mobile) {
+      mobile = standardizePhoneNumber(args.patch.mobile);
+    }
+
     // Calculate new search text
     const merged = {
       name: args.patch.name ?? lead.name,
       subject: lead.subject, // subject is not in patch currently
-      mobile: args.patch.mobile ?? lead.mobile,
+      mobile: mobile,
       altMobile: lead.altMobile, // altMobile is not in patch currently
       email: args.patch.email ?? lead.email,
       altEmail: lead.altEmail, // altEmail is not in patch currently
@@ -463,8 +481,13 @@ export const updateLead = mutation({
     };
     const searchText = generateSearchText(merged);
 
+    const patchUpdates = { ...args.patch };
+    if (patchUpdates.mobile) {
+      patchUpdates.mobile = mobile;
+    }
+
     await ctx.db.patch(args.id, {
-      ...args.patch,
+      ...patchUpdates,
       searchText,
       lastActivity: Date.now(),
     });
@@ -660,16 +683,6 @@ export const standardizeAllPhoneNumbers = mutation({
       throw new Error("Only admins can standardize phone numbers");
     }
 
-    // Helper function to standardize phone numbers
-    function standardizePhoneNumber(phone: string): string {
-      if (!phone) return "";
-      const cleaned = phone.replace(/\D/g, "");
-      if (cleaned.length === 10) {
-        return "91" + cleaned;
-      }
-      return cleaned;
-    }
-
     // Fetch all leads
     const allLeads = await ctx.db.query("leads").collect();
     
@@ -774,11 +787,13 @@ export const bulkImportLeads = mutation({
         ? leadData.source 
         : "Manual Import";
 
+      const mobile = standardizePhoneNumber(leadData.mobile);
+
       // Generate Search Text
       const searchText = [
         leadData.name,
         leadData.subject,
-        leadData.mobile,
+        mobile,
         leadData.altMobile,
         leadData.email,
         leadData.altEmail,
@@ -793,7 +808,7 @@ export const bulkImportLeads = mutation({
         name: leadData.name,
         email: leadData.email,
         altEmail: leadData.altEmail,
-        mobile: leadData.mobile,
+        mobile: mobile,
         altMobile: leadData.altMobile,
         source: source,
         assignedTo: assignedTo as any, // Cast to any to satisfy ID type if needed, or let Convex validate
