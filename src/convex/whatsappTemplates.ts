@@ -4,6 +4,67 @@ import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 
+// Helper function to send template message
+async function sendTemplateMessageHelper(
+  phoneNumber: string,
+  templateName: string,
+  languageCode: string,
+  leadId: string,
+  ctx: any
+) {
+  const accessToken = process.env.CLOUD_API_ACCESS_TOKEN;
+  const phoneNumberId = process.env.WA_PHONE_NUMBER_ID;
+  
+  if (!accessToken || !phoneNumberId) {
+    throw new Error("WhatsApp API not configured.");
+  }
+
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: phoneNumber,
+          type: "template",
+          template: {
+            name: templateName,
+            language: {
+              code: languageCode,
+            },
+          },
+        }),
+      }
+    );
+
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(`WhatsApp API error: ${JSON.stringify(data)}`);
+    }
+
+    // Store message in database
+    await ctx.runMutation(internal.whatsappMutations.storeMessage, {
+      leadId: leadId,
+      phoneNumber: phoneNumber,
+      content: `[Template: ${templateName}]`,
+      direction: "outbound",
+      status: "sent",
+      externalId: data.messages?.[0]?.id || "",
+    });
+
+    return { success: true, messageId: data.messages?.[0]?.id };
+  } catch (error) {
+    console.error("Template send error:", error);
+    throw new Error(`Failed to send template: ${error instanceof Error ? error.message : "Unknown error"}`);
+  }
+}
+
 // Sync templates from Meta WhatsApp Business API
 export const syncTemplates = action({
   args: {},
@@ -232,122 +293,29 @@ export const sendTemplateMessage = action({
     leadId: v.id("leads"),
   },
   handler: async (ctx, args) => {
-    const accessToken = process.env.CLOUD_API_ACCESS_TOKEN;
-    const phoneNumberId = process.env.WA_PHONE_NUMBER_ID;
-    
-    if (!accessToken || !phoneNumberId) {
-      throw new Error("WhatsApp API not configured.");
-    }
-
-    try {
-      const response = await fetch(
-        `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
-        {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            messaging_product: "whatsapp",
-            to: args.phoneNumber,
-            type: "template",
-            template: {
-              name: args.templateName,
-              language: {
-                code: args.languageCode,
-              },
-            },
-          }),
-        }
-      );
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(`WhatsApp API error: ${JSON.stringify(data)}`);
-      }
-
-      // Store message in database
-      await ctx.runMutation(internal.whatsappMutations.storeMessage, {
-        leadId: args.leadId,
-        phoneNumber: args.phoneNumber,
-        content: `[Template: ${args.templateName}]`,
-        direction: "outbound",
-        status: "sent",
-        externalId: data.messages?.[0]?.id || "",
-      });
-
-      return { success: true, messageId: data.messages?.[0]?.id };
-    } catch (error) {
-      console.error("Template send error:", error);
-      throw new Error(`Failed to send template: ${error instanceof Error ? error.message : "Unknown error"}`);
-    }
+    return await sendTemplateMessageHelper(
+      args.phoneNumber,
+      args.templateName,
+      args.languageCode,
+      args.leadId,
+      ctx
+    );
   },
 });
 
-// Internal action for sending template messages (called from mutations)
-export const sendTemplateMessageInternal = internalAction({
+// Internal action to send welcome message
+export const sendWelcomeMessage = internalAction({
   args: {
     phoneNumber: v.string(),
-    templateName: v.string(),
-    languageCode: v.string(),
     leadId: v.id("leads"),
   },
   handler: async (ctx, args) => {
-    const accessToken = process.env.CLOUD_API_ACCESS_TOKEN;
-    const phoneNumberId = process.env.WA_PHONE_NUMBER_ID;
-    
-    if (!accessToken || !phoneNumberId) {
-      console.error("WhatsApp API not configured for template sending");
-      return { success: false, error: "WhatsApp API not configured" };
-    }
-
-    try {
-      const response = await fetch(
-        `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
-        {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            messaging_product: "whatsapp",
-            to: args.phoneNumber,
-            type: "template",
-            template: {
-              name: args.templateName,
-              language: {
-                code: args.languageCode,
-              },
-            },
-          }),
-        }
-      );
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        console.error(`WhatsApp template send failed: ${JSON.stringify(data)}`);
-        return { success: false, error: JSON.stringify(data) };
-      }
-
-      // Store message in database
-      await ctx.runMutation(internal.whatsappMutations.storeMessage, {
-        leadId: args.leadId,
-        phoneNumber: args.phoneNumber,
-        content: `[Template: ${args.templateName}]`,
-        direction: "outbound",
-        status: "sent",
-        externalId: data.messages?.[0]?.id || "",
-      });
-
-      console.log(`Successfully sent template ${args.templateName} to ${args.phoneNumber}`);
-      return { success: true, messageId: data.messages?.[0]?.id };
-    } catch (error) {
-      console.error("Template send error:", error);
-      return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
-    }
+    return await sendTemplateMessageHelper(
+      args.phoneNumber,
+      "cafoliwelcomemessage",
+      "en_US",
+      args.leadId,
+      ctx
+    );
   },
 });

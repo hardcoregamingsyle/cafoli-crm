@@ -152,28 +152,6 @@ export const getLeadsForMatching = internalQuery({
   },
 });
 
-// Send welcome template to new lead
-export const sendWelcomeTemplate = internalMutation({
-  args: {
-    leadId: v.id("leads"),
-    phoneNumber: v.string(),
-  },
-  handler: async (ctx, args) => {
-    try {
-      // Schedule the internal action to send the template
-      await ctx.scheduler.runAfter(0, internal.whatsappTemplates.sendTemplateMessageInternal, {
-        phoneNumber: args.phoneNumber,
-        templateName: "cafoliwelcomemessage",
-        languageCode: "en_US",
-        leadId: args.leadId,
-      });
-      console.log(`Scheduled welcome template for lead ${args.leadId}`);
-    } catch (error) {
-      console.error("Failed to schedule welcome template:", error);
-    }
-  },
-});
-
 export const createLeadFromWhatsApp = internalMutation({
   args: {
     phoneNumber: v.string(),

@@ -449,7 +449,7 @@ export const createLead = mutation({
     
     // Send WhatsApp welcome template for new leads
     try {
-      await ctx.scheduler.runAfter(0, internal.whatsappMutations.sendWelcomeTemplate, {
+      await ctx.scheduler.runAfter(0, internal.whatsappTemplates.sendWelcomeMessage, {
         leadId: leadId,
         phoneNumber: mobile,
       });
@@ -492,9 +492,9 @@ export const updateLead = mutation({
     const lead = await ctx.db.get(args.id);
     if (!lead) throw new Error("Lead not found");
 
-    // Validate tags array length (maximum 8 tags)
-    if (args.patch.tags !== undefined && args.patch.tags.length > 8) {
-      throw new Error("A lead cannot have more than 8 tags");
+    // Validate tags limit
+    if (args.patch.tags && args.patch.tags.length > 8) {
+      throw new Error("Maximum of 8 tags allowed per lead");
     }
 
     // Validate follow-up date constraints

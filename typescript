@@ -1,0 +1,4 @@
+    // Validate tags limit
+    if (args.patch.tags && args.patch.tags.length > 8) {
+      throw new Error("Maximum of 8 tags allowed per lead");
+    }
