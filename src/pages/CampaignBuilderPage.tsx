@@ -39,6 +39,7 @@ export default function CampaignBuilderPage() {
   const [showBlockMenu, setShowBlockMenu] = useState(false);
   const [draggingBlock, setDraggingBlock] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   
   // Lead selection state
@@ -117,6 +118,36 @@ export default function CampaignBuilderPage() {
     setBlocks(blocks.filter(b => b.id !== blockId));
     setConnections(connections.filter(c => c.from !== blockId && c.to !== blockId));
     if (selectedBlock === blockId) setSelectedBlock(null);
+  };
+
+  const addConnection = (fromId: string, toId: string) => {
+    // Prevent duplicate connections
+    if (connections.some(c => c.from === fromId && c.to === toId)) {
+      toast.error("Connection already exists");
+      return;
+    }
+    // Prevent self-connections
+    if (fromId === toId) {
+      toast.error("Cannot connect a block to itself");
+      return;
+    }
+    setConnections([...connections, { from: fromId, to: toId }]);
+    toast.success("Connection created");
+  };
+
+  const removeConnection = (fromId: string, toId: string) => {
+    setConnections(connections.filter(c => !(c.from === fromId && c.to === toId)));
+    toast.success("Connection removed");
+  };
+
+  const handleBlockConnect = (blockId: string) => {
+    if (connectingFrom === null) {
+      setConnectingFrom(blockId);
+      toast.info("Select target block to connect");
+    } else {
+      addConnection(connectingFrom, blockId);
+      setConnectingFrom(null);
+    }
   };
 
   const handleMouseDown = (e: React.MouseEvent, blockId: string) => {
@@ -217,12 +248,11 @@ export default function CampaignBuilderPage() {
       const toX = toBlock.position.x + 100;
       const toY = toBlock.position.y;
       
+      const midX = fromX;
+      const midY = (fromY + toY) / 2;
+      
       return (
-        <svg
-          key={`conn-${idx}`}
-          className="absolute top-0 left-0 pointer-events-none"
-          style={{ width: '100%', height: '100%', zIndex: 0 }}
-        >
+        <g key={`conn-${idx}`}>
           <defs>
             <marker
               id={`arrowhead-${idx}`}
@@ -236,13 +266,33 @@ export default function CampaignBuilderPage() {
             </marker>
           </defs>
           <path
-            d={`M ${fromX} ${fromY} Q ${fromX} ${(fromY + toY) / 2}, ${toX} ${toY}`}
+            d={`M ${fromX} ${fromY} Q ${midX} ${midY}, ${toX} ${toY}`}
             stroke="hsl(var(--primary))"
             strokeWidth="2"
             fill="none"
             markerEnd={`url(#arrowhead-${idx})`}
+            className="cursor-pointer hover:stroke-destructive transition-colors"
+            style={{ pointerEvents: 'stroke' }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (confirm("Delete this connection?")) {
+                removeConnection(conn.from, conn.to);
+              }
+            }}
           />
-        </svg>
+          {conn.label && (
+            <text
+              x={midX}
+              y={midY}
+              fill="hsl(var(--primary))"
+              fontSize="12"
+              textAnchor="middle"
+              className="pointer-events-none"
+            >
+              {conn.label}
+            </text>
+          )}
+        </g>
       );
     });
   };
@@ -436,7 +486,12 @@ export default function CampaignBuilderPage() {
                   onMouseUp={handleMouseUp}
                   onMouseLeave={handleMouseUp}
                 >
-                  {renderConnections()}
+                  <svg
+                    className="absolute top-0 left-0 pointer-events-none"
+                    style={{ width: '100%', height: '100%', zIndex: 0 }}
+                  >
+                    {renderConnections()}
+                  </svg>
                   
                   {blocks.length === 0 ? (
                     <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
@@ -467,17 +522,31 @@ export default function CampaignBuilderPage() {
                                 {blockType && <blockType.icon className="h-4 w-4" />}
                                 <span className="text-sm font-medium">{blockType?.label}</span>
                               </div>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-6 w-6 p-0"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  removeBlock(block.id);
-                                }}
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
+                              <div className="flex gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className={`h-6 w-6 p-0 ${connectingFrom === block.id ? 'bg-primary text-primary-foreground' : ''}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleBlockConnect(block.id);
+                                  }}
+                                  title={connectingFrom === block.id ? "Select target" : "Connect to another block"}
+                                >
+                                  <GitBranch className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 w-6 p-0"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    removeBlock(block.id);
+                                  }}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
                             </div>
                             <div className="text-xs text-muted-foreground">
                               {block.type === "wait" && `${block.data.duration} ${block.data.unit}`}
