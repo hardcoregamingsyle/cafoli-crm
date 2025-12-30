@@ -1,10 +1,10 @@
 import { v } from "convex/values";
 import { mutation, internalMutation } from "./_generated/server";
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { ROLES } from "./schema";
 
 export const createCampaign = mutation({
   args: {
+    userId: v.id("users"),
     name: v.string(),
     description: v.optional(v.string()),
     type: v.string(),
@@ -28,13 +28,8 @@ export const createCampaign = mutation({
     })),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("You must be logged in to create a campaign");
-    }
-
     // Verify user exists
-    const user = await ctx.db.get(userId);
+    const user = await ctx.db.get(args.userId);
     if (!user) {
       throw new Error("User not found");
     }
@@ -44,7 +39,7 @@ export const createCampaign = mutation({
       description: args.description,
       type: args.type,
       status: "draft",
-      createdBy: userId,
+      createdBy: args.userId,
       leadSelection: args.leadSelection,
       blocks: args.blocks,
       connections: args.connections,
@@ -65,6 +60,7 @@ export const createCampaign = mutation({
 
 export const updateCampaign = mutation({
   args: {
+    userId: v.id("users"),
     campaignId: v.id("campaigns"),
     name: v.optional(v.string()),
     description: v.optional(v.string()),
@@ -88,9 +84,10 @@ export const updateCampaign = mutation({
     }))),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("You must be logged in to update a campaign");
+    // Verify user exists
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new Error("User not found");
     }
 
     const campaign = await ctx.db.get(args.campaignId);
@@ -113,11 +110,15 @@ export const updateCampaign = mutation({
 
 export const activateCampaign = mutation({
   args: {
+    userId: v.id("users"),
     campaignId: v.id("campaigns"),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Unauthorized");
+    // Verify user exists
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
 
     const campaign = await ctx.db.get(args.campaignId);
     if (!campaign) throw new Error("Campaign not found");
@@ -134,7 +135,6 @@ export const activateCampaign = mutation({
     await ctx.db.patch(args.campaignId, { status: "active" });
 
     // Enroll eligible leads
-    const user = await ctx.db.get(userId);
     const isAdmin = user?.role === ROLES.ADMIN;
 
     let leads;
@@ -143,7 +143,7 @@ export const activateCampaign = mutation({
         leads = await ctx.db.query("leads").collect();
       } else {
         leads = await ctx.db.query("leads")
-          .withIndex("by_assigned_to", (q) => q.eq("assignedTo", userId))
+          .withIndex("by_assigned_to", (q) => q.eq("assignedTo", args.userId))
           .collect();
       }
     } else {
@@ -151,7 +151,7 @@ export const activateCampaign = mutation({
       leads = await ctx.db.query("leads").collect();
       
       if (!isAdmin) {
-        leads = leads.filter(l => l.assignedTo === userId);
+        leads = leads.filter(l => l.assignedTo === args.userId);
       }
 
       // Apply filters
@@ -202,11 +202,15 @@ export const activateCampaign = mutation({
 
 export const pauseCampaign = mutation({
   args: {
+    userId: v.id("users"),
     campaignId: v.id("campaigns"),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Unauthorized");
+    // Verify user exists
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
 
     await ctx.db.patch(args.campaignId, { status: "paused" });
   },
@@ -214,11 +218,15 @@ export const pauseCampaign = mutation({
 
 export const deleteCampaign = mutation({
   args: {
+    userId: v.id("users"),
     campaignId: v.id("campaigns"),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Unauthorized");
+    // Verify user exists
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
 
     const campaign = await ctx.db.get(args.campaignId);
     if (!campaign) throw new Error("Campaign not found");

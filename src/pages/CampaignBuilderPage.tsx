@@ -111,7 +111,10 @@ export default function CampaignBuilderPage() {
   };
 
   const handleSave = async () => {
-    if (!user) return;
+    if (!user) {
+      toast.error("You must be logged in to create a campaign");
+      return;
+    }
     if (!name.trim()) {
       toast.error("Campaign name is required");
       return;
@@ -132,6 +135,7 @@ export default function CampaignBuilderPage() {
 
       if (campaignId) {
         await updateCampaign({
+          userId: user._id,
           campaignId: campaignId as Id<"campaigns">,
           name,
           description,
@@ -142,6 +146,7 @@ export default function CampaignBuilderPage() {
         toast.success("Campaign updated");
       } else {
         await createCampaign({
+          userId: user._id,
           name,
           description,
           type: "sequence",

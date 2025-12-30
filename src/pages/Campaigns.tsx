@@ -20,8 +20,12 @@ export default function Campaigns() {
   const deleteCampaign = useMutation(api.campaigns.deleteCampaign);
 
   const handleActivate = async (campaignId: Id<"campaigns">) => {
+    if (!user) {
+      toast.error("You must be logged in");
+      return;
+    }
     try {
-      const result = await activateCampaign({ campaignId });
+      const result = await activateCampaign({ userId: user._id, campaignId });
       toast.success(`Campaign activated! ${result.enrolled} leads enrolled.`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to activate campaign");
@@ -29,8 +33,12 @@ export default function Campaigns() {
   };
 
   const handlePause = async (campaignId: Id<"campaigns">) => {
+    if (!user) {
+      toast.error("You must be logged in");
+      return;
+    }
     try {
-      await pauseCampaign({ campaignId });
+      await pauseCampaign({ userId: user._id, campaignId });
       toast.success("Campaign paused");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to pause campaign");
@@ -38,9 +46,13 @@ export default function Campaigns() {
   };
 
   const handleDelete = async (campaignId: Id<"campaigns">) => {
+    if (!user) {
+      toast.error("You must be logged in");
+      return;
+    }
     if (!confirm("Are you sure you want to delete this campaign?")) return;
     try {
-      await deleteCampaign({ campaignId });
+      await deleteCampaign({ userId: user._id, campaignId });
       toast.success("Campaign deleted");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete campaign");
