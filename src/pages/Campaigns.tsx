@@ -12,7 +12,7 @@ import { Id } from "@/convex/_generated/dataModel";
 
 export default function Campaigns() {
   const { user } = useAuth();
-  const campaigns = useQuery(api.campaigns.getCampaigns) || [];
+  const campaigns = useQuery(api.campaigns.getCampaigns, user ? { userId: user._id } : "skip") || [];
   const navigate = useNavigate();
 
   const activateCampaign = useMutation(api.campaigns.activateCampaign);

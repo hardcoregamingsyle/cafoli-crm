@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 export default function Dashboard() {
   const { user } = useAuth();
   const leads = useQuery(api.leads.getLeads, user ? { filter: "all", userId: user._id } : "skip") || [];
-  const campaigns = useQuery(api.campaigns.getCampaigns) || [];
+  const campaigns = useQuery(api.campaigns.getCampaigns, user ? { userId: user._id } : "skip") || [];
   
   // Cold Caller Leads
   const coldCallerLeadsNeedingFollowUp = useQuery(
