@@ -1,17 +1,20 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Clock, Mail, MessageSquare, GitBranch, Shuffle, Tag, TagIcon, Filter, X, ArrowLeft, Save, Move } from "lucide-react";
+import { GitBranch, X, ArrowLeft, Save, Move } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
 import { Id } from "@/convex/_generated/dataModel";
 import { Textarea } from "@/components/ui/textarea";
+import { BlockPalette, blockTypes } from "@/components/campaign-builder/BlockPalette";
+import { CampaignSettings } from "@/components/campaign-builder/CampaignSettings";
+import { LeadSelectionPanel } from "@/components/campaign-builder/LeadSelectionPanel";
 
 interface CampaignBlock {
   id: string;
@@ -57,17 +60,6 @@ export default function CampaignBuilderPage() {
   const updateCampaign = useMutation(api.campaigns.updateCampaign);
 
   const availableStatuses = ["Cold", "Hot", "Mature"];
-
-  const blockTypes = [
-    { type: "wait", label: "Wait", icon: Clock, color: "bg-blue-500" },
-    { type: "send_email", label: "Send Email", icon: Mail, color: "bg-green-500" },
-    { type: "send_whatsapp", label: "Send WhatsApp", icon: MessageSquare, color: "bg-emerald-500" },
-    { type: "conditional", label: "Conditional", icon: GitBranch, color: "bg-purple-500" },
-    { type: "ab_test", label: "A/B Test", icon: Shuffle, color: "bg-orange-500" },
-    { type: "add_tag", label: "Add Tag", icon: Tag, color: "bg-pink-500" },
-    { type: "remove_tag", label: "Remove Tag", icon: TagIcon, color: "bg-red-500" },
-    { type: "lead_condition", label: "Lead Condition", icon: Filter, color: "bg-indigo-500" },
-  ];
 
   const addBlock = (type: string) => {
     const newBlock: CampaignBlock = {
@@ -326,147 +318,33 @@ export default function CampaignBuilderPage() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Left Sidebar - Campaign Settings & Block Palette */}
           <div className="lg:col-span-1 space-y-4">
-            {/* Campaign Details */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Campaign Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <Label>Name</Label>
-                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="My Campaign" />
-                </div>
-                <div>
-                  <Label>Description</Label>
-                  <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional" />
-                </div>
-              </CardContent>
-            </Card>
+            <CampaignSettings
+              name={name}
+              description={description}
+              onNameChange={setName}
+              onDescriptionChange={setDescription}
+            />
 
-            {/* Lead Selection */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Lead Selection</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <Label>Type</Label>
-                  <Select value={leadSelectionType} onValueChange={(v: any) => setLeadSelectionType(v)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Leads</SelectItem>
-                      <SelectItem value="filtered">Filtered</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+            <LeadSelectionPanel
+              leadSelectionType={leadSelectionType}
+              selectedTags={selectedTags}
+              selectedStatuses={selectedStatuses}
+              selectedSources={selectedSources}
+              autoEnrollNew={autoEnrollNew}
+              allTags={allTags}
+              uniqueSources={uniqueSources}
+              availableStatuses={availableStatuses}
+              onLeadSelectionTypeChange={setLeadSelectionType}
+              onAddTag={(tagId) => setSelectedTags([...selectedTags, tagId])}
+              onRemoveTag={(tagId) => setSelectedTags(selectedTags.filter(t => t !== tagId))}
+              onAddStatus={(status) => setSelectedStatuses([...selectedStatuses, status])}
+              onRemoveStatus={(status) => setSelectedStatuses(selectedStatuses.filter(s => s !== status))}
+              onAddSource={(source) => setSelectedSources([...selectedSources, source])}
+              onRemoveSource={(source) => setSelectedSources(selectedSources.filter(s => s !== source))}
+              onAutoEnrollChange={setAutoEnrollNew}
+            />
 
-                {leadSelectionType === "filtered" && (
-                  <div className="space-y-3 text-xs">
-                    <div>
-                      <Label className="text-xs">Tags</Label>
-                      <Select onValueChange={(v) => !selectedTags.includes(v) && setSelectedTags([...selectedTags, v])}>
-                        <SelectTrigger className="h-8">
-                          <SelectValue placeholder="Select..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {allTags.map(tag => (
-                            <SelectItem key={tag._id} value={tag._id}>{tag.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {selectedTags.map(tagId => {
-                          const tag = allTags.find(t => t._id === tagId);
-                          return tag ? (
-                            <span key={tagId} className="px-1.5 py-0.5 rounded text-xs flex items-center gap-1" style={{ backgroundColor: tag.color, color: 'white' }}>
-                              {tag.name}
-                              <X className="h-2.5 w-2.5 cursor-pointer" onClick={() => setSelectedTags(selectedTags.filter(t => t !== tagId))} />
-                            </span>
-                          ) : null;
-                        })}
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label className="text-xs">Statuses</Label>
-                      <Select onValueChange={(v) => !selectedStatuses.includes(v) && setSelectedStatuses([...selectedStatuses, v])}>
-                        <SelectTrigger className="h-8">
-                          <SelectValue placeholder="Select..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableStatuses.map(status => (
-                            <SelectItem key={status} value={status}>{status}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {selectedStatuses.map(status => (
-                          <span key={status} className="px-1.5 py-0.5 bg-secondary rounded text-xs flex items-center gap-1">
-                            {status}
-                            <X className="h-2.5 w-2.5 cursor-pointer" onClick={() => setSelectedStatuses(selectedStatuses.filter(s => s !== status))} />
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label className="text-xs">Sources</Label>
-                      <Select onValueChange={(v) => !selectedSources.includes(v) && setSelectedSources([...selectedSources, v])}>
-                        <SelectTrigger className="h-8">
-                          <SelectValue placeholder="Select..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {uniqueSources.map(source => (
-                            <SelectItem key={source} value={source}>{source}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {selectedSources.map(source => (
-                          <span key={source} className="px-1.5 py-0.5 bg-secondary rounded text-xs flex items-center gap-1">
-                            {source}
-                            <X className="h-2.5 w-2.5 cursor-pointer" onClick={() => setSelectedSources(selectedSources.filter(s => s !== source))} />
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={autoEnrollNew}
-                        onChange={(e) => setAutoEnrollNew(e.target.checked)}
-                        className="rounded"
-                      />
-                      <Label className="text-xs">Auto-enroll new leads</Label>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Block Palette */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Add Blocks</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-1">
-                {blockTypes.map(bt => (
-                  <Button
-                    key={bt.type}
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start"
-                    onClick={() => addBlock(bt.type)}
-                  >
-                    <bt.icon className="mr-2 h-3.5 w-3.5" />
-                    {bt.label}
-                  </Button>
-                ))}
-              </CardContent>
-            </Card>
+            <BlockPalette onAddBlock={addBlock} />
           </div>
 
           {/* Center - Whiteboard Canvas */}
@@ -552,6 +430,21 @@ export default function CampaignBuilderPage() {
                               {block.type === "wait" && `${block.data.duration} ${block.data.unit}`}
                               {block.type === "send_email" && (block.data.subject || "No subject")}
                               {block.type === "send_whatsapp" && (block.data.templateName || "No template")}
+                              {block.type === "conditional" && (
+                                <div className="text-[10px]">
+                                  ✓ {block.data.truePath?.length || 0} | ✗ {block.data.falsePath?.length || 0}
+                                </div>
+                              )}
+                              {block.type === "ab_test" && (
+                                <div className="text-[10px]">
+                                  A: {block.data.splitPercentage}% | B: {100 - block.data.splitPercentage}%
+                                </div>
+                              )}
+                              {block.type === "lead_condition" && (
+                                <div className="text-[10px]">
+                                  ✓ {block.data.truePath?.length || 0} | ✗ {block.data.falsePath?.length || 0}
+                                </div>
+                              )}
                             </div>
                           </CardContent>
                         </Card>
