@@ -160,8 +160,8 @@ export const sendWelcomeTemplate = internalMutation({
   },
   handler: async (ctx, args) => {
     try {
-      // Schedule the action to send the template
-      await ctx.scheduler.runAfter(0, api.whatsappTemplates.sendTemplateMessage, {
+      // Schedule the internal action to send the template
+      await ctx.scheduler.runAfter(0, internal.whatsappTemplates.sendTemplateMessageInternal, {
         phoneNumber: args.phoneNumber,
         templateName: "cafoliwelcomemessage",
         languageCode: "en_US",

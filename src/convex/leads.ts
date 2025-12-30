@@ -492,6 +492,11 @@ export const updateLead = mutation({
     const lead = await ctx.db.get(args.id);
     if (!lead) throw new Error("Lead not found");
 
+    // Validate tags array length (maximum 8 tags)
+    if (args.patch.tags !== undefined && args.patch.tags.length > 8) {
+      throw new Error("A lead cannot have more than 8 tags");
+    }
+
     // Validate follow-up date constraints
     if (args.patch.nextFollowUpDate !== undefined) {
       const followUpDate = args.patch.nextFollowUpDate;
