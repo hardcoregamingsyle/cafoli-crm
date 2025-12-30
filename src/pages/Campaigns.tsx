@@ -6,16 +6,14 @@ import { api } from "@/convex/_generated/api";
 import { useQuery, useMutation } from "convex/react";
 import { Plus, Play, Pause, Trash2, Edit, BarChart } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { useState } from "react";
-import CampaignBuilder from "@/components/CampaignBuilder";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { Id } from "@/convex/_generated/dataModel";
 
 export default function Campaigns() {
   const { user } = useAuth();
   const campaigns = useQuery(api.campaigns.getCampaigns) || [];
-  const [showBuilder, setShowBuilder] = useState(false);
-  const [editingCampaignId, setEditingCampaignId] = useState<Id<"campaigns"> | undefined>();
+  const navigate = useNavigate();
 
   const activateCampaign = useMutation(api.campaigns.activateCampaign);
   const pauseCampaign = useMutation(api.campaigns.pauseCampaign);
@@ -56,10 +54,7 @@ export default function Campaigns() {
           <h1 className="text-3xl font-bold tracking-tight">Campaigns</h1>
           <p className="text-muted-foreground">Create automated sequences for your leads.</p>
         </div>
-        <Button onClick={() => {
-          setEditingCampaignId(undefined);
-          setShowBuilder(true);
-        }}>
+        <Button onClick={() => navigate("/campaigns/new")}>
           <Plus className="mr-2 h-4 w-4" />
           New Campaign
         </Button>
@@ -112,10 +107,7 @@ export default function Campaigns() {
                         size="sm"
                         variant="outline"
                         className="flex-1"
-                        onClick={() => {
-                          setEditingCampaignId(campaign._id);
-                          setShowBuilder(true);
-                        }}
+                        onClick={() => navigate(`/campaigns/edit/${campaign._id}`)}
                       >
                         <Edit className="mr-1 h-3 w-3" />
                         Edit
@@ -173,25 +165,13 @@ export default function Campaigns() {
           <div className="col-span-full flex flex-col items-center justify-center py-12 text-muted-foreground border border-dashed rounded-lg">
             <BarChart className="h-12 w-12 mb-4 opacity-20" />
             <p>No campaigns created yet.</p>
-            <Button className="mt-4" onClick={() => setShowBuilder(true)}>
+            <Button className="mt-4" onClick={() => navigate("/campaigns/new")}>
               <Plus className="mr-2 h-4 w-4" />
               Create Your First Campaign
             </Button>
           </div>
         )}
       </div>
-
-      <Dialog open={showBuilder} onOpenChange={setShowBuilder}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingCampaignId ? "Edit Campaign" : "Create New Campaign"}</DialogTitle>
-          </DialogHeader>
-          <CampaignBuilder
-            campaignId={editingCampaignId}
-            onSave={() => setShowBuilder(false)}
-          />
-        </DialogContent>
-      </Dialog>
     </AppLayout>
   );
 }
