@@ -112,6 +112,11 @@ export function LeadReminders() {
   }
 
   if (showCold && coldLeads && coldLeads.length > 0) {
+    const isPlural = coldLeads.length > 1;
+    const description = isPlural 
+      ? "These are good leads. Let's convert these leads to be good parties."
+      : "This is a good lead. Let's convert this lead to be a good party.";
+
     return (
       <Dialog open={showCold} onOpenChange={handleCloseCold}>
         <DialogContent className="sm:max-w-[600px] border-blue-200 bg-blue-50 dark:bg-blue-950/20">
@@ -121,7 +126,7 @@ export function LeadReminders() {
               <DialogTitle>Boost Your Sales</DialogTitle>
             </div>
             <DialogDescription className="text-blue-700 dark:text-blue-300 pt-2">
-              Let's Boost your Sale. Make this Not Matured Lead a Matured Party.
+              {description}
             </DialogDescription>
           </DialogHeader>
           <ScrollArea className="max-h-[60vh] mt-4">
