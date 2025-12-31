@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Shield, Users, UserPlus, Trash2, LogIn, Download, RefreshCw, FolderClock } from "lucide-react";
 import { useState } from "react";
@@ -29,12 +29,14 @@ export default function Admin() {
   const standardizePhoneNumbers = useMutation(api.leads.standardizeAllPhoneNumbers);
   const importLeads = useMutation(api.leads.bulkImportLeads);
   const manualMarkColdCallerLeads = useMutation(api.coldCallerLeads.manualMarkColdCallerLeads);
+  const sendWelcomeToRecentLeads = useAction(api.whatsappTemplatesActions.sendWelcomeToRecentLeads);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isStandardizing, setIsStandardizing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isMarkingColdCaller, setIsMarkingColdCaller] = useState(false);
+  const [isSendingWelcome, setIsSendingWelcome] = useState(false);
   const [newUserData, setNewUserData] = useState({
     email: "",
     name: "",
@@ -133,6 +135,25 @@ export default function Admin() {
       toast.error(error instanceof Error ? error.message : "Failed to mark cold caller leads");
     } finally {
       setIsMarkingColdCaller(false);
+    }
+  };
+
+  const handleSendWelcomeToRecentLeads = async () => {
+    if (!currentUser) {
+      toast.error("You must be logged in");
+      return;
+    }
+
+    setIsSendingWelcome(true);
+    try {
+      const result = await sendWelcomeToRecentLeads({});
+      toast.success(
+        `Welcome messages sent successfully!\n${result.messagesSent} messages sent to ${result.leadsProcessed} leads\n${result.errors} errors`
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to send welcome messages");
+    } finally {
+      setIsSendingWelcome(false);
     }
   };
 
@@ -401,6 +422,15 @@ export default function Admin() {
             >
               <FolderClock className={`mr-2 h-4 w-4 ${isMarkingColdCaller ? 'animate-spin' : ''}`} />
               {isMarkingColdCaller ? "Marking..." : "Mark Cold Caller Leads"}
+            </Button>
+
+            <Button 
+              variant="outline" 
+              onClick={handleSendWelcomeToRecentLeads}
+              disabled={isSendingWelcome}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${isSendingWelcome ? 'animate-spin' : ''}`} />
+              {isSendingWelcome ? "Sending..." : "Send Welcome to Recent Leads"}
             </Button>
 
             <Button variant="outline" onClick={handleDownloadCSV}>

@@ -10,6 +10,7 @@ export const createLead = mutation({
     subject: v.string(),
     source: v.string(),
     mobile: v.string(),
+    altMobile: v.optional(v.string()),
     email: v.optional(v.string()),
     agencyName: v.optional(v.string()),
     message: v.optional(v.string()),
@@ -55,14 +56,27 @@ export const createLead = mutation({
       }
     }
     
-    // Send welcome WhatsApp message
+    // Send welcome WhatsApp message to primary mobile
     try {
       await ctx.scheduler.runAfter(0, internal.whatsappTemplates.sendWelcomeMessage, {
         phoneNumber: mobile,
         leadId: leadId,
       });
     } catch (error) {
-      console.error("Failed to schedule welcome WhatsApp template:", error);
+      console.error("Failed to schedule welcome WhatsApp template to primary mobile:", error);
+    }
+    
+    // Send welcome WhatsApp message to alternate mobile if exists
+    if (args.altMobile) {
+      const altMobile = standardizePhoneNumber(args.altMobile);
+      try {
+        await ctx.scheduler.runAfter(0, internal.whatsappTemplates.sendWelcomeMessage, {
+          phoneNumber: altMobile,
+          leadId: leadId,
+        });
+      } catch (error) {
+        console.error("Failed to schedule welcome WhatsApp template to alternate mobile:", error);
+      }
     }
     
     return leadId;

@@ -43,6 +43,7 @@ import type * as whatsappMutations from "../whatsappMutations.js";
 import type * as whatsappQueries from "../whatsappQueries.js";
 import type * as whatsappStorage from "../whatsappStorage.js";
 import type * as whatsappTemplates from "../whatsappTemplates.js";
+import type * as whatsappTemplatesActions from "../whatsappTemplatesActions.js";
 import type * as whatsappTemplatesMutations from "../whatsappTemplatesMutations.js";
 import type * as whatsappTemplatesQueries from "../whatsappTemplatesQueries.js";
 
@@ -88,6 +89,7 @@ declare const fullApi: ApiFromModules<{
   whatsappQueries: typeof whatsappQueries;
   whatsappStorage: typeof whatsappStorage;
   whatsappTemplates: typeof whatsappTemplates;
+  whatsappTemplatesActions: typeof whatsappTemplatesActions;
   whatsappTemplatesMutations: typeof whatsappTemplatesMutations;
   whatsappTemplatesQueries: typeof whatsappTemplatesQueries;
 }>;
