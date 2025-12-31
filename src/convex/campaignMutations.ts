@@ -177,13 +177,23 @@ export const activateCampaign = mutation({
     // Enroll leads
     const now = Date.now();
     for (const lead of leads) {
-      await ctx.db.insert("campaignEnrollments", {
+      const enrollmentId = await ctx.db.insert("campaignEnrollments", {
         campaignId: args.campaignId,
         leadId: lead._id,
         status: "active",
         currentBlockId: campaign.blocks[0].id,
         enrolledAt: now,
         pathTaken: [],
+      });
+
+      // Schedule the first block execution immediately
+      await ctx.db.insert("campaignExecutions", {
+        campaignId: args.campaignId,
+        enrollmentId: enrollmentId,
+        leadId: lead._id,
+        blockId: campaign.blocks[0].id,
+        scheduledFor: now, // Execute immediately
+        status: "pending",
       });
     }
 
