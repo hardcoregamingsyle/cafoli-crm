@@ -4,20 +4,13 @@ import { useQuery } from "convex/react";
 import { Users, MessageSquare, BarChart3, Activity } from "lucide-react";
 import { useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { api } from "@/convex/_generated/api";
 
 export default function Dashboard() {
   const { user } = useAuth();
   
-  // Import api dynamically to avoid circular type issues
-  let apiRef: any = null;
-  try {
-    apiRef = require("@/convex/_generated/api").api;
-  } catch (e) {
-    console.error("Failed to load api", e);
-  }
-  
-  const leads = useQuery(apiRef?.leads?.getLeads, user ? { filter: "all", userId: user._id } : "skip") || [];
-  const campaigns = useQuery(apiRef?.campaigns?.getCampaigns, user ? { userId: user._id } : "skip") || [];
+  const leads = useQuery(api.leads.queries.getLeads, user ? { filter: "all", userId: user._id } : "skip") || [];
+  const campaigns = useQuery(api.campaigns.getCampaigns, user ? { userId: user._id } : "skip") || [];
   
   // Memoize computed stats to avoid recalculation on every render
   const stats = useMemo(() => {
