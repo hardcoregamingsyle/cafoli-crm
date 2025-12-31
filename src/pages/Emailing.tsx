@@ -23,16 +23,17 @@ export default function Emailing() {
   const deleteTemplate = useMutation(api.emailTemplates.deleteTemplate);
   const sendEmailAction = useAction(api.emailActions.sendEmail);
 
-  const leads = useQuery(api.leads.getLeads, { 
-    filter: user?.role === "admin" ? "all" : "mine" 
-  }) || [];
-  const leadsWithEmails = leads.filter(l => l.email);
+  const isAdmin = user?.role === "admin";
+  const leads = useQuery(api.leads.getLeads, user ? { 
+    filter: isAdmin ? "all" : "mine" 
+  } : "skip") || [];
 
   const [activeTab, setActiveTab] = useState("send");
   
   // Send Email State
   const [senderPrefix, setSenderPrefix] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
+  const [selectedLeadId, setSelectedLeadId] = useState<string>("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailContent, setEmailContent] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -62,6 +63,7 @@ export default function Emailing() {
         toast.success("Email sent successfully!");
         // Clear form
         setRecipientEmail("");
+        setSelectedLeadId("");
         setEmailSubject("");
         setEmailContent("");
         setSelectedTemplateId("none");
@@ -179,23 +181,34 @@ export default function Emailing() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="recipient">Recipient Lead</Label>
-                      <Select value={recipientEmail} onValueChange={setRecipientEmail}>
+                      <Select 
+                        value={selectedLeadId} 
+                        onValueChange={(value) => {
+                          setSelectedLeadId(value);
+                          const lead = leads.find(l => l._id === value);
+                          if (lead?.email) {
+                            setRecipientEmail(lead.email);
+                          }
+                        }}
+                      >
                         <SelectTrigger>
                           <SelectValue placeholder="Select a lead" />
                         </SelectTrigger>
                         <SelectContent>
-                          {leadsWithEmails.map((lead) => (
-                            <SelectItem key={lead._id} value={lead.email!}>
-                              {lead.name} ({lead.email})
-                            </SelectItem>
+                          {leads
+                            .filter(l => l.email)
+                            .map((lead) => (
+                              <SelectItem key={lead._id} value={lead._id}>
+                                {lead.name} ({lead.email})
+                              </SelectItem>
                           ))}
-                          {leadsWithEmails.length === 0 && (
-                            <div className="p-2 text-sm text-muted-foreground text-center">
-                              No leads with email addresses found
-                            </div>
-                          )}
                         </SelectContent>
                       </Select>
+                      {recipientEmail && (
+                        <p className="text-xs text-muted-foreground">
+                          Sending to: {recipientEmail}
+                        </p>
+                      )}
                     </div>
                   </div>
 
