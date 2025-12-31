@@ -137,10 +137,14 @@ export const getPaginatedLeads = query({
       if (hasFilters) {
          const allLeads = await ctx.db.query("leads").order("desc").collect();
          let filtered = allLeads.filter(l => {
-            if (args.filter === "unassigned") return !l.assignedTo && l.type !== "Irrelevant";
+            if (args.filter === "unassigned") {
+              return !l.assignedTo && 
+                     l.type !== "Irrelevant" && 
+                     (!l.isColdCallerLead || l.coldCallerAssignedTo);
+            }
             if (args.filter === "irrelevant") return l.type === "Irrelevant";
             if (args.filter === "all") return l.type !== "Irrelevant";
-            return !l.assignedTo && l.type !== "Irrelevant";
+            return !l.assignedTo && l.type !== "Irrelevant" && (!l.isColdCallerLead || l.coldCallerAssignedTo);
          });
 
          filtered = applyFilters(filtered);
@@ -165,7 +169,14 @@ export const getPaginatedLeads = query({
           if (args.filter === "unassigned") {
             predicate = q.and(
               q.eq(q.field("assignedTo"), undefined),
-              q.neq(q.field("type"), "Irrelevant")
+              q.neq(q.field("type"), "Irrelevant"),
+              q.or(
+                q.eq(q.field("isColdCallerLead"), false),
+                q.and(
+                  q.eq(q.field("isColdCallerLead"), true),
+                  q.neq(q.field("coldCallerAssignedTo"), undefined)
+                )
+              )
             );
           } else if (args.filter === "irrelevant") {
             predicate = q.eq(q.field("type"), "Irrelevant");
@@ -224,14 +235,14 @@ export const getLeads = query({
       leads = leads.filter(l => l.type !== "Irrelevant");
     } else if (args.filter === "unassigned") {
       leads = await ctx.db.query("leads").order("desc").collect();
-      leads = leads.filter(l => !l.assignedTo && l.type !== "Irrelevant");
+      leads = leads.filter(l => !l.assignedTo && l.type !== "Irrelevant" && (!l.isColdCallerLead || l.coldCallerAssignedTo));
     } else if (args.filter === "all") {
       if (user.role !== ROLES.ADMIN) return [];
       leads = await ctx.db.query("leads").order("desc").collect();
       leads = leads.filter(l => l.type !== "Irrelevant");
     } else {
       leads = await ctx.db.query("leads").order("desc").collect();
-      leads = leads.filter(l => !l.assignedTo && l.type !== "Irrelevant");
+      leads = leads.filter(l => !l.assignedTo && l.type !== "Irrelevant" && (!l.isColdCallerLead || l.coldCallerAssignedTo));
     }
 
     return leads;
