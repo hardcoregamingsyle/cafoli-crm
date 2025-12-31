@@ -41,6 +41,10 @@ const schema = defineSchema(
 
       role: v.optional(roleValidator), // role of the user. do not remove
       passwordHash: v.optional(v.string()), // hashed password for password authentication
+      
+      preferences: v.optional(v.object({
+        leadRemindersEnabled: v.optional(v.boolean()),
+      })),
     }).index("email", ["email"]), // index for the email. do not remove or modify
 
     leads: defineTable({

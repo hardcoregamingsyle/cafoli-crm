@@ -239,3 +239,27 @@ export const deleteUser = mutation({
     await ctx.db.delete(args.userId);
   },
 });
+
+export const updatePreferences = mutation({
+  args: {
+    preferences: v.object({
+      leadRemindersEnabled: v.optional(v.boolean()),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+    
+    const user = await ctx.db.get(userId);
+    if (!user) throw new Error("User not found");
+
+    const currentPreferences = user.preferences || {};
+    
+    await ctx.db.patch(userId, {
+      preferences: {
+        ...currentPreferences,
+        ...args.preferences,
+      },
+    });
+  },
+});
