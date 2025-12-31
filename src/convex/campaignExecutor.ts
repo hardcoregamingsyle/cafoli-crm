@@ -2,7 +2,6 @@
 
 import { internalAction } from "./_generated/server";
 import { v } from "convex/values";
-import { internal } from "./_generated/api";
 
 // Process pending campaign executions
 export const processCampaignExecutions = internalAction({
@@ -11,34 +10,41 @@ export const processCampaignExecutions = internalAction({
     const now = Date.now();
     
     // Get pending executions that are due
-    const pendingExecutions = await ctx.runMutation(internal.campaignExecutorMutations.getPendingExecutions, { now });
+    const pendingExecutions = await ctx.runQuery(
+      "campaignExecutorMutations:getPendingExecutions" as any,
+      { now }
+    );
     
     console.log(`Processing ${pendingExecutions.length} pending campaign executions`);
     
     for (const execution of pendingExecutions) {
       try {
         // Mark as executing
-        await ctx.runMutation(internal.campaignExecutorMutations.markExecuting, { executionId: execution._id });
+        await ctx.runMutation(
+          "campaignExecutorMutations:markExecuting" as any,
+          { executionId: execution._id }
+        );
         
         // Get campaign and block details
-        const campaign = await ctx.runMutation(internal.campaignExecutorMutations.getCampaignForExecution, { 
-          campaignId: execution.campaignId 
-        });
+        const campaign = await ctx.runQuery(
+          "campaignExecutorMutations:getCampaignForExecution" as any,
+          { campaignId: execution.campaignId }
+        );
         
         if (!campaign) {
-          await ctx.runMutation(internal.campaignExecutorMutations.markFailed, { 
-            executionId: execution._id, 
-            error: "Campaign not found" 
-          });
+          await ctx.runMutation(
+            "campaignExecutorMutations:markFailed" as any,
+            { executionId: execution._id, error: "Campaign not found" }
+          );
           continue;
         }
         
         const block = campaign.blocks.find((b: any) => b.id === execution.blockId);
         if (!block) {
-          await ctx.runMutation(internal.campaignExecutorMutations.markFailed, { 
-            executionId: execution._id, 
-            error: "Block not found" 
-          });
+          await ctx.runMutation(
+            "campaignExecutorMutations:markFailed" as any,
+            { executionId: execution._id, error: "Block not found" }
+          );
           continue;
         }
         
@@ -58,36 +64,40 @@ export const processCampaignExecutions = internalAction({
         }
         
         // Mark as completed
-        await ctx.runMutation(internal.campaignExecutorMutations.markCompleted, { 
-          executionId: execution._id, 
-          result 
-        });
+        await ctx.runMutation(
+          "campaignExecutorMutations:markCompleted" as any,
+          { executionId: execution._id, result }
+        );
         
         // Schedule next block(s)
         await scheduleNextBlocks(ctx, execution, campaign);
         
       } catch (error) {
         console.error(`Error executing campaign block:`, error);
-        await ctx.runMutation(internal.campaignExecutorMutations.markFailed, { 
-          executionId: execution._id, 
-          error: error instanceof Error ? error.message : "Unknown error" 
-        });
+        await ctx.runMutation(
+          "campaignExecutorMutations:markFailed" as any,
+          { executionId: execution._id, error: error instanceof Error ? error.message : "Unknown error" }
+        );
       }
     }
   },
 });
 
 async function executeWhatsAppBlock(ctx: any, leadId: string, blockData: any) {
-  const lead = await ctx.runMutation(internal.campaignExecutorMutations.getLead, { leadId });
+  const lead = await ctx.runQuery(
+    "campaignExecutorMutations:getLead" as any,
+    { leadId }
+  );
   
   if (!lead || !lead.mobile) {
     throw new Error("Lead not found or missing mobile number");
   }
   
   // Get template
-  const template = await ctx.runMutation(internal.campaignExecutorMutations.getTemplate, { 
-    templateId: blockData.templateId 
-  });
+  const template = await ctx.runQuery(
+    "campaignExecutorMutations:getTemplate" as any,
+    { templateId: blockData.templateId }
+  );
   
   if (!template) {
     throw new Error("Template not found");
@@ -98,19 +108,19 @@ async function executeWhatsAppBlock(ctx: any, leadId: string, blockData: any) {
   const message = bodyComponent?.text || "Hello!";
   
   // Send WhatsApp message
-  // Note: sendWhatsAppMessage is a public action, we need to call it differently
-  // For now, we'll use the mutation to store the message and handle sending separately
-  await ctx.runMutation(internal.campaignExecutorMutations.sendWhatsAppForCampaign, {
-    phoneNumber: lead.mobile,
-    message,
-    leadId,
-  });
+  await ctx.runMutation(
+    "campaignExecutorMutations:sendWhatsAppForCampaign" as any,
+    { phoneNumber: lead.mobile, message, leadId }
+  );
   
   return { success: true, message: "WhatsApp sent" };
 }
 
 async function executeEmailBlock(ctx: any, leadId: string, blockData: any) {
-  const lead = await ctx.runMutation(internal.campaignExecutorMutations.getLead, { leadId });
+  const lead = await ctx.runQuery(
+    "campaignExecutorMutations:getLead" as any,
+    { leadId }
+  );
   
   if (!lead || !lead.email) {
     throw new Error("Lead not found or missing email address");
@@ -118,13 +128,16 @@ async function executeEmailBlock(ctx: any, leadId: string, blockData: any) {
 
   // Send email using Brevo
   try {
-    await ctx.runAction(internal.brevo.sendEmailInternal, {
-      to: lead.email,
-      toName: lead.name || "Valued Customer",
-      subject: blockData.subject || "Message from Cafoli Connect",
-      htmlContent: blockData.htmlContent || blockData.message || "Hello!",
-      textContent: blockData.textContent,
-    });
+    await ctx.runAction(
+      "brevo:sendEmailInternal" as any,
+      {
+        to: lead.email,
+        toName: lead.name || "Valued Customer",
+        subject: blockData.subject || "Message from Cafoli Connect",
+        htmlContent: blockData.htmlContent || blockData.message || "Hello!",
+        textContent: blockData.textContent,
+      }
+    );
 
     return { success: true, message: "Email sent" };
   } catch (error) {
@@ -133,18 +146,18 @@ async function executeEmailBlock(ctx: any, leadId: string, blockData: any) {
 }
 
 async function executeAddTagBlock(ctx: any, leadId: string, blockData: any) {
-  await ctx.runMutation(internal.campaignExecutorMutations.addTagToLead, { 
-    leadId, 
-    tagId: blockData.tagId 
-  });
+  await ctx.runMutation(
+    "campaignExecutorMutations:addTagToLead" as any,
+    { leadId, tagId: blockData.tagId }
+  );
   return { success: true, message: "Tag added" };
 }
 
 async function executeRemoveTagBlock(ctx: any, leadId: string, blockData: any) {
-  await ctx.runMutation(internal.campaignExecutorMutations.removeTagFromLead, { 
-    leadId, 
-    tagId: blockData.tagId 
-  });
+  await ctx.runMutation(
+    "campaignExecutorMutations:removeTagFromLead" as any,
+    { leadId, tagId: blockData.tagId }
+  );
   return { success: true, message: "Tag removed" };
 }
 
@@ -170,12 +183,15 @@ async function scheduleNextBlocks(ctx: any, execution: any, campaign: any) {
     }
     
     // Schedule next execution
-    await ctx.runMutation(internal.campaignExecutorMutations.scheduleExecution, {
-      campaignId: execution.campaignId,
-      enrollmentId: execution.enrollmentId,
-      leadId: execution.leadId,
-      blockId: conn.to,
-      scheduledFor: Date.now() + delay,
-    });
+    await ctx.runMutation(
+      "campaignExecutorMutations:scheduleExecution" as any,
+      {
+        campaignId: execution.campaignId,
+        enrollmentId: execution.enrollmentId,
+        leadId: execution.leadId,
+        blockId: conn.to,
+        scheduledFor: Date.now() + delay,
+      }
+    );
   }
 }

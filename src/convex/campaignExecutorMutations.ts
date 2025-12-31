@@ -1,9 +1,8 @@
-import { internalMutation } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
-import { internal } from "./_generated/api";
 
-// Query helpers
-export const getPendingExecutions = internalMutation({
+// Query helpers - these only read data
+export const getPendingExecutions = internalQuery({
   args: { now: v.number() },
   handler: async (ctx, args) => {
     return await ctx.db
@@ -14,27 +13,28 @@ export const getPendingExecutions = internalMutation({
   },
 });
 
-export const getCampaignForExecution = internalMutation({
+export const getCampaignForExecution = internalQuery({
   args: { campaignId: v.id("campaigns") },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.campaignId);
   },
 });
 
-export const getLead = internalMutation({
+export const getLead = internalQuery({
   args: { leadId: v.id("leads") },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.leadId);
   },
 });
 
-export const getTemplate = internalMutation({
+export const getTemplate = internalQuery({
   args: { templateId: v.id("templates") },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.templateId);
   },
 });
 
+// Mutation helpers - these modify data
 export const markExecuting = internalMutation({
   args: { executionId: v.id("campaignExecutions") },
   handler: async (ctx, args) => {
@@ -120,10 +120,14 @@ export const sendWhatsAppForCampaign = internalMutation({
   },
   handler: async (ctx, args) => {
     // Schedule the internal WhatsApp send action to run immediately
-    await ctx.scheduler.runAfter(0, internal.whatsapp.sendWhatsAppMessageInternal, {
-      phoneNumber: args.phoneNumber,
-      message: args.message,
-      leadId: args.leadId,
-    });
+    await ctx.scheduler.runAfter(
+      0, 
+      "whatsapp:sendWhatsAppMessageInternal" as any,
+      {
+        phoneNumber: args.phoneNumber,
+        message: args.message,
+        leadId: args.leadId,
+      }
+    );
   },
 });
