@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Doc } from "@/convex/_generated/dataModel";
-import { Check, ChevronsUpDown, X } from "lucide-react";
+import { Check, ChevronsUpDown, X, ArrowUpDown } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface LeadsFilterBarProps {
   selectedStatuses: string[];
@@ -19,6 +20,8 @@ interface LeadsFilterBarProps {
   allUsers: Doc<"users">[];
   isAdmin: boolean;
   availableStatuses: string[];
+  sortBy: string;
+  setSortBy: (v: string) => void;
 }
 
 export function LeadsFilterBar({
@@ -34,7 +37,9 @@ export function LeadsFilterBar({
   uniqueSources,
   allUsers,
   isAdmin,
-  availableStatuses
+  availableStatuses,
+  sortBy,
+  setSortBy
 }: LeadsFilterBarProps) {
   
   const toggleFilter = (value: string, currentFilters: string[], setFilters: (filters: string[]) => void) => {
@@ -58,6 +63,22 @@ export function LeadsFilterBar({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex gap-2 items-center flex-wrap overflow-x-auto pb-2">
+        {/* Sort Dropdown */}
+        <Select value={sortBy} onValueChange={setSortBy}>
+          <SelectTrigger className="w-[180px]">
+            <ArrowUpDown className="mr-2 h-4 w-4 opacity-50" />
+            <SelectValue placeholder="Sort by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="newest">Newest First</SelectItem>
+            <SelectItem value="oldest">Oldest First</SelectItem>
+            <SelectItem value="next_followup">Next Follow-up</SelectItem>
+            <SelectItem value="last_contacted">Last Contacted</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <div className="h-8 w-[1px] bg-border mx-1" />
+
         {/* Status Filter */}
         <Popover>
           <PopoverTrigger asChild>

@@ -1,16 +1,17 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
 import { Doc, Id } from "@/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
-import { Calendar, Mail, MapPin, MessageSquare, Phone, Save, User } from "lucide-react";
+import { Calendar, Save, User, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { TagManager } from "@/components/TagManager";
+import { LeadInfo } from "@/components/leads/LeadInfo";
+import { LeadActivity } from "@/components/leads/LeadActivity";
 
 interface LeadDetailsProps {
   leadId: Id<"leads">;
@@ -30,11 +31,11 @@ export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
   const [newComment, setNewComment] = useState("");
 
   if (lead === undefined) {
-    return <div className="flex-1 flex items-center justify-center">Loading...</div>;
+    return <div className="flex-1 flex items-center justify-center h-full">Loading...</div>;
   }
 
   if (lead === null) {
-    return <div className="flex-1 flex items-center justify-center">Lead not found</div>;
+    return <div className="flex-1 flex items-center justify-center h-full">Lead not found</div>;
   }
 
   const handleStatusChange = async (status: string) => {
@@ -155,34 +156,32 @@ export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-card border rounded-lg shadow-sm">
+    <div className="flex-1 flex flex-col overflow-hidden bg-card border rounded-lg shadow-sm h-full">
       <div className="p-6 border-b flex justify-between items-start bg-muted/10">
-        <div>
+        <div className="flex-1 mr-4">
           <div className="flex items-center gap-3 mb-2">
             <Button variant="ghost" size="icon" className="md:hidden" onClick={onClose}>
-              <User className="h-4 w-4" />
+              <X className="h-4 w-4" />
             </Button>
-            <h2 className="text-2xl font-bold">{lead.name}</h2>
-            <span className="text-sm text-muted-foreground bg-background border px-2 py-1 rounded">
+            <h2 className="text-2xl font-bold truncate">{lead.name}</h2>
+            <span className="text-sm text-muted-foreground bg-background border px-2 py-1 rounded whitespace-nowrap">
               {lead.source}
             </span>
             {lead.adminAssignmentRequired && (
-              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded border border-purple-200 font-medium">
+              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded border border-purple-200 font-medium whitespace-nowrap">
                 Admin Assignment Required
               </span>
             )}
           </div>
-          <p className="text-muted-foreground">{lead.subject}</p>
+          <p className="text-muted-foreground text-sm mb-3">{lead.subject}</p>
           
-          <div className="mt-3">
-            <TagManager 
-              leadId={lead._id} 
-              selectedTagIds={lead.tags || []} 
-              onTagsChange={handleTagsChange} 
-            />
-          </div>
+          <TagManager 
+            leadId={lead._id} 
+            selectedTagIds={lead.tags || []} 
+            onTagsChange={handleTagsChange} 
+          />
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap justify-end">
           {!isEditing && (
             <Button variant="outline" size="sm" onClick={startEditing}>
               <Save className="mr-2 h-4 w-4" />
@@ -224,129 +223,17 @@ export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6">
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
-          <div className="space-y-4">
-            <h3 className="font-semibold flex items-center gap-2">
-              <User className="h-4 w-4" /> Contact Details
-            </h3>
-            <div className="grid gap-3 text-sm">
-              <div>
-                <Label className="text-xs text-muted-foreground">Name</Label>
-                {isEditing ? (
-                  <Input 
-                    value={editedLead.name || ""} 
-                    onChange={(e) => setEditedLead({ ...editedLead, name: e.target.value })}
-                    className="mt-1"
-                  />
-                ) : (
-                  <p className="mt-1">{lead.name}</p>
-                )}
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Phone className="h-3 w-3" /> Mobile
-                </Label>
-                {isEditing ? (
-                  <Input 
-                    value={editedLead.mobile || ""} 
-                    onChange={(e) => setEditedLead({ ...editedLead, mobile: e.target.value })}
-                    className="mt-1"
-                  />
-                ) : (
-                  <p className="mt-1">{lead.mobile}</p>
-                )}
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Mail className="h-3 w-3" /> Email
-                </Label>
-                {isEditing ? (
-                  <Input 
-                    value={editedLead.email || ""} 
-                    onChange={(e) => setEditedLead({ ...editedLead, email: e.target.value })}
-                    className="mt-1"
-                    type="email"
-                  />
-                ) : (
-                  <p className="mt-1">{lead.email || "Not provided"}</p>
-                )}
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Agency Name</Label>
-                {isEditing ? (
-                  <Input 
-                    value={editedLead.agencyName || ""} 
-                    onChange={(e) => setEditedLead({ ...editedLead, agencyName: e.target.value })}
-                    className="mt-1"
-                  />
-                ) : (
-                  <p className="mt-1">{lead.agencyName || "Not provided"}</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <h3 className="font-semibold flex items-center gap-2">
-              <MapPin className="h-4 w-4" /> Location
-            </h3>
-            <div className="grid gap-3 text-sm">
-              <div>
-                <Label className="text-xs text-muted-foreground">Station</Label>
-                {isEditing ? (
-                  <Input 
-                    value={editedLead.station || ""} 
-                    onChange={(e) => setEditedLead({ ...editedLead, station: e.target.value })}
-                    className="mt-1"
-                  />
-                ) : (
-                  <p className="mt-1">{lead.station || "Not provided"}</p>
-                )}
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">District</Label>
-                {isEditing ? (
-                  <Input 
-                    value={editedLead.district || ""} 
-                    onChange={(e) => setEditedLead({ ...editedLead, district: e.target.value })}
-                    className="mt-1"
-                  />
-                ) : (
-                  <p className="mt-1">{lead.district || "Not provided"}</p>
-                )}
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">State</Label>
-                {isEditing ? (
-                  <Input 
-                    value={editedLead.state || ""} 
-                    onChange={(e) => setEditedLead({ ...editedLead, state: e.target.value })}
-                    className="mt-1"
-                  />
-                ) : (
-                  <p className="mt-1">{lead.state || "Not provided"}</p>
-                )}
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Pincode</Label>
-                {isEditing ? (
-                  <Input 
-                    value={editedLead.pincode || ""} 
-                    onChange={(e) => setEditedLead({ ...editedLead, pincode: e.target.value })}
-                    className="mt-1"
-                  />
-                ) : (
-                  <p className="mt-1">{lead.pincode || "Not provided"}</p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        <LeadInfo 
+          lead={lead} 
+          isEditing={isEditing} 
+          editedLead={editedLead} 
+          setEditedLead={setEditedLead} 
+        />
 
         <div className="mb-8">
-          <h3 className="font-semibold mb-2 flex items-center gap-2">
+          <h3 className="font-semibold mb-2 flex items-center gap-2 text-primary">
             <Calendar className="h-4 w-4" /> Follow-up Date
-            {lead.assignedTo && <span className="text-xs text-red-500">(Required)</span>}
+            {lead.assignedTo && <span className="text-xs text-red-500 font-normal">(Required)</span>}
           </h3>
           {isEditing ? (
             <div className="space-y-2">
@@ -363,10 +250,10 @@ export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
               </p>
             </div>
           ) : (
-            <div className={`bg-muted/30 p-4 rounded-md text-sm ${
+            <div className={`bg-muted/30 p-4 rounded-md text-sm border ${
               lead.nextFollowUpDate && lead.nextFollowUpDate < Date.now() 
-                ? 'border-2 border-red-500 bg-red-50' 
-                : ''
+                ? 'border-red-500 bg-red-50' 
+                : 'border-border'
             }`}>
               {formatFollowUpDate(lead.nextFollowUpDate)}
               {lead.nextFollowUpDate && lead.nextFollowUpDate < Date.now() && (
@@ -377,7 +264,7 @@ export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
         </div>
 
         <div className="mb-8">
-          <h3 className="font-semibold mb-2">Message</h3>
+          <h3 className="font-semibold mb-2 text-primary">Message</h3>
           {isEditing ? (
             <Textarea 
               value={editedLead.message || ""} 
@@ -385,41 +272,18 @@ export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
               className="min-h-[100px]"
             />
           ) : (
-            <div className="bg-muted/30 p-4 rounded-md text-sm">
-              {lead.message || "No message content."}
+            <div className="bg-muted/30 p-4 rounded-md text-sm border border-border">
+              {lead.message || <span className="text-muted-foreground italic">No message content.</span>}
             </div>
           )}
         </div>
 
-        <div className="space-y-4">
-          <h3 className="font-semibold flex items-center gap-2">
-            <MessageSquare className="h-4 w-4" /> Activity & Comments
-          </h3>
-          
-          <div className="space-y-4 mb-4">
-            {comments?.map((comment: any) => (
-              <div key={comment._id} className="bg-muted/30 p-3 rounded-lg">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="font-medium text-sm">{comment.userName}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(comment._creationTime).toLocaleString()}
-                  </span>
-                </div>
-                <p className="text-sm">{comment.content}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex gap-2">
-            <Textarea
-              placeholder="Add a comment..."
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              className="min-h-[80px]"
-            />
-            <Button className="self-end" onClick={handleAddComment}>Post</Button>
-          </div>
-        </div>
+        <LeadActivity 
+          comments={comments || []} 
+          newComment={newComment} 
+          setNewComment={setNewComment} 
+          onAddComment={handleAddComment} 
+        />
       </div>
     </div>
   );

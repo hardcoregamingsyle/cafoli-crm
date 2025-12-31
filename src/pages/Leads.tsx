@@ -35,6 +35,7 @@ export default function Leads() {
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedAssignedTo, setSelectedAssignedTo] = useState<string[]>([]);
+  const [sortBy, setSortBy] = useState<string>("newest");
 
   const allTags = useQuery(api.tags.getAllTags) || [];
   const uniqueSources = useQuery(api.leads.getUniqueSources) || [];
@@ -78,6 +79,7 @@ export default function Leads() {
       sources: selectedSources.length > 0 ? selectedSources : undefined,
       tags: selectedTags.length > 0 ? selectedTags as Id<"tags">[] : undefined,
       assignedToUsers: selectedAssignedTo.length > 0 ? selectedAssignedTo as Id<"users">[] : undefined,
+      sortBy: sortBy,
     }, 
     { initialNumItems: 20 }
   );
@@ -250,6 +252,8 @@ export default function Leads() {
             allUsers={allUsers}
             isAdmin={isAdmin}
             availableStatuses={availableStatuses}
+            sortBy={sortBy}
+            setSortBy={setSortBy}
           />
         </div>
 
