@@ -1,1 +1,74 @@
-grep -r "whatsappTemplates" src/convex/ --include="*.ts" | grep -v "_generated" | grep -v "node_modules" | head -10
+export * from "./leads/queries";
+
+export {
+  createLead,
+  updateLead,
+  assignLead,
+  addComment,
+} from "./leads/standard";
+
+export {
+  logExport,
+  standardizeAllPhoneNumbers,
+  bulkImportLeads,
+} from "./leads/admin";
+
+// Additional code from the edit snippet
+
+import { useQuery, useMutation } from 'react-query';
+import { useState, useMemo } from 'react';
+
+const YourComponent = ({ user, filter }) => {
+  // Fetch unique sources; default to empty array if undefined
+  const uniqueSources = useQuery(api.leads.queries.getUniqueSources) || [];
+
+  // Fetch all users; skip if no user
+  const allUsers = useQuery(api.users.getAllUsers, user ? { userId: user._id } : "skip") || [];
+
+  // Action to manually sync Pharmavends
+  const manualSync = useAction(api.pharmavends.manualSyncPharmavends);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSync = async () => {
+    // Implementation details omitted
+  };
+
+  // Mutation for assigning a lead
+  const assignLead = useMutation(api.leads.standard.assignLead);
+
+  // Handle lead selection
+  const handleLeadSelect = (id: Id<"leads">) => {
+    // Implementation details omitted
+  };
+
+  // Available status options
+  const availableStatuses = ["Cold", "Hot", "Mature"];
+
+  // Fetch leads with optional user filter
+  const leadsData = useQuery(api.leads.queries.getLeads, user ? { userId: user._id, filter } : "skip") || [];
+
+  // Memoized sorted leads
+  const sortedLeads = useMemo(() => {
+    // Implementation details omitted
+  }, [leadsData]);
+
+  // Rest of your component logic and JSX
+  return (
+    // Your JSX here
+  );
+};
+
+export default YourComponent;
+
+export function CreateLeadDialog({ open, onOpenChange, userId }: CreateLeadDialogProps) {
+  const createLead = useMutation(api.leads.standard.createLead);
+
+  const handleCreateLead = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    // Implementation details omitted
+  };
+
+  return (
+    // Your JSX here
+  );
+}

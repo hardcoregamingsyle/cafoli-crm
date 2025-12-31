@@ -34,7 +34,7 @@ export default function CampaignBuilderPage() {
   const [autoEnrollNew, setAutoEnrollNew] = useState(true);
 
   const allTags = useQuery(api.tags.getAllTags) || [];
-  const uniqueSources = useQuery(api.leads.getUniqueSources) || [];
+  const uniqueSources = useQuery(api.leads.queries.getUniqueSources) || [];
   const templates = useQuery((api as any).whatsappTemplatesQueries?.getTemplates) || [];
 
   const createCampaign = useMutation(api.campaigns.createCampaign);

@@ -27,7 +27,6 @@ import type * as http from "../http.js";
 import type * as indiamartMutations from "../indiamartMutations.js";
 import type * as leadQueries from "../leadQueries.js";
 import type * as leadUtils from "../leadUtils.js";
-import type * as leads from "../leads.js";
 import type * as leads_admin from "../leads/admin.js";
 import type * as leads_queries from "../leads/queries.js";
 import type * as leads_standard from "../leads/standard.js";
@@ -73,7 +72,6 @@ declare const fullApi: ApiFromModules<{
   indiamartMutations: typeof indiamartMutations;
   leadQueries: typeof leadQueries;
   leadUtils: typeof leadUtils;
-  leads: typeof leads;
   "leads/admin": typeof leads_admin;
   "leads/queries": typeof leads_queries;
   "leads/standard": typeof leads_standard;

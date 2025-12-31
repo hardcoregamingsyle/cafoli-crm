@@ -21,13 +21,13 @@ import { useRef } from "react";
 export default function Admin() {
   const { user: currentUser, signIn } = useAuth();
   const allUsers = useQuery(api.users.getAllUsers, currentUser ? { userId: currentUser._id } : "skip") || [];
-  const allLeadsForExport = useQuery(api.leads.getAllLeadsForExport, currentUser ? { userId: currentUser._id } : "skip");
-  const nextDownloadNumber = useQuery(api.leads.getNextDownloadNumber);
+  const allLeadsForExport = useQuery(api.leads.queries.getAllLeadsForExport, currentUser ? { userId: currentUser._id } : "skip");
+  const nextDownloadNumber = useQuery(api.leads.queries.getNextDownloadNumber);
   const createUser = useMutation(api.users.createUser);
   const deleteUser = useMutation(api.users.deleteUser);
-  const logExport = useMutation(api.leads.logExport);
-  const standardizePhoneNumbers = useMutation(api.leads.standardizeAllPhoneNumbers);
-  const importLeads = useMutation(api.leads.bulkImportLeads);
+  const logExport = useMutation(api.leads.admin.logExport);
+  const standardizePhoneNumbers = useMutation(api.leads.admin.standardizeAllPhoneNumbers);
+  const importLeads = useMutation(api.leads.admin.bulkImportLeads);
   const manualMarkColdCallerLeads = useMutation(api.coldCallerLeads.manualMarkColdCallerLeads);
   const sendWelcomeToRecentLeads = useAction(api.whatsappTemplatesActions.sendWelcomeToRecentLeads);
 

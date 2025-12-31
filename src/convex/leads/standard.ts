@@ -1,7 +1,6 @@
 import { v } from "convex/values";
 import { mutation } from "../_generated/server";
 import { ROLES } from "../schema";
-import { internal } from "../_generated/api";
 import { standardizePhoneNumber, generateSearchText, handleFollowUpChange } from "../leadUtils";
 
 export const createLead = mutation({

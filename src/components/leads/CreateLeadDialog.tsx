@@ -16,7 +16,7 @@ interface CreateLeadDialogProps {
 }
 
 export function CreateLeadDialog({ open, onOpenChange, userId }: CreateLeadDialogProps) {
-  const createLead = useMutation(api.leads.createLead);
+  const createLead = useMutation(api.leads.standard.createLead);
 
   const handleCreateLead = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();

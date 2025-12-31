@@ -21,7 +21,7 @@ export default function Emailing() {
   const sendEmailAction = useAction(api.emailActions.sendEmail);
 
   const isAdmin = user?.role === "admin";
-  const leads = useQuery(api.leads.getLeads, user ? { 
+  const leads = useQuery(api.leads.queries.getLeads, user ? { 
     filter: isAdmin ? "all" : "mine" 
   } : "skip") || [];
 

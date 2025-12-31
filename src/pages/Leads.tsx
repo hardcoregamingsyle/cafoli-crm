@@ -44,7 +44,7 @@ export default function Leads() {
   const [whatsAppLeadId, setWhatsAppLeadId] = useState<Id<"leads"> | null>(null);
 
   const allTags = useQuery(api.tags.getAllTags) || [];
-  const uniqueSources = useQuery(api.leads.getUniqueSources) || [];
+  const uniqueSources = useQuery(api.leads.queries.getUniqueSources) || [];
   const allUsers = useQuery(api.users.getAllUsers, user ? { userId: user._id } : "skip") || [];
 
   const manualSync = useAction(api.pharmavends.manualSyncPharmavends);
@@ -63,7 +63,7 @@ export default function Leads() {
     }
   };
 
-  const assignLead = useMutation(api.leads.assignLead);
+  const assignLead = useMutation(api.leads.standard.assignLead);
 
   const handleLeadSelect = (id: Id<"leads">) => {
     setSelectedLeadId(id);
@@ -98,7 +98,7 @@ export default function Leads() {
 
   const availableStatuses = ["Cold", "Hot", "Mature"];
 
-  const leadsData = useQuery(api.leads.getLeads, user ? { userId: user._id, filter } : "skip") || [];
+  const leadsData = useQuery(api.leads.queries.getLeads, user ? { userId: user._id, filter } : "skip") || [];
 
   const sortedLeads = useMemo(() => {
     if (!leadsData) return [];
