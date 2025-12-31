@@ -1,5 +1,38 @@
-import { useState } from "react";
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
-import { Doc, Id } from "@/convex/_generated/dataModel";
-import { toast } from "sonner";
+"use node";
+
+import { ConvexCredentials } from "@convex-dev/auth/providers/ConvexCredentials";
+import { internal } from "../_generated/api";
+import { Id } from "../_generated/dataModel";
+import { hashPassword, verifyPassword } from "../lib/passwordUtils";
+import { Password } from "@convex-dev/auth/providers/Password";
+import { DataModel } from "../_generated/dataModel";
+
+// Hardcoded credentials storage (in-memory for this implementation)
+const HARDCODED_USERS = [
+  {
+    id: "user-1",
+    password: "password-1",
+  },
+];
+
+export const password = ConvexCredentials({
+  users: HARDCODED_USERS,
+});
+
+export const PasswordProvider = Password<DataModel>({
+  profile(params) {
+    return {
+      email: params.email as string,
+      name: params.name as string,
+    };
+  },
+});
+
+export const { auth, signIn, signOut, store } = PasswordProvider;
+
+    // 3. Sort by lastMessageAt (descending) or creation time for new leads
+    return leadsWithChat.sort((a, b) => {
+      const timeA = Math.max(a.lastMessageAt || 0, a._creationTime);
+      const timeB = Math.max(b.lastMessageAt || 0, b._creationTime);
+      return timeB - timeA;
+    });

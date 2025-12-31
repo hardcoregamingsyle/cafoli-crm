@@ -84,7 +84,11 @@ export const getLeadsWithChatStatus = query({
       })
     );
 
-    // 3. Sort by lastMessageAt (descending)
-    return leadsWithChat.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+    // 3. Sort by lastMessageAt (descending) or creation time for new leads
+    return leadsWithChat.sort((a, b) => {
+      const timeA = Math.max(a.lastMessageAt || 0, a._creationTime);
+      const timeB = Math.max(b.lastMessageAt || 0, b._creationTime);
+      return timeB - timeA;
+    });
   },
 });

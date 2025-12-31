@@ -263,3 +263,31 @@ export const updatePreferences = mutation({
     });
   },
 });
+
+export const createAccount = mutation({
+  args: {
+    email: v.string(),
+    password: v.string(),
+    name: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const email = args.email.toLowerCase();
+    const existingUser = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", email))
+      .unique();
+
+    if (existingUser) {
+      throw new Error("User already exists");
+    }
+
+    const passwordHash = hashPassword(args.password);
+
+    await ctx.db.insert("users", {
+      email,
+      name: args.name,
+      role: ROLES.STAFF,
+      passwordHash,
+    });
+  },
+});
