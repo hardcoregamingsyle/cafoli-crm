@@ -14,6 +14,7 @@ export const getPaginatedLeads = query({
     sources: v.optional(v.array(v.string())),
     tags: v.optional(v.array(v.id("tags"))),
     assignedToUsers: v.optional(v.array(v.id("users"))),
+    sortBy: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = args.userId || await getAuthUserId(ctx);
@@ -78,6 +79,29 @@ export const getPaginatedLeads = query({
       return filtered;
     };
 
+    // Sorting logic
+    const sortLeads = (leads: any[]) => {
+      if (!args.sortBy) return leads;
+
+      return leads.sort((a, b) => {
+        switch (args.sortBy) {
+          case "newest":
+            return b._creationTime - a._creationTime;
+          case "oldest":
+            return a._creationTime - b._creationTime;
+          case "last_activity":
+            return (b.lastActivity || 0) - (a.lastActivity || 0);
+          case "next_followup":
+            if (a.nextFollowUpDate && b.nextFollowUpDate) return a.nextFollowUpDate - b.nextFollowUpDate;
+            if (a.nextFollowUpDate) return -1;
+            if (b.nextFollowUpDate) return 1;
+            return 0;
+          default:
+            return 0;
+        }
+      });
+    };
+
     // Search logic
     if (args.search) {
       let results = await ctx.db
@@ -92,6 +116,7 @@ export const getPaginatedLeads = query({
         .take(args.paginationOpts.numItems); 
 
       results = applyFilters(results);
+      results = sortLeads(results);
       const enrichedResults = await enrichLeads(results);
       return { page: enrichedResults, isDone: true, continueCursor: "" };
     }
@@ -105,34 +130,40 @@ export const getPaginatedLeads = query({
       let activeLeads = allLeads.filter(l => l.type !== "Irrelevant");
       activeLeads = applyFilters(activeLeads);
 
-      const sortedLeads = activeLeads.sort((a, b) => {
-        const dateA = a.nextFollowUpDate;
-        const dateB = b.nextFollowUpDate;
-        
-        if (dateA && dateB) {
-          return dateA - dateB;
-        }
-        
-        if (dateA) return -1;
-        if (dateB) return 1;
-        
-        return b.lastActivity - a.lastActivity;
-      });
+      // Default sort if not specified
+      if (!args.sortBy) {
+        activeLeads.sort((a, b) => {
+          const dateA = a.nextFollowUpDate;
+          const dateB = b.nextFollowUpDate;
+          
+          if (dateA && dateB) {
+            return dateA - dateB;
+          }
+          
+          if (dateA) return -1;
+          if (dateB) return 1;
+          
+          return b.lastActivity - a.lastActivity;
+        });
+      } else {
+        activeLeads = sortLeads(activeLeads);
+      }
 
       const { numItems, cursor } = args.paginationOpts;
       const offset = cursor ? parseInt(cursor) : 0;
-      const page = sortedLeads.slice(offset, offset + numItems);
-      const isDone = offset + numItems >= sortedLeads.length;
+      const page = activeLeads.slice(offset, offset + numItems);
+      const isDone = offset + numItems >= activeLeads.length;
       const continueCursor = isDone ? "" : (offset + numItems).toString();
 
       const enrichedPage = await enrichLeads(page);
       return { page: enrichedPage, isDone, continueCursor };
     } else {
-      // Check if any filters are applied
+      // Check if any filters are applied or sorting is requested
       const hasFilters = (args.statuses && args.statuses.length > 0) ||
                         (args.sources && args.sources.length > 0) ||
                         (args.tags && args.tags.length > 0) ||
-                        (args.assignedToUsers && args.assignedToUsers.length > 0);
+                        (args.assignedToUsers && args.assignedToUsers.length > 0) ||
+                        args.sortBy;
 
       if (hasFilters) {
          const allLeads = await ctx.db.query("leads").order("desc").collect();
@@ -148,6 +179,7 @@ export const getPaginatedLeads = query({
          });
 
          filtered = applyFilters(filtered);
+         filtered = sortLeads(filtered);
 
          const { numItems, cursor } = args.paginationOpts;
          const offset = cursor ? parseInt(cursor) : 0;

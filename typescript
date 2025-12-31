@@ -1,19 +1,22 @@
-                        <span className={cn("text-xs px-2 py-1 rounded-full font-medium", 
-                          lead.status === "Mature" 
-                            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                            : lead.status === "Hot"
-                              ? "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400"
-                              : config.badgeColor
-                        )}>
-                          {lead.status}
-                        </span>
-                        {isCritical && (
-                          <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 font-medium">
-                            Overdue: {lead.nextFollowUpDate ? format(lead.nextFollowUpDate, "PP") : "Unknown"}
-                          </span>
-                        )}
-                        {!isCritical && (
-                           <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300 font-medium">
-                             {lead.type}
-                           </span>
-                        )}
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Clock, Mail, MessageSquare, GitBranch, Shuffle, Tag, TagIcon, Filter } from "lucide-react";
+
+export interface BlockType {
+  type: string;
+  label: string;
+  icon: any;
+  color: string;
+}
+
+interface BlockPaletteProps { ... }
+export const blockTypes: BlockType[] = [ ... ];
+export function BlockPalette(...) { ... }
+
+const leadSelection = {
+  type: leadSelectionType,
+  tagIds: selectedTags.length > 0 ? selectedTags as Id<"tags">[] : undefined,
+  statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
+  sources: selectedSources.length > 0 ? selectedSources : undefined,
+  autoEnrollNew,
+};

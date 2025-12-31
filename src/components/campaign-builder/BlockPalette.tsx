@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Clock, Mail, MessageSquare, GitBranch, Shuffle, Tag, TagIcon, Filter } from "lucide-react";
 
-interface BlockType {
+export interface BlockType {
   type: string;
   label: string;
   icon: any;

@@ -1,33 +1,18 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { GitBranch, X, ArrowLeft, Save, Move } from "lucide-react";
+import { ArrowLeft, Save } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
 import { Id } from "@/convex/_generated/dataModel";
-import { Textarea } from "@/components/ui/textarea";
 import { BlockPalette, blockTypes } from "@/components/campaign-builder/BlockPalette";
 import { CampaignSettings } from "@/components/campaign-builder/CampaignSettings";
 import { LeadSelectionPanel } from "@/components/campaign-builder/LeadSelectionPanel";
-
-interface CampaignBlock {
-  id: string;
-  type: string;
-  data: any;
-  position: { x: number; y: number };
-}
-
-interface CampaignConnection {
-  from: string;
-  to: string;
-  label?: string;
-}
+import { CampaignCanvas } from "@/components/campaign-builder/CampaignCanvas";
+import { BlockConfigurationPanel } from "@/components/campaign-builder/BlockConfigurationPanel";
+import { CampaignBlock, CampaignConnection } from "@/types/campaign";
 
 export default function CampaignBuilderPage() {
   const { campaignId } = useParams();
@@ -39,11 +24,7 @@ export default function CampaignBuilderPage() {
   const [blocks, setBlocks] = useState<CampaignBlock[]>([]);
   const [connections, setConnections] = useState<CampaignConnection[]>([]);
   const [selectedBlock, setSelectedBlock] = useState<string | null>(null);
-  const [showBlockMenu, setShowBlockMenu] = useState(false);
-  const [draggingBlock, setDraggingBlock] = useState<string | null>(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
-  const canvasRef = useRef<HTMLDivElement>(null);
   
   // Lead selection state
   const [leadSelectionType, setLeadSelectionType] = useState<"all" | "filtered">("all");
@@ -69,7 +50,6 @@ export default function CampaignBuilderPage() {
       position: { x: 200 + blocks.length * 50, y: 100 + blocks.length * 100 },
     };
     setBlocks([...blocks, newBlock]);
-    setShowBlockMenu(false);
     setSelectedBlock(newBlock.id);
     
     // Auto-connect to previous block if exists
@@ -104,75 +84,6 @@ export default function CampaignBuilderPage() {
 
   const updateBlockData = (blockId: string, data: any) => {
     setBlocks(blocks.map(b => b.id === blockId ? { ...b, data: { ...b.data, ...data } } : b));
-  };
-
-  const removeBlock = (blockId: string) => {
-    setBlocks(blocks.filter(b => b.id !== blockId));
-    setConnections(connections.filter(c => c.from !== blockId && c.to !== blockId));
-    if (selectedBlock === blockId) setSelectedBlock(null);
-  };
-
-  const addConnection = (fromId: string, toId: string) => {
-    // Prevent duplicate connections
-    if (connections.some(c => c.from === fromId && c.to === toId)) {
-      toast.error("Connection already exists");
-      return;
-    }
-    // Prevent self-connections
-    if (fromId === toId) {
-      toast.error("Cannot connect a block to itself");
-      return;
-    }
-    setConnections([...connections, { from: fromId, to: toId }]);
-    toast.success("Connection created");
-  };
-
-  const removeConnection = (fromId: string, toId: string) => {
-    setConnections(connections.filter(c => !(c.from === fromId && c.to === toId)));
-    toast.success("Connection removed");
-  };
-
-  const handleBlockConnect = (blockId: string) => {
-    if (connectingFrom === null) {
-      setConnectingFrom(blockId);
-      toast.info("Select target block to connect");
-    } else {
-      addConnection(connectingFrom, blockId);
-      setConnectingFrom(null);
-    }
-  };
-
-  const handleMouseDown = (e: React.MouseEvent, blockId: string) => {
-    if ((e.target as HTMLElement).closest('button')) return;
-    
-    const block = blocks.find(b => b.id === blockId);
-    if (!block) return;
-    
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setDragOffset({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
-    });
-    setDraggingBlock(blockId);
-    setSelectedBlock(blockId);
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!draggingBlock || !canvasRef.current) return;
-    
-    const canvasRect = canvasRef.current.getBoundingClientRect();
-    const newX = e.clientX - canvasRect.left - dragOffset.x;
-    const newY = e.clientY - canvasRect.top - dragOffset.y;
-    
-    setBlocks(blocks.map(b => 
-      b.id === draggingBlock 
-        ? { ...b, position: { x: Math.max(0, newX), y: Math.max(0, newY) } }
-        : b
-    ));
-  };
-
-  const handleMouseUp = () => {
-    setDraggingBlock(null);
   };
 
   const handleSave = async () => {
@@ -225,70 +136,6 @@ export default function CampaignBuilderPage() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to save campaign");
     }
-  };
-
-  // Draw connections on canvas - simple straight lines
-  const renderConnections = () => {
-    return connections.map((conn, idx) => {
-      const fromBlock = blocks.find(b => b.id === conn.from);
-      const toBlock = blocks.find(b => b.id === conn.to);
-      
-      if (!fromBlock || !toBlock) return null;
-      
-      // Calculate connection points (center bottom of from block to center top of to block)
-      const fromX = fromBlock.position.x + 100;
-      const fromY = fromBlock.position.y + 60;
-      const toX = toBlock.position.x + 100;
-      const toY = toBlock.position.y;
-      
-      return (
-        <g key={`conn-${idx}`}>
-          <defs>
-            <marker
-              id={`arrowhead-${idx}`}
-              markerWidth="10"
-              markerHeight="10"
-              refX="9"
-              refY="3"
-              orient="auto"
-            >
-              <polygon points="0 0, 10 3, 0 6" fill="hsl(var(--primary))" />
-            </marker>
-          </defs>
-          {/* Straight line connection */}
-          <line
-            x1={fromX}
-            y1={fromY}
-            x2={toX}
-            y2={toY}
-            stroke="hsl(var(--primary))"
-            strokeWidth="3"
-            markerEnd={`url(#arrowhead-${idx})`}
-            className="cursor-pointer hover:stroke-destructive transition-colors"
-            style={{ pointerEvents: 'stroke' }}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (confirm("Delete this connection?")) {
-                removeConnection(conn.from, conn.to);
-              }
-            }}
-          />
-          {/* Label in the middle of the line */}
-          {conn.label && (
-            <text
-              x={(fromX + toX) / 2}
-              y={(fromY + toY) / 2}
-              fill="hsl(var(--primary))"
-              fontSize="12"
-              textAnchor="middle"
-              className="pointer-events-none bg-background px-1"
-            >
-              {conn.label}
-            </text>
-          )}
-        </g>
-      );
-    });
   };
 
   const selectedBlockData = blocks.find(b => b.id === selectedBlock);
@@ -351,226 +198,28 @@ export default function CampaignBuilderPage() {
 
           {/* Center - Whiteboard Canvas */}
           <div className="lg:col-span-2">
-            <Card className="h-[calc(100vh-12rem)]">
-              <CardHeader className="border-b">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Move className="h-4 w-4" />
-                  Campaign Flow (Drag blocks to arrange)
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-0 h-full overflow-auto bg-muted/20">
-                <div 
-                  ref={canvasRef}
-                  className="relative min-h-full min-w-full p-8"
-                  onMouseMove={handleMouseMove}
-                  onMouseUp={handleMouseUp}
-                  onMouseLeave={handleMouseUp}
-                >
-                  <svg
-                    className="absolute top-0 left-0 pointer-events-none"
-                    style={{ width: '100%', height: '100%', zIndex: 0 }}
-                  >
-                    {renderConnections()}
-                  </svg>
-                  
-                  {blocks.length === 0 ? (
-                    <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-                      <div className="text-center">
-                        <p className="text-sm">Add blocks from the left panel to start building your campaign</p>
-                      </div>
-                    </div>
-                  ) : (
-                    blocks.map((block, idx) => {
-                      const blockType = blockTypes.find(bt => bt.type === block.type);
-                      return (
-                        <Card
-                          key={block.id}
-                          className={`absolute cursor-move transition-all ${
-                            selectedBlock === block.id ? 'ring-2 ring-primary shadow-lg' : 'hover:shadow-md'
-                          } ${draggingBlock === block.id ? 'opacity-70' : ''}`}
-                          style={{ 
-                            left: block.position.x, 
-                            top: block.position.y, 
-                            width: '200px',
-                            zIndex: selectedBlock === block.id ? 10 : 1
-                          }}
-                          onMouseDown={(e) => handleMouseDown(e, block.id)}
-                        >
-                          <CardContent className="p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                {blockType && <blockType.icon className="h-4 w-4" />}
-                                <span className="text-sm font-medium">{blockType?.label}</span>
-                              </div>
-                              <div className="flex gap-1">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className={`h-6 w-6 p-0 ${connectingFrom === block.id ? 'bg-primary text-primary-foreground' : ''}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleBlockConnect(block.id);
-                                  }}
-                                  title={connectingFrom === block.id ? "Select target" : "Connect to another block"}
-                                >
-                                  <GitBranch className="h-3 w-3" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-6 w-6 p-0"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    removeBlock(block.id);
-                                  }}
-                                >
-                                  <X className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {block.type === "wait" && `${block.data.duration} ${block.data.unit}`}
-                              {block.type === "send_email" && (block.data.subject || "No subject")}
-                              {block.type === "send_whatsapp" && (block.data.templateName || "No template")}
-                              {block.type === "conditional" && (
-                                <div className="text-[10px]">
-                                  ✓ {block.data.truePath?.length || 0} | ✗ {block.data.falsePath?.length || 0}
-                                </div>
-                              )}
-                              {block.type === "ab_test" && (
-                                <div className="text-[10px]">
-                                  A: {block.data.splitPercentage}% | B: {100 - block.data.splitPercentage}%
-                                </div>
-                              )}
-                              {block.type === "lead_condition" && (
-                                <div className="text-[10px]">
-                                  ✓ {block.data.truePath?.length || 0} | ✗ {block.data.falsePath?.length || 0}
-                                </div>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      );
-                    })
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+            <CampaignCanvas
+              blocks={blocks}
+              connections={connections}
+              blockTypes={blockTypes}
+              selectedBlock={selectedBlock}
+              connectingFrom={connectingFrom}
+              onBlocksChange={setBlocks}
+              onConnectionsChange={setConnections}
+              onSelectBlock={setSelectedBlock}
+              onConnectingFromChange={setConnectingFrom}
+            />
           </div>
 
           {/* Right Sidebar - Block Configuration */}
           <div className="lg:col-span-1">
-            <Card className="sticky top-24">
-              <CardHeader>
-                <CardTitle className="text-sm">Block Configuration</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {selectedBlockData ? (
-                  <div className="space-y-4">
-                    <div className="text-sm font-medium mb-3">
-                      {blockTypes.find(bt => bt.type === selectedBlockData.type)?.label}
-                    </div>
-
-                    {selectedBlockData.type === "wait" && (
-                      <>
-                        <div>
-                          <Label className="text-xs">Duration</Label>
-                          <Input
-                            type="number"
-                            className="h-8"
-                            value={selectedBlockData.data.duration}
-                            onChange={(e) => updateBlockData(selectedBlockData.id, { duration: parseInt(e.target.value) })}
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs">Unit</Label>
-                          <Select
-                            value={selectedBlockData.data.unit}
-                            onValueChange={(v) => updateBlockData(selectedBlockData.id, { unit: v })}
-                          >
-                            <SelectTrigger className="h-8">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="minutes">Minutes</SelectItem>
-                              <SelectItem value="hours">Hours</SelectItem>
-                              <SelectItem value="days">Days</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </>
-                    )}
-
-                    {selectedBlockData.type === "send_email" && (
-                      <>
-                        <div>
-                          <Label className="text-xs">Subject</Label>
-                          <Input
-                            className="h-8"
-                            value={selectedBlockData.data.subject}
-                            onChange={(e) => updateBlockData(selectedBlockData.id, { subject: e.target.value })}
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs">Content</Label>
-                          <Textarea
-                            className="text-xs"
-                            value={selectedBlockData.data.content}
-                            onChange={(e) => updateBlockData(selectedBlockData.id, { content: e.target.value })}
-                            rows={4}
-                          />
-                        </div>
-                      </>
-                    )}
-
-                    {selectedBlockData.type === "send_whatsapp" && (
-                      <div>
-                        <Label className="text-xs">Template</Label>
-                        <Select
-                          value={selectedBlockData.data.templateId}
-                          onValueChange={(v) => {
-                            const template = templates.find(t => t._id === v);
-                            updateBlockData(selectedBlockData.id, { templateId: v, templateName: template?.name });
-                          }}
-                        >
-                          <SelectTrigger className="h-8">
-                            <SelectValue placeholder="Select..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {templates.filter(t => t.status === "APPROVED").map(template => (
-                              <SelectItem key={template._id} value={template._id}>{template.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-
-                    {(selectedBlockData.type === "add_tag" || selectedBlockData.type === "remove_tag") && (
-                      <div>
-                        <Label className="text-xs">Tag</Label>
-                        <Select
-                          value={selectedBlockData.data.tagId}
-                          onValueChange={(v) => updateBlockData(selectedBlockData.id, { tagId: v })}
-                        >
-                          <SelectTrigger className="h-8">
-                            <SelectValue placeholder="Select..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {allTags.map(tag => (
-                              <SelectItem key={tag._id} value={tag._id}>{tag.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-center text-sm text-muted-foreground py-8">
-                    Select a block to configure
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <BlockConfigurationPanel
+              selectedBlock={selectedBlockData}
+              blockTypes={blockTypes}
+              templates={templates}
+              allTags={allTags}
+              onUpdateBlockData={updateBlockData}
+            />
           </div>
         </div>
       </div>
