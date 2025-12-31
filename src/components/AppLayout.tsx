@@ -23,6 +23,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import JSZip from "jszip";
 import { toast } from "sonner";
+import { LeadReminders } from "./LeadReminders";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -237,6 +238,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <div className="min-h-screen bg-background flex">
+      <LeadReminders />
       {/* Desktop Sidebar */}
       <div className="hidden md:block w-64 fixed inset-y-0 z-50">
         {renderSidebarContent()}

@@ -30,6 +30,13 @@ export const createLead = mutation({
       message: args.message,
     });
 
+    // Rule: If status is Hot or Mature, type cannot be "To be Decided"
+    // Default status is "Cold", so this only applies if we were allowing custom status on create, 
+    // but here status is hardcoded to "Cold". 
+    // However, if we ever change the default status or allow it as an arg, we should be careful.
+    // For now, the createLead hardcodes status: "Cold", type: "To be Decided", so no change needed here based on current code.
+    // But I will add a comment or logic if the hardcoded values change.
+    
     const leadId = await ctx.db.insert("leads", {
       name: args.name,
       subject: args.subject,
@@ -103,6 +110,16 @@ export const updateLead = mutation({
       throw new Error("A lead cannot have more than 8 tags");
     }
 
+    // Rule: A lead cannot be Marked Hot or Matured if the Other Status is Yet to decide (To be Decided)
+    // If Any lead is Yet to Decide but is Marked as Hot or Matured, set the Status to be Relevant Automatically.
+    let newType = args.patch.type;
+    const newStatus = args.patch.status || lead.status;
+    const currentType = args.patch.type || lead.type;
+
+    if ((newStatus === "Hot" || newStatus === "Mature") && currentType === "To be Decided") {
+      newType = "Relevant";
+    }
+
     // Validate follow-up date constraints
     if (args.patch.nextFollowUpDate !== undefined) {
       const followUpDate = args.patch.nextFollowUpDate;
@@ -148,6 +165,11 @@ export const updateLead = mutation({
     const patchUpdates = { ...args.patch };
     if (patchUpdates.mobile) {
       patchUpdates.mobile = mobile;
+    }
+    
+    // Apply the type update if it was changed by our rule
+    if (newType !== args.patch.type) {
+      patchUpdates.type = newType;
     }
 
     await ctx.db.patch(args.id, {
