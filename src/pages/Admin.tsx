@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Shield, Users, UserPlus, Trash2, LogIn, Download, RefreshCw } from "lucide-react";
+import { Shield, Users, UserPlus, Trash2, LogIn, Download, RefreshCw, FolderClock } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -27,11 +27,13 @@ export default function Admin() {
   const logExport = useMutation(api.leads.logExport);
   const standardizePhoneNumbers = useMutation(api.leads.standardizeAllPhoneNumbers);
   const importLeads = useMutation(api.leads.bulkImportLeads);
+  const manualMarkColdCallerLeads = useMutation(api.coldCallerLeads.manualMarkColdCallerLeads);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isStandardizing, setIsStandardizing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isMarkingColdCaller, setIsMarkingColdCaller] = useState(false);
   const [newUserData, setNewUserData] = useState({
     email: "",
     name: "",
@@ -111,6 +113,25 @@ export default function Admin() {
       toast.error(error instanceof Error ? error.message : "Failed to standardize phone numbers");
     } finally {
       setIsStandardizing(false);
+    }
+  };
+
+  const handleManualMarkColdCallerLeads = async () => {
+    if (!currentUser) {
+      toast.error("You must be logged in");
+      return;
+    }
+
+    setIsMarkingColdCaller(true);
+    try {
+      const result = await manualMarkColdCallerLeads({ adminId: currentUser._id });
+      toast.success(
+        `Cold Caller Leads marked successfully!\n${result.markedCount} leads newly marked\n${result.alreadyMarked} already marked\n${result.totalUnassigned} total unassigned leads checked`
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to mark cold caller leads");
+    } finally {
+      setIsMarkingColdCaller(false);
     }
   };
 
@@ -370,6 +391,15 @@ export default function Admin() {
             >
               <RefreshCw className={`mr-2 h-4 w-4 ${isStandardizing ? 'animate-spin' : ''}`} />
               {isStandardizing ? "Standardizing..." : "Standardize Phone Numbers"}
+            </Button>
+
+            <Button 
+              variant="outline" 
+              onClick={handleManualMarkColdCallerLeads}
+              disabled={isMarkingColdCaller}
+            >
+              <FolderClock className={`mr-2 h-4 w-4 ${isMarkingColdCaller ? 'animate-spin' : ''}`} />
+              {isMarkingColdCaller ? "Marking..." : "Mark Cold Caller Leads"}
             </Button>
 
             <Button variant="outline" onClick={handleDownloadCSV}>

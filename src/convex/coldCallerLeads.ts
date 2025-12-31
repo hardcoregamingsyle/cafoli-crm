@@ -36,6 +36,55 @@ export const markColdCallerLeads = internalMutation({
   },
 });
 
+// Manual trigger for admin to mark all eligible leads as cold caller leads
+export const manualMarkColdCallerLeads = mutation({
+  args: { adminId: v.id("users") },
+  handler: async (ctx, args) => {
+    const admin = await ctx.db.get(args.adminId);
+    if (!admin || admin.role !== ROLES.ADMIN) {
+      throw new Error("Only admins can manually mark cold caller leads");
+    }
+
+    const now = Date.now();
+    const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
+    
+    const unassignedLeads = await ctx.db
+      .query("leads")
+      .filter((q) => q.and(
+        q.eq(q.field("assignedTo"), undefined),
+        q.neq(q.field("type"), "Irrelevant"),
+        q.lt(q.field("_creationTime"), twentyFourHoursAgo)
+      ))
+      .collect();
+    
+    let markedCount = 0;
+    
+    for (const lead of unassignedLeads) {
+      // Only mark if not already a cold caller lead
+      if (!lead.isColdCallerLead) {
+        await ctx.db.patch(lead._id, {
+          isColdCallerLead: true,
+        });
+        
+        // Add system comment
+        await ctx.db.insert("comments", {
+          leadId: lead._id,
+          content: "Lead manually marked as Cold Caller Lead by admin (unassigned for 24+ hours)",
+          isSystem: true,
+        });
+        
+        markedCount++;
+      }
+    }
+    
+    return { 
+      markedCount, 
+      totalUnassigned: unassignedLeads.length,
+      alreadyMarked: unassignedLeads.length - markedCount
+    };
+  },
+});
+
 // Allocate 10 cold caller leads to each staff member (Mon-Fri IST)
 export const allocateColdCallerLeads = internalMutation({
   args: {},
