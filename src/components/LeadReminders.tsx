@@ -18,8 +18,8 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 export function LeadReminders() {
-  const criticalLeads = useQuery(api.leadQueries.getCriticalOverdueLeads, {});
-  const coldLeads = useQuery(api.leadQueries.getColdOverdueLeads, {});
+  const criticalLeads = useQuery(api.leads.getCriticalOverdueLeads, {});
+  const coldLeads = useQuery(api.leads.getColdOverdueLeads, {});
   const currentUser = useQuery(api.users.currentUser);
   const updatePreferences = useMutation(api.users.updatePreferences);
   const navigate = useNavigate();

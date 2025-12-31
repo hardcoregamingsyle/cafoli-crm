@@ -1,9 +1,10 @@
 import { v } from "convex/values";
 import { internalQuery, internalMutation } from "./_generated/server";
+import { Doc } from "./_generated/dataModel";
 
 export const getActiveKeys = internalQuery({
   args: {},
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<Doc<"brevoApiKeys">[]> => {
     const keys = await ctx.db
       .query("brevoApiKeys")
       .withIndex("by_active", (q) => q.eq("isActive", true))

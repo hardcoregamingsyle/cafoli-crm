@@ -1,24 +1,18 @@
 // Re-export all functions from the refactored modules
-export {
-  getPaginatedLeads,
-  getOverdueLeads,
-  getLeads,
-  getLead,
-  getComments,
-  getUniqueSources,
-  getAllLeadsForExport,
-  getNextDownloadNumber,
-} from "./leadQueries";
+export * from "./leads/queries";
 
 export {
   createLead,
   updateLead,
   assignLead,
   addComment,
+} from "./leads/standard";
+
+export {
   logExport,
   standardizeAllPhoneNumbers,
   bulkImportLeads,
-} from "./leadMutations";
+} from "./leads/admin";
 
 export {
   standardizePhoneNumber,

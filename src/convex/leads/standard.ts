@@ -1,9 +1,8 @@
 import { v } from "convex/values";
-import { mutation } from "./_generated/server";
-import { ROLES } from "./schema";
-import { getAuthUserId } from "@convex-dev/auth/server";
-import { internal } from "./_generated/api";
-import { standardizePhoneNumber, generateSearchText, handleFollowUpChange } from "./leadUtils";
+import { mutation } from "../_generated/server";
+import { ROLES } from "../schema";
+import { internal } from "../_generated/api";
+import { standardizePhoneNumber, generateSearchText, handleFollowUpChange } from "../leadUtils";
 
 export const createLead = mutation({
   args: {
@@ -30,13 +29,6 @@ export const createLead = mutation({
       message: args.message,
     });
 
-    // Rule: If status is Hot or Mature, type cannot be "To be Decided"
-    // Default status is "Cold", so this only applies if we were allowing custom status on create, 
-    // but here status is hardcoded to "Cold". 
-    // However, if we ever change the default status or allow it as an arg, we should be careful.
-    // For now, the createLead hardcodes status: "Cold", type: "To be Decided", so no change needed here based on current code.
-    // But I will add a comment or logic if the hardcoded values change.
-    
     const leadId = await ctx.db.insert("leads", {
       name: args.name,
       subject: args.subject,
@@ -110,8 +102,6 @@ export const updateLead = mutation({
       throw new Error("A lead cannot have more than 8 tags");
     }
 
-    // Rule: A lead cannot be Marked Hot or Matured if the Other Status is Yet to decide (To be Decided)
-    // If Any lead is Yet to Decide but is Marked as Hot or Matured, set the Status to be Relevant Automatically.
     let newType = args.patch.type;
     const newStatus = args.patch.status || lead.status;
     const currentType = args.patch.type || lead.type;
@@ -167,7 +157,6 @@ export const updateLead = mutation({
       patchUpdates.mobile = mobile;
     }
     
-    // Apply the type update if it was changed by our rule
     if (newType !== args.patch.type) {
       patchUpdates.type = newType;
     }
@@ -250,171 +239,5 @@ export const addComment = mutation({
     await ctx.db.patch(args.leadId, {
       lastActivity: Date.now(),
     });
-  },
-});
-
-export const logExport = mutation({
-  args: {
-    userId: v.id("users"),
-    downloadNumber: v.number(),
-    fileName: v.string(),
-    leadCount: v.number(),
-  },
-  handler: async (ctx, args) => {
-    await ctx.db.insert("exportLogs", {
-      userId: args.userId,
-      downloadNumber: args.downloadNumber,
-      fileName: args.fileName,
-      leadCount: args.leadCount,
-      exportedAt: Date.now(),
-    });
-  },
-});
-
-export const standardizeAllPhoneNumbers = mutation({
-  args: { adminId: v.id("users") },
-  handler: async (ctx, args) => {
-    const admin = await ctx.db.get(args.adminId);
-    if (!admin || admin.role !== ROLES.ADMIN) {
-      throw new Error("Only admins can standardize phone numbers");
-    }
-
-    const allLeads = await ctx.db.query("leads").collect();
-    
-    let updatedCount = 0;
-    let mergedCount = 0;
-    const processedMobiles = new Set<string>();
-
-    for (const lead of allLeads) {
-      const originalMobile = lead.mobile;
-      const standardizedMobile = standardizePhoneNumber(originalMobile);
-      
-      if (originalMobile === standardizedMobile) {
-        continue;
-      }
-
-      if (processedMobiles.has(standardizedMobile)) {
-        await ctx.db.insert("comments", {
-          leadId: lead._id,
-          content: `Duplicate phone number detected after standardization: ${standardizedMobile}. Please review and merge manually.`,
-          isSystem: true,
-        });
-        mergedCount++;
-        continue;
-      }
-
-      await ctx.db.patch(lead._id, {
-        mobile: standardizedMobile,
-        lastActivity: Date.now(),
-      });
-
-      processedMobiles.add(standardizedMobile);
-      updatedCount++;
-    }
-
-    return {
-      success: true,
-      updatedCount,
-      duplicatesFound: mergedCount,
-      totalLeads: allLeads.length,
-    };
-  },
-});
-
-export const bulkImportLeads = mutation({
-  args: {
-    leads: v.array(
-      v.object({
-        name: v.string(),
-        email: v.optional(v.string()),
-        altEmail: v.optional(v.string()),
-        mobile: v.string(),
-        altMobile: v.optional(v.string()),
-        source: v.optional(v.string()),
-        assignedToName: v.optional(v.string()),
-        agencyName: v.optional(v.string()),
-        pincode: v.optional(v.string()),
-        station: v.optional(v.string()),
-        state: v.optional(v.string()),
-        district: v.optional(v.string()),
-        subject: v.optional(v.string()),
-        message: v.optional(v.string()),
-      })
-    ),
-    adminId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    const adminId = args.adminId;
-    if (!adminId) throw new Error("Unauthorized");
-
-    const admin = await ctx.db.get(adminId);
-    if (admin?.role !== ROLES.ADMIN) {
-      throw new Error("Only admins can import leads");
-    }
-
-    const allUsers = await ctx.db.query("users").collect();
-    const userMap = new Map<string, string>();
-    
-    for (const user of allUsers) {
-      if (user.name) userMap.set(user.name.toLowerCase(), user._id);
-      if (user.email) userMap.set(user.email.toLowerCase(), user._id);
-    }
-
-    let importedCount = 0;
-
-    for (const leadData of args.leads) {
-      let assignedTo = undefined;
-      if (leadData.assignedToName) {
-        const lookup = leadData.assignedToName.toLowerCase().trim();
-        if (userMap.has(lookup)) {
-          assignedTo = userMap.get(lookup);
-        }
-      }
-
-      const source = leadData.source && leadData.source.trim() !== "" 
-        ? leadData.source 
-        : "Manual Import";
-
-      const mobile = standardizePhoneNumber(leadData.mobile);
-
-      const searchText = [
-        leadData.name,
-        leadData.subject,
-        mobile,
-        leadData.altMobile,
-        leadData.email,
-        leadData.altEmail,
-        leadData.message,
-        leadData.agencyName,
-        leadData.station,
-        leadData.district,
-        leadData.state
-      ].filter(Boolean).join(" ");
-
-      await ctx.db.insert("leads", {
-        name: leadData.name,
-        email: leadData.email,
-        altEmail: leadData.altEmail,
-        mobile: mobile,
-        altMobile: leadData.altMobile,
-        source: source,
-        assignedTo: assignedTo as any,
-        agencyName: leadData.agencyName,
-        pincode: leadData.pincode,
-        station: leadData.station,
-        state: leadData.state,
-        district: leadData.district,
-        subject: leadData.subject || "Imported Lead",
-        message: leadData.message,
-        status: "Cold",
-        type: "To be Decided",
-        lastActivity: Date.now(),
-        searchText,
-      });
-
-      importedCount++;
-    }
-
-    return { importedCount };
   },
 });

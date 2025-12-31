@@ -1,12 +1,16 @@
 "use node";
 
-import { action, internalAction } from "./_generated/server";
+import { action, internalAction, ActionCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import { Id, Doc } from "./_generated/dataModel";
 
 // Get next available API key from database with rotation
-async function getNextApiKey(ctx: any): Promise<{ key: string; keyId: string } | null> {
-  const keys = await ctx.runQuery(internal.brevoQueries.getActiveKeys);
+async function getNextApiKey(ctx: ActionCtx): Promise<{ key: string; keyId: Id<"brevoApiKeys"> } | null> {
+  // Cast internal to any to avoid "Type instantiation is excessively deep" error
+  // @ts-ignore
+  const internalAny: any = internal;
+  const keys = await ctx.runQuery(internalAny.brevoQueries.getActiveKeys) as Doc<"brevoApiKeys">[];
   
   if (!keys || keys.length === 0) {
     console.error("No active Brevo API keys found in database");
@@ -38,7 +42,7 @@ async function getNextApiKey(ctx: any): Promise<{ key: string; keyId: string } |
 }
 
 // Increment usage count for a key
-async function incrementKeyUsage(ctx: any, keyId: string) {
+async function incrementKeyUsage(ctx: ActionCtx, keyId: Id<"brevoApiKeys">) {
   await ctx.runMutation(internal.brevoQueries.incrementUsage, { keyId });
 }
 
@@ -116,7 +120,7 @@ export const sendEmailInternal = internalAction({
 });
 
 // Helper function to send email with a specific key
-async function sendEmailWithKey(ctx: any, args: any, keyData: { key: string; keyId: string }) {
+async function sendEmailWithKey(ctx: ActionCtx, args: any, keyData: { key: string; keyId: Id<"brevoApiKeys"> }) {
   const response = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: {
@@ -152,7 +156,7 @@ async function sendEmailWithKey(ctx: any, args: any, keyData: { key: string; key
 }
 
 // Helper for welcome email with specific key
-async function sendWelcomeEmailWithKey(ctx: any, args: any, keyData: { key: string; keyId: string }, htmlContent: string) {
+async function sendWelcomeEmailWithKey(ctx: ActionCtx, args: any, keyData: { key: string; keyId: Id<"brevoApiKeys"> }, htmlContent: string) {
   const response = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: {
