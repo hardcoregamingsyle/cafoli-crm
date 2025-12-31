@@ -6,11 +6,18 @@ import { api } from "@/convex/_generated/api";
 export function useAuth() {
   const { isLoading, isAuthenticated } = useConvexAuth();
   
+  // Defensive check for api.users to prevent crash if users.ts is not generated/loaded
+  const currentUserQuery = api.users?.currentUser;
+
   const user = useQuery(
-    api.users.currentUser, 
+    currentUserQuery ?? "skip", 
     isAuthenticated ? {} : "skip"
   );
   const { signIn, signOut } = useAuthActions();
+
+  if (isAuthenticated && !currentUserQuery) {
+    console.error("Critical: api.users.currentUser is undefined. Check src/convex/users.ts");
+  }
 
   return {
     isLoading: isLoading || (isAuthenticated && user === undefined),

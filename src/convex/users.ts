@@ -56,7 +56,7 @@ export const login = mutation({
       }
 
       // Create the owner account if it doesn't exist
-      const passwordHash = hashPassword(args.password);
+      const passwordHash = await hashPassword(args.password);
       
       const newUserId = await ctx.db.insert("users", {
         email: "owner",
@@ -76,7 +76,7 @@ export const login = mutation({
       return null;
     }
 
-    if (verifyPassword(args.password, user.passwordHash)) {
+    if (await verifyPassword(args.password, user.passwordHash)) {
       return user._id;
     }
     return null;
@@ -197,7 +197,7 @@ export const createUser = mutation({
     }
 
     // Hash the password before storing
-    const passwordHash = hashPassword(args.password);
+    const passwordHash = await hashPassword(args.password);
 
     // Create user in database
     const newUserId = await ctx.db.insert("users", {
@@ -281,7 +281,7 @@ export const createAccount = mutation({
       throw new Error("User already exists");
     }
 
-    const passwordHash = hashPassword(args.password);
+    const passwordHash = await hashPassword(args.password);
 
     await ctx.db.insert("users", {
       email,
