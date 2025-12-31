@@ -23,6 +23,11 @@ export default function Emailing() {
   const deleteTemplate = useMutation(api.emailTemplates.deleteTemplate);
   const sendEmailAction = useAction(api.emailActions.sendEmail);
 
+  const leads = useQuery(api.leads.getLeads, { 
+    filter: user?.role === "admin" ? "all" : "mine" 
+  }) || [];
+  const leadsWithEmails = leads.filter(l => l.email);
+
   const [activeTab, setActiveTab] = useState("send");
   
   // Send Email State
@@ -173,14 +178,24 @@ export default function Emailing() {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="recipient">Recipient Email</Label>
-                      <Input 
-                        id="recipient" 
-                        type="email" 
-                        placeholder="recipient@example.com" 
-                        value={recipientEmail}
-                        onChange={(e) => setRecipientEmail(e.target.value)}
-                      />
+                      <Label htmlFor="recipient">Recipient Lead</Label>
+                      <Select value={recipientEmail} onValueChange={setRecipientEmail}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a lead" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {leadsWithEmails.map((lead) => (
+                            <SelectItem key={lead._id} value={lead.email!}>
+                              {lead.name} ({lead.email})
+                            </SelectItem>
+                          ))}
+                          {leadsWithEmails.length === 0 && (
+                            <div className="p-2 text-sm text-muted-foreground text-center">
+                              No leads with email addresses found
+                            </div>
+                          )}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 
