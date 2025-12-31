@@ -12,6 +12,8 @@ import type * as auth from "../auth.js";
 import type * as auth_emailOtp from "../auth/emailOtp.js";
 import type * as auth_password from "../auth/password.js";
 import type * as brevo from "../brevo.js";
+import type * as brevoMutations from "../brevoMutations.js";
+import type * as brevoQueries from "../brevoQueries.js";
 import type * as campaignExecutor from "../campaignExecutor.js";
 import type * as campaignExecutorMutations from "../campaignExecutorMutations.js";
 import type * as campaignMutations from "../campaignMutations.js";
@@ -52,6 +54,8 @@ declare const fullApi: ApiFromModules<{
   "auth/emailOtp": typeof auth_emailOtp;
   "auth/password": typeof auth_password;
   brevo: typeof brevo;
+  brevoMutations: typeof brevoMutations;
+  brevoQueries: typeof brevoQueries;
   campaignExecutor: typeof campaignExecutor;
   campaignExecutorMutations: typeof campaignExecutorMutations;
   campaignMutations: typeof campaignMutations;

@@ -110,8 +110,26 @@ async function executeWhatsAppBlock(ctx: any, leadId: string, blockData: any) {
 }
 
 async function executeEmailBlock(ctx: any, leadId: string, blockData: any) {
-  // Email sending would be implemented here
-  return { success: true, message: "Email sent (not implemented)" };
+  const lead = await ctx.runMutation(internal.campaignExecutorMutations.getLead, { leadId });
+  
+  if (!lead || !lead.email) {
+    throw new Error("Lead not found or missing email address");
+  }
+
+  // Send email using Brevo
+  try {
+    await ctx.runAction(internal.brevo.sendEmailInternal, {
+      to: lead.email,
+      toName: lead.name || "Valued Customer",
+      subject: blockData.subject || "Message from Cafoli Connect",
+      htmlContent: blockData.htmlContent || blockData.message || "Hello!",
+      textContent: blockData.textContent,
+    });
+
+    return { success: true, message: "Email sent" };
+  } catch (error) {
+    throw new Error(`Failed to send email: ${error instanceof Error ? error.message : "Unknown error"}`);
+  }
 }
 
 async function executeAddTagBlock(ctx: any, leadId: string, blockData: any) {

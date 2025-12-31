@@ -229,6 +229,17 @@ const schema = defineSchema(
       exportedAt: v.number(),
     }).index("by_user", ["userId"]),
 
+    brevoApiKeys: defineTable({
+      apiKey: v.string(),
+      label: v.optional(v.string()),
+      isActive: v.boolean(),
+      dailyLimit: v.optional(v.number()),
+      usageCount: v.number(),
+      lastUsedAt: v.optional(v.number()),
+      lastResetAt: v.number(),
+      order: v.number(), // For rotation order
+    }).index("by_active", ["isActive"]).index("by_order", ["order"]),
+
     // WhatsApp Templates
     templates: defineTable({
       name: v.string(),

@@ -1,4 +1,5 @@
 import AppLayout from "@/components/AppLayout";
+import BrevoKeyManager from "@/components/BrevoKeyManager";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -571,6 +572,8 @@ export default function Admin() {
             </div>
           </CardContent>
         </Card>
+
+        {currentUser && <BrevoKeyManager userId={currentUser._id} />}
 
         <Card>
           <CardHeader>

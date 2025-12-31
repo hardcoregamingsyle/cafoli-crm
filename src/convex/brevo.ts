@@ -2,38 +2,47 @@
 
 import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 
-// Hardcoded Brevo API keys with rotation support
-const BREVO_API_KEYS = [
-  "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",
-  "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",
-  "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",
-  "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",
-  "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",
-];
+// Get next available API key from database with rotation
+async function getNextApiKey(ctx: any): Promise<{ key: string; keyId: string } | null> {
+  const keys = await ctx.runQuery(internal.brevoQueries.getActiveKeys);
+  
+  if (!keys || keys.length === 0) {
+    console.error("No active Brevo API keys found in database");
+    return null;
+  }
 
-let currentKeyIndex = 0;
+  const now = Date.now();
+  const oneDayMs = 24 * 60 * 60 * 1000;
 
-// Get next API key in rotation
-function getNextApiKey(): string {
-  const key = BREVO_API_KEYS[currentKeyIndex];
-  currentKeyIndex = (currentKeyIndex + 1) % BREVO_API_KEYS.length;
-  return key;
+  // Reset usage counts for keys where 24 hours have passed
+  for (const key of keys) {
+    if (now - key.lastResetAt > oneDayMs) {
+      await ctx.runMutation(internal.brevoMutations.resetDailyUsageInternal, { keyId: key._id });
+    }
+  }
+
+  // Find first key that hasn't hit its limit
+  for (const key of keys) {
+    const resetTime = now - key.lastResetAt > oneDayMs ? now : key.lastResetAt;
+    const usageCount = now - key.lastResetAt > oneDayMs ? 0 : key.usageCount;
+    
+    if (usageCount < (key.dailyLimit || 300)) {
+      return { key: key.apiKey, keyId: key._id };
+    }
+  }
+
+  console.error("All Brevo API keys have reached their daily limit");
+  return null;
 }
 
-// Fallback to environment variable if needed
-function getApiKey(): string {
-  return process.env.BREVO_API_KEY || getNextApiKey();
+// Increment usage count for a key
+async function incrementKeyUsage(ctx: any, keyId: string) {
+  await ctx.runMutation(internal.brevoQueries.incrementUsage, { keyId });
 }
 
-interface BrevoEmailParams {
-  to: string;
-  subject: string;
-  htmlContent: string;
-  textContent?: string;
-}
-
-export const sendEmail = action({
+export const sendEmailInternal = internalAction({
   args: {
     to: v.string(),
     toName: v.string(),
@@ -42,14 +51,18 @@ export const sendEmail = action({
     textContent: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const apiKey = getApiKey();
+    const keyData = await getNextApiKey(ctx);
+    
+    if (!keyData) {
+      throw new Error("No available Brevo API keys. Please add keys in Admin panel.");
+    }
 
     try {
       const response = await fetch("https://api.brevo.com/v3/smtp/email", {
         method: "POST",
         headers: {
           "accept": "application/json",
-          "api-key": apiKey,
+          "api-key": keyData.key,
           "content-type": "application/json",
         },
         body: JSON.stringify({
@@ -73,8 +86,25 @@ export const sendEmail = action({
 
       if (!response.ok) {
         console.error("Brevo API error:", data);
+        
+        // If rate limit error, try next key
+        if (response.status === 429 || (data.code === "too_many_requests")) {
+          console.log("Rate limit hit, marking key as exhausted");
+          // The key will be skipped on next call due to usage count
+          await incrementKeyUsage(ctx, keyData.keyId);
+          
+          // Retry with next key
+          const nextKeyData = await getNextApiKey(ctx);
+          if (nextKeyData) {
+            return await sendEmailWithKey(ctx, args, nextKeyData);
+          }
+        }
+        
         throw new Error(`Failed to send email: ${JSON.stringify(data)}`);
       }
+
+      // Increment usage count on success
+      await incrementKeyUsage(ctx, keyData.keyId);
 
       console.log("Email sent successfully:", data);
       return { success: true, messageId: data.messageId };
@@ -85,6 +115,92 @@ export const sendEmail = action({
   },
 });
 
+// Helper function to send email with a specific key
+async function sendEmailWithKey(ctx: any, args: any, keyData: { key: string; keyId: string }) {
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "accept": "application/json",
+      "api-key": keyData.key,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      sender: {
+        name: "Cafoli Connect",
+        email: "welcome@mail.skinticals.com",
+      },
+      to: [
+        {
+          email: args.to,
+          name: args.toName,
+        },
+      ],
+      subject: args.subject,
+      htmlContent: args.htmlContent,
+      textContent: args.textContent || args.htmlContent.replace(/<[^>]*>/g, ""),
+    }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(`Failed to send email: ${JSON.stringify(data)}`);
+  }
+
+  await incrementKeyUsage(ctx, keyData.keyId);
+  return { success: true, messageId: data.messageId };
+}
+
+// Helper for welcome email with specific key
+async function sendWelcomeEmailWithKey(ctx: any, args: any, keyData: { key: string; keyId: string }, htmlContent: string) {
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "accept": "application/json",
+      "api-key": keyData.key,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      sender: {
+        name: "Cafoli Connect",
+        email: "welcome@mail.skinticals.com",
+      },
+      to: [
+        {
+          email: args.leadEmail,
+          name: args.leadName,
+        },
+      ],
+      subject: "Welcome to Cafoli Connect - We've Received Your Inquiry",
+      htmlContent,
+      textContent: htmlContent.replace(/<[^>]*>/g, ""),
+    }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(`Failed to send email: ${JSON.stringify(data)}`);
+  }
+
+  await incrementKeyUsage(ctx, keyData.keyId);
+  return { success: true, messageId: data.messageId };
+}
+
+// Public action wrapper for external use
+export const sendEmail = action({
+  args: {
+    to: v.string(),
+    toName: v.string(),
+    subject: v.string(),
+    htmlContent: v.string(),
+    textContent: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<{ success: boolean; messageId?: string }> => {
+    return await ctx.runAction(internal.brevo.sendEmailInternal, args);
+  },
+});
+
 export const sendWelcomeEmail = internalAction({
   args: {
     leadName: v.string(),
@@ -92,7 +208,11 @@ export const sendWelcomeEmail = internalAction({
     source: v.string(),
   },
   handler: async (ctx, args) => {
-    const apiKey = getApiKey();
+    const keyData = await getNextApiKey(ctx);
+    
+    if (!keyData) {
+      throw new Error("No available Brevo API keys. Please add keys in Admin panel.");
+    }
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -146,7 +266,7 @@ export const sendWelcomeEmail = internalAction({
         method: "POST",
         headers: {
           "accept": "application/json",
-          "api-key": apiKey,
+          "api-key": keyData.key,
           "content-type": "application/json",
         },
         body: JSON.stringify({
@@ -170,8 +290,21 @@ export const sendWelcomeEmail = internalAction({
 
       if (!response.ok) {
         console.error("Brevo API error:", data);
+        
+        // If rate limit error, try next key
+        if (response.status === 429 || (data.code === "too_many_requests")) {
+          await incrementKeyUsage(ctx, keyData.keyId);
+          const nextKeyData = await getNextApiKey(ctx);
+          if (nextKeyData) {
+            // Retry with welcome email content
+            return await sendWelcomeEmailWithKey(ctx, args, nextKeyData, htmlContent);
+          }
+        }
+        
         throw new Error(`Failed to send email: ${JSON.stringify(data)}`);
       }
+
+      await incrementKeyUsage(ctx, keyData.keyId);
 
       console.log("Welcome email sent successfully:", data);
       return { success: true, messageId: data.messageId };
