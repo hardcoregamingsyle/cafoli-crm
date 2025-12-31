@@ -1,33 +1,19 @@
-export const getActiveKeys = internalQuery({ ... });
-export const incrementUsage = internalMutation({
-  args: {
-    keyId: v.id("brevoApiKeys"),
-  },
-  handler: async (ctx, args) => {
-    const keys = await ctx.runQuery(internal.brevoQueries.getActiveKeys, {});
-    // ...
-  },
-});
-
-brevoApiKeys: defineTable({
-  apiKey: v.string(),
-  label: v.optional(v.string()),
-  isActive: v.boolean(),
-  dailyLimit: v.optional(v.number()),
-  usageCount: v.number(),
-  lastUsedAt: v.optional(v.number()),
-  lastResetAt: v.number(),
-  order: v.number(), // For rotation order
-}).index("by_active", ["isActive"]).index("by_order", ["order"]),
-
-emailTemplates: defineTable({
-  name: v.string(),
-  subject: v.string(),
-  content: v.string(), // HTML content
-  createdBy: v.id("users"),
-  lastModifiedAt: v.number(),
-}).index("by_name", ["name"]),
-
-// WhatsApp Templates
-templates: defineTable({
-// ... keep existing code
+                        <span className={cn("text-xs px-2 py-1 rounded-full font-medium", 
+                          lead.status === "Mature" 
+                            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                            : lead.status === "Hot"
+                              ? "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400"
+                              : config.badgeColor
+                        )}>
+                          {lead.status}
+                        </span>
+                        {isCritical && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 font-medium">
+                            Overdue: {lead.nextFollowUpDate ? format(lead.nextFollowUpDate, "PP") : "Unknown"}
+                          </span>
+                        )}
+                        {!isCritical && (
+                           <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300 font-medium">
+                             {lead.type}
+                           </span>
+                        )}
