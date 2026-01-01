@@ -24,6 +24,7 @@ import { useMutation, useQuery } from "convex/react";
 import JSZip from "jszip";
 import { toast } from "sonner";
 import { LeadReminders } from "./LeadReminders";
+import { MandatoryFollowUpPopup } from "./MandatoryFollowUpPopup";
 import { ColdCallerPopup } from "@/components/ColdCallerPopup";
 import { api } from "@/convex/_generated/api";
 
@@ -141,7 +142,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
           const escapeCsvValue = (value: string) => {
             if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-              return `"${value.replace(/"/g, '""')}"`;
+              return `"${value.replace(/"/g, '""')}`;
             }
             return value;
           };
@@ -271,6 +272,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   return (
     <div className="min-h-screen bg-background flex">
       <LeadReminders />
+      <MandatoryFollowUpPopup />
       {/* Cold Caller Popup */}
       {user && coldCallerLeadsNeedingFollowUp.length > 0 && (
         <ColdCallerPopup
