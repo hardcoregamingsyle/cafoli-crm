@@ -28,7 +28,7 @@ export function TemplatesDialog({ selectedLeadId }: TemplatesDialogProps) {
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
   
-  const templates = useQuery((api as any).whatsappTemplatesQueries?.getTemplates) || [];
+  const templates = useQuery(api.whatsappTemplatesQueries.getTemplates) || [];
   // Determine filter based on user role to ensure staff can see their assigned leads
   const filter = user?.role === ROLES.ADMIN ? "all" : "mine";
   const leads = useQuery(api.leads.queries.getLeads, { filter, userId: user?._id }) || [];

@@ -35,7 +35,7 @@ export default function CampaignBuilderPage() {
 
   const allTags = useQuery(api.tags.getAllTags) || [];
   const uniqueSources = useQuery(api.leads.queries.getUniqueSources) || [];
-  const templates = useQuery((api as any).whatsappTemplatesQueries?.getTemplates) || [];
+  const templates = useQuery(api.whatsappTemplatesQueries.getTemplates) || [];
 
   const createCampaign = useMutation(api.campaigns.createCampaign);
   const updateCampaign = useMutation(api.campaigns.updateCampaign);
