@@ -34,13 +34,13 @@ export default function UserManagement({ users, currentUserId, onDeleteUser, onL
           {users.map((user) => (
             <div
               key={user._id}
-              className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
+              className="flex flex-col md:flex-row md:items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors gap-4 md:gap-0"
             >
-              <div className="flex-1">
-                <div className="flex items-center gap-3">
+              <div className="flex-1 w-full">
+                <div className="flex flex-wrap items-center gap-3">
                   <div>
                     <p className="font-medium">{user.name || "Unnamed User"}</p>
-                    <p className="text-sm text-muted-foreground">{user.email}</p>
+                    <p className="text-sm text-muted-foreground break-all">{user.email}</p>
                   </div>
                   {user.role && (
                     <span
@@ -61,7 +61,7 @@ export default function UserManagement({ users, currentUserId, onDeleteUser, onL
                 </div>
               </div>
               
-              <div className="flex gap-2">
+              <div className="flex gap-2 w-full md:w-auto justify-end">
                 {user._id !== currentUserId && (
                   <>
                     <Button

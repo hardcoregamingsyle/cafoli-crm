@@ -154,14 +154,14 @@ export default function Leads() {
       {filter === "mine" && <MandatoryFollowUpPopup />}
       
       <div className="h-[calc(100vh-4rem)] flex flex-col gap-4">
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
             <p className="text-muted-foreground">
               Manage and track your leads
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 w-full md:w-auto">
             <CreateLeadDialog 
               open={isCreateOpen} 
               onOpenChange={setIsCreateOpen} 
@@ -171,45 +171,47 @@ export default function Leads() {
         </div>
 
         {/* Search and Filter Bar */}
-        <div className="flex gap-2 items-center">
+        <div className="flex flex-col md:flex-row gap-2 items-stretch md:items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search by name, email, phone, company, subject, or message..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-10"
+              className="pl-10 w-full"
             />
           </div>
           
-          {/* Sort Dropdown */}
-          <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-[180px]">
-              <ArrowUpDown className="mr-2 h-4 w-4 opacity-50" />
-              <SelectValue placeholder="Sort by" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="newest">Newest First</SelectItem>
-              <SelectItem value="oldest">Oldest First</SelectItem>
-              <SelectItem value="next_followup">Next Follow-up</SelectItem>
-              <SelectItem value="last_contacted">Last Contacted</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex gap-2">
+            {/* Sort Dropdown */}
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="w-[140px] md:w-[180px]">
+                <ArrowUpDown className="mr-2 h-4 w-4 opacity-50" />
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest First</SelectItem>
+                <SelectItem value="oldest">Oldest First</SelectItem>
+                <SelectItem value="next_followup">Next Follow-up</SelectItem>
+                <SelectItem value="last_contacted">Last Contacted</SelectItem>
+              </SelectContent>
+            </Select>
 
-          {/* Filter Button */}
-          <Button 
-            variant="outline" 
-            onClick={() => setFilterSidebarOpen(true)}
-            className="gap-2"
-          >
-            <Filter className="h-4 w-4" />
-            Filters
-            {(selectedStatuses.length + selectedSources.length + selectedTags.length + selectedAssignedTo.length) > 0 && (
-              <Badge variant="secondary" className="ml-1">
-                {selectedStatuses.length + selectedSources.length + selectedTags.length + selectedAssignedTo.length}
-              </Badge>
-            )}
-          </Button>
+            {/* Filter Button */}
+            <Button 
+              variant="outline" 
+              onClick={() => setFilterSidebarOpen(true)}
+              className="gap-2 flex-1 md:flex-none"
+            >
+              <Filter className="h-4 w-4" />
+              Filters
+              {(selectedStatuses.length + selectedSources.length + selectedTags.length + selectedAssignedTo.length) > 0 && (
+                <Badge variant="secondary" className="ml-1">
+                  {selectedStatuses.length + selectedSources.length + selectedTags.length + selectedAssignedTo.length}
+                </Badge>
+              )}
+            </Button>
+          </div>
         </div>
 
         {/* Active Filters Display */}
