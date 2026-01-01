@@ -103,12 +103,22 @@ export const getLeadsWithChatStatus = query({
         return {
           ...lead,
           unreadCount: chat?.unreadCount || 0,
-          lastMessageAt: chat?.lastMessageAt || 0,
+          lastMessageAt: chat?.lastMessageAt || lead.lastActivity || 0,
         };
       })
     );
     
-    // Sort by last message time (most recent first)
-    return leadsWithChatStatus.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+    // Sort by last message time (most recent first), prioritizing those with messages
+    return leadsWithChatStatus.sort((a, b) => {
+      // Prioritize leads with actual messages
+      const aHasMessages = a.lastMessageAt > 0;
+      const bHasMessages = b.lastMessageAt > 0;
+      
+      if (aHasMessages && !bHasMessages) return -1;
+      if (!aHasMessages && bHasMessages) return 1;
+      
+      // Both have messages or both don't - sort by timestamp
+      return b.lastMessageAt - a.lastMessageAt;
+    });
   },
 });

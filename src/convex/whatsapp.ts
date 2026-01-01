@@ -270,6 +270,7 @@ export const handleIncomingMessage = internalAction({
       });
 
       let leadId;
+      let isNewLead = false;
 
       if (matchingLeads && matchingLeads.length > 0) {
         leadId = matchingLeads[0]._id;
@@ -280,6 +281,7 @@ export const handleIncomingMessage = internalAction({
           name: args.senderName,
           message: args.text,
         });
+        isNewLead = true;
       }
 
       if (leadId) {
@@ -343,8 +345,18 @@ export const handleIncomingMessage = internalAction({
           quotedMessageExternalId: args.quotedMessageExternalId,
         });
 
-        // NOTE: We do NOT send read receipt automatically anymore.
-        // It will be sent when the user opens the chat.
+        // Send welcome message for new leads
+        if (isNewLead) {
+          console.log(`Sending welcome message to new lead ${leadId}`);
+          try {
+            await ctx.runAction(internal.whatsapp.sendWelcomeMessage, {
+              leadId,
+              phoneNumber: args.from,
+            });
+          } catch (error) {
+            console.error("Error sending welcome message:", error);
+          }
+        }
 
         console.log(`Stored incoming message from ${args.from} for lead ${leadId}`);
       }
@@ -369,6 +381,64 @@ export const handleStatusUpdate = internalAction({
       console.log(`Updated message ${args.messageId} to status: ${args.status}`);
     } catch (error) {
       console.error("Error handling status update:", error);
+    }
+  },
+});
+
+// Send welcome message to new WhatsApp leads
+export const sendWelcomeMessage = internalAction({
+  args: {
+    leadId: v.id("leads"),
+    phoneNumber: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const accessToken = process.env.CLOUD_API_ACCESS_TOKEN;
+    const phoneNumberId = process.env.WA_PHONE_NUMBER_ID;
+    
+    if (!accessToken || !phoneNumberId) {
+      console.error("WhatsApp API not configured for welcome messages");
+      return;
+    }
+
+    const welcomeMessage = "Thank you for contacting us! We've received your message and will get back to you shortly. 🙏";
+
+    try {
+      const response = await fetch(
+        `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            messaging_product: "whatsapp",
+            to: args.phoneNumber,
+            type: "text",
+            text: { body: welcomeMessage },
+          }),
+        }
+      );
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(`WhatsApp API error: ${JSON.stringify(data)}`);
+      }
+
+      // Store welcome message in database
+      await ctx.runMutation("whatsappMutations:storeMessage" as any, {
+        leadId: args.leadId,
+        phoneNumber: args.phoneNumber,
+        content: welcomeMessage,
+        direction: "outbound",
+        status: "sent",
+        externalId: data.messages?.[0]?.id || "",
+      });
+
+      console.log(`Welcome message sent to ${args.phoneNumber}`);
+    } catch (error) {
+      console.error("Error sending welcome message:", error);
     }
   },
 });
