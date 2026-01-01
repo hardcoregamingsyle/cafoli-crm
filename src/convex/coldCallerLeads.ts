@@ -134,55 +134,37 @@ export const manualAllocateColdCallerLeads = mutation({
 
     const totalRequested = args.leadsPerStaff * staffUsers.length;
     let allocatedCount = 0;
+    let leadIndex = 0;
     
-    // If requested more than available, distribute equally
-    if (totalRequested > availableLeads.length) {
-      const leadsPerStaffActual = Math.floor(availableLeads.length / staffUsers.length);
-      const remainder = availableLeads.length % staffUsers.length;
+    // Distribute leads evenly among staff
+    const leadsPerStaffActual = Math.min(
+      args.leadsPerStaff,
+      Math.floor(availableLeads.length / staffUsers.length)
+    );
+    const remainder = Math.min(
+      availableLeads.length - (leadsPerStaffActual * staffUsers.length),
+      staffUsers.length
+    );
+    
+    for (let i = 0; i < staffUsers.length && leadIndex < availableLeads.length; i++) {
+      const user = staffUsers[i];
+      const leadsToAssign = leadsPerStaffActual + (i < remainder ? 1 : 0);
       
-      let leadIndex = 0;
-      for (let i = 0; i < staffUsers.length; i++) {
-        const user = staffUsers[i];
-        const leadsToAssign = leadsPerStaffActual + (i < remainder ? 1 : 0);
+      for (let j = 0; j < leadsToAssign && leadIndex < availableLeads.length; j++) {
+        const lead = availableLeads[leadIndex];
+        await ctx.db.patch(lead._id, {
+          coldCallerAssignedTo: user._id,
+          coldCallerAssignedAt: Date.now(),
+        });
         
-        for (let j = 0; j < leadsToAssign && leadIndex < availableLeads.length; j++) {
-          const lead = availableLeads[leadIndex];
-          await ctx.db.patch(lead._id, {
-            coldCallerAssignedTo: user._id,
-            coldCallerAssignedAt: Date.now(),
-          });
-          
-          await ctx.db.insert("comments", {
-            leadId: lead._id,
-            content: `Cold Caller Lead allocated to ${user.name || user.email} by admin`,
-            isSystem: true,
-          });
-          
-          leadIndex++;
-          allocatedCount++;
-        }
-      }
-    } else {
-      // Allocate requested amount to each staff
-      let leadIndex = 0;
-      for (const user of staffUsers) {
-        const userLeads = availableLeads.slice(leadIndex, leadIndex + args.leadsPerStaff);
+        await ctx.db.insert("comments", {
+          leadId: lead._id,
+          content: `Cold Caller Lead allocated to ${user.name || user.email} by admin`,
+          isSystem: true,
+        });
         
-        for (const lead of userLeads) {
-          await ctx.db.patch(lead._id, {
-            coldCallerAssignedTo: user._id,
-            coldCallerAssignedAt: Date.now(),
-          });
-          
-          await ctx.db.insert("comments", {
-            leadId: lead._id,
-            content: `Cold Caller Lead allocated to ${user.name || user.email} by admin`,
-            isSystem: true,
-          });
-        }
-        
-        leadIndex += userLeads.length;
-        allocatedCount += userLeads.length;
+        leadIndex++;
+        allocatedCount++;
       }
     }
     
