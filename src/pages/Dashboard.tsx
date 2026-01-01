@@ -2,34 +2,23 @@ import AppLayout from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery } from "convex/react";
 import { Users, MessageSquare, BarChart3, Activity, Loader2 } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { api } from "@/convex/_generated/api";
 import { useNavigate } from "react-router";
-import { useEffect } from "react";
 
 export default function Dashboard() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+
+  const leads = useQuery(api.leadQueries.getLeads, user ? { filter: "all", userId: user._id } : "skip") || [];
+  const campaigns = useQuery(api.campaignQueries.getCampaigns, user ? { userId: user._id } : "skip") || [];
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       navigate("/auth");
     }
   }, [authLoading, isAuthenticated, navigate]);
-  
-  const leads = useQuery(api.leadQueries.getLeads, user ? { filter: "all", userId: user._id } : "skip") || [];
-  const campaigns = useQuery(api.campaignQueries.getCampaigns, user ? { userId: user._id } : "skip") || [];
-
-  if (authLoading || !user) {
-    return (
-      <AppLayout>
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      </AppLayout>
-    );
-  }
   
   // Memoize computed stats to avoid recalculation on every render
   const stats = useMemo(() => {
@@ -67,6 +56,16 @@ export default function Dashboard() {
   // Memoize recent leads slice
   const recentLeads = useMemo(() => leads.slice(0, 5), [leads]);
   const recentCampaigns = useMemo(() => campaigns.slice(0, 5), [campaigns]);
+
+  if (authLoading || !user) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
