@@ -376,13 +376,13 @@ export default function Admin() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Admin Panel</h1>
             <p className="text-muted-foreground">Manage users and system settings.</p>
           </div>
           
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {/* Hidden file input */}
             <input
               type="file"
