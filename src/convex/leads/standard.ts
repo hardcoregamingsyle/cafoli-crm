@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation } from "../_generated/server";
+import { internal } from "../_generated/api";
 import { ROLES } from "../schema";
 import { standardizePhoneNumber, generateSearchText, handleFollowUpChange } from "../leadUtils";
 
@@ -43,9 +44,10 @@ export const createLead = mutation({
       searchText,
     });
     
+    // Send welcome email if email exists
     if (args.email) {
       try {
-        await ctx.scheduler.runAfter(0, "brevo:sendWelcomeEmail" as any, {
+        await ctx.scheduler.runAfter(0, internal.brevo.sendWelcomeEmail, {
           leadName: args.name,
           leadEmail: args.email,
           source: args.source,
@@ -57,7 +59,7 @@ export const createLead = mutation({
     
     // Send welcome WhatsApp message to primary mobile
     try {
-      await ctx.scheduler.runAfter(0, "whatsappTemplates:sendWelcomeMessage" as any, {
+      await ctx.scheduler.runAfter(0, internal.whatsappTemplates.sendWelcomeMessage, {
         phoneNumber: mobile,
         leadId: leadId,
       });
@@ -69,7 +71,7 @@ export const createLead = mutation({
     if (args.altMobile) {
       const altMobile = standardizePhoneNumber(args.altMobile);
       try {
-        await ctx.scheduler.runAfter(0, "whatsappTemplates:sendWelcomeMessage" as any, {
+        await ctx.scheduler.runAfter(0, internal.whatsappTemplates.sendWelcomeMessage, {
           phoneNumber: altMobile,
           leadId: leadId,
         });

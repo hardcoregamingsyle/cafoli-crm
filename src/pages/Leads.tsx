@@ -2,7 +2,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
-import { useQuery, useMutation, useAction } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { useState, useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Id, Doc } from "@/convex/_generated/dataModel";
@@ -46,22 +46,6 @@ export default function Leads() {
   const allTags = useQuery(api.tags.getAllTags) || [];
   const uniqueSources = useQuery(api.leads.queries.getUniqueSources) || [];
   const allUsers = useQuery(api.users.getAllUsers, user ? { userId: user._id } : "skip") || [];
-
-  const manualSync = useAction(api.pharmavends.manualSyncPharmavends);
-  const [isSyncing, setIsSyncing] = useState(false);
-
-  const handleSync = async () => {
-    setIsSyncing(true);
-    try {
-      await manualSync();
-      toast.success("Sync started in background");
-    } catch (error) {
-      toast.error("Failed to start sync");
-      console.error(error);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
 
   const assignLead = useMutation(api.leads.standard.assignLead);
 
@@ -112,7 +96,7 @@ export default function Leads() {
     });
   }, [leadsData, sortBy]);
 
-  const filteredLeads = leadsData?.filter((lead: any) => {
+  const filteredLeads = sortedLeads?.filter((lead: any) => {
     // Search filter
     if (search) {
       const query = search.toLowerCase();
@@ -124,7 +108,7 @@ export default function Leads() {
       if (!matchesSearch) return false;
     }
 
-    // Tag filter - fix type issue
+    // Tag filter
     if (selectedTags && selectedTags.length > 0) {
       const hasTag = selectedTags.some(tag => lead.tags?.includes(tag));
       if (!hasTag) return false;
@@ -132,20 +116,17 @@ export default function Leads() {
 
     // Status filter
     if (selectedStatuses && selectedStatuses.length > 0) {
-      if (selectedStatuses.includes(lead.status)) return true;
-      return false;
+      if (!selectedStatuses.includes(lead.status)) return false;
     }
 
     // Source filter
     if (selectedSources && selectedSources.length > 0) {
-      if (selectedSources.includes(lead.source)) return true;
-      return false;
+      if (!selectedSources.includes(lead.source)) return false;
     }
 
-    // Assigned filter - fix type issue
+    // Assigned filter
     if (selectedAssignedTo && selectedAssignedTo.length > 0) {
-      if (selectedAssignedTo.includes(lead.assignedTo)) return true;
-      return false;
+      if (!selectedAssignedTo.includes(lead.assignedTo)) return false;
     }
 
     return true;
@@ -156,7 +137,7 @@ export default function Leads() {
     setWhatsAppDialogOpen(true);
   };
 
-  const whatsAppLead = whatsAppLeadId && sortedLeads ? sortedLeads.find(l => l._id === whatsAppLeadId) : null;
+  const whatsAppLead = whatsAppLeadId && filteredLeads ? filteredLeads.find(l => l._id === whatsAppLeadId) : null;
 
   return (
     <AppLayout>
@@ -199,7 +180,7 @@ export default function Leads() {
           {/* Leads List */}
           <div className={`${selectedLeadId ? 'hidden md:flex' : 'flex'} flex-col w-full md:w-1/3 lg:w-1/4 min-w-[300px] border rounded-lg bg-card shadow-sm overflow-hidden`}>
             <div className="p-2 border-b bg-muted/50 text-sm font-medium text-muted-foreground flex justify-between items-center">
-              <span>{sortedLeads.length} Leads</span>
+              <span>{filteredLeads.length} Leads</span>
               {filter === "all" && (
                 <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
                   Admin View
@@ -207,7 +188,7 @@ export default function Leads() {
               )}
             </div>
             <div className="flex-1 overflow-y-auto p-2 space-y-2">
-              {sortedLeads.map((lead: Doc<"leads">) => (
+              {filteredLeads.map((lead: Doc<"leads">) => (
                 <LeadCard
                   key={lead._id}
                   lead={lead}
@@ -219,9 +200,10 @@ export default function Leads() {
                   onSelect={handleLeadSelect}
                   onAssignToSelf={handleAssignToSelf}
                   onAssignToUser={handleAssignToUser}
+                  onOpenWhatsApp={handleOpenWhatsApp}
                 />
               ))}
-              {sortedLeads.length === 0 && (
+              {filteredLeads.length === 0 && (
                 <div className="p-8 text-center text-muted-foreground">
                   No leads found matching your criteria.
                 </div>
@@ -247,24 +229,6 @@ export default function Leads() {
               Select a lead to view details
             </div>
           )}
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredLeads.map((lead) => (
-            <LeadCard
-              key={lead._id}
-              lead={lead}
-              isSelected={selectedLeadId === lead._id}
-              isUnassignedView={filter === "unassigned"}
-              viewIrrelevant={false}
-              isAdmin={user?.role === "admin"}
-              allUsers={allUsers || []}
-              onSelect={setSelectedLeadId}
-              onAssignToSelf={handleAssignToSelf}
-              onAssignToUser={handleAssignToUser}
-              onOpenWhatsApp={handleOpenWhatsApp}
-            />
-          ))}
         </div>
 
         {/* WhatsApp Dialog */}

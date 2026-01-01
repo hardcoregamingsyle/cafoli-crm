@@ -32,7 +32,7 @@ export const getChatsByLeadId = internalQuery({
 export const getAllChats = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db.query("chats").collect();
+    return await ctx.db.query("chats").order("desc").collect();
   },
 });
 
@@ -84,10 +84,12 @@ export const getLeadsWithChatStatus = query({
       ? await ctx.db
           .query("leads")
           .withIndex("by_assigned_to", (q) => q.eq("assignedTo", args.userId))
+          .order("desc")
           .collect()
       : await ctx.db
           .query("leads")
           .withIndex("by_last_activity")
+          .order("desc")
           .collect();
     
     // Enrich leads with chat status
