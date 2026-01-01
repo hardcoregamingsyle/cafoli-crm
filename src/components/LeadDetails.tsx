@@ -38,7 +38,7 @@ export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
     startEditing,
     cancelEditing,
     saveEdits,
-  } = useLeadEditor({ lead: lead!, user });
+  } = useLeadEditor({ lead, user });
 
   if (lead === undefined) {
     return <div className="flex-1 flex items-center justify-center h-full">Loading...</div>;

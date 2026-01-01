@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 
 interface UseLeadEditorProps {
-  lead: Doc<"leads">;
+  lead: Doc<"leads"> | undefined | null;
   user: Doc<"users"> | null | undefined;
 }
 
@@ -18,31 +18,32 @@ export function useLeadEditor({ lead, user }: UseLeadEditorProps) {
   const [newComment, setNewComment] = useState("");
 
   const handleStatusChange = async (status: string) => {
-    if (!user) return;
+    if (!user || !lead) return;
     await updateLead({ id: lead._id, patch: { status }, userId: user._id });
     toast.success("Status updated");
   };
 
   const handleTypeChange = async (type: string) => {
-    if (!user) return;
+    if (!user || !lead) return;
     await updateLead({ id: lead._id, patch: { type }, userId: user._id });
     toast.success("Type updated");
   };
 
   const handleAddComment = async () => {
-    if (!newComment.trim() || !user) return;
+    if (!newComment.trim() || !user || !lead) return;
     await addComment({ leadId: lead._id, content: newComment, userId: user._id });
     setNewComment("");
     toast.success("Comment added");
   };
 
   const handleTagsChange = async (newTags: Id<"tags">[]) => {
-    if (!user) return;
+    if (!user || !lead) return;
     await updateLead({ id: lead._id, patch: { tags: newTags }, userId: user._id });
     toast.success("Tags updated");
   };
 
   const startEditing = () => {
+    if (!lead) return;
     setEditedLead({
       name: lead.name,
       subject: lead.subject,
@@ -67,7 +68,7 @@ export function useLeadEditor({ lead, user }: UseLeadEditorProps) {
   };
 
   const saveEdits = async () => {
-    if (!user) return;
+    if (!user || !lead) return;
 
     // Validate follow-up date if lead is assigned
     if (lead.assignedTo && editedLead.nextFollowUpDate) {
