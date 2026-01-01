@@ -29,17 +29,11 @@ const PRESET_COLORS = [
   "#64748b", // slate-500
 ];
 
-export function TagManager({ leadId, selectedTagIds, onTagsChange }: TagManagerProps) {
-  // Import api dynamically to avoid circular type issues
-  let apiRef: any = null;
-  try {
-    apiRef = require("@/convex/_generated/api").api;
-  } catch (e) {
-    console.error("Failed to load api", e);
-  }
+import { api } from "@/convex/_generated/api";
 
-  const allTags = useQuery(apiRef?.tags?.getAllTags) || [];
-  const createTag = useMutation(apiRef?.tags?.createTag);
+export function TagManager({ leadId, selectedTagIds, onTagsChange }: TagManagerProps) {
+  const allTags = useQuery(api.tags.getAllTags) || [];
+  const createTag = useMutation(api.tags.createTag);
   
   const [open, setOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
