@@ -17,8 +17,8 @@ import * as Papa from "papaparse";
 export default function Admin() {
   const { user: currentUser, signIn } = useAuth();
   const allUsers = useQuery(api.users.getAllUsers, currentUser ? { userId: currentUser._id } : "skip") || [];
-  const allLeadsForExport = useQuery(api.leads.queries.getAllLeadsForExport, currentUser ? { userId: currentUser._id } : "skip");
-  const nextDownloadNumber = useQuery(api.leads.queries.getNextDownloadNumber);
+  const allLeadsForExport = useQuery(api.leadQueries.getAllLeadsForExport, currentUser ? { userId: currentUser._id } : "skip");
+  const nextDownloadNumber = useQuery(api.leadQueries.getNextDownloadNumber);
   
   const createUser = useMutation(api.users.createUser);
   const deleteUser = useMutation(api.users.deleteUser);
