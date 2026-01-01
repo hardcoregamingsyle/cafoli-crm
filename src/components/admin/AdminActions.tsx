@@ -9,10 +9,12 @@ interface AdminActionsProps {
   onMarkColdCallerLeads: () => void;
   onSendWelcomeMessages: () => void;
   onDownloadAllLeads: () => void;
+  onAutoAssignLeads: () => void;
   isImporting: boolean;
   isStandardizing: boolean;
   isMarkingColdCaller: boolean;
   isSendingWelcome: boolean;
+  isAutoAssigning: boolean;
 }
 
 export default function AdminActions({

@@ -30,6 +30,7 @@ import type * as indiamartMutations from "../indiamartMutations.js";
 import type * as leadQueries from "../leadQueries.js";
 import type * as leadUtils from "../leadUtils.js";
 import type * as leads_admin from "../leads/admin.js";
+import type * as leads_autoAssign from "../leads/autoAssign.js";
 import type * as leads_mutations from "../leads/mutations.js";
 import type * as leads_queries from "../leads/queries.js";
 import type * as leads_standard from "../leads/standard.js";
@@ -80,6 +81,7 @@ declare const fullApi: ApiFromModules<{
   leadQueries: typeof leadQueries;
   leadUtils: typeof leadUtils;
   "leads/admin": typeof leads_admin;
+  "leads/autoAssign": typeof leads_autoAssign;
   "leads/mutations": typeof leads_mutations;
   "leads/queries": typeof leads_queries;
   "leads/standard": typeof leads_standard;

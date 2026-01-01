@@ -33,12 +33,14 @@ export default function Admin() {
   const manualMarkColdCallerLeads = useMutation(api.coldCallerLeads.manualMarkColdCallerLeads);
   const manualAllocateColdCallerLeads = useMutation(api.coldCallerLeads.manualAllocateColdCallerLeads);
   const sendWelcomeToRecentLeads = useAction(api.whatsappTemplatesActions.sendWelcomeToRecentLeads);
+  const autoAssignUnassignedLeads = useMutation(api.leads.autoAssign.autoAssignUnassignedLeads);
 
   const [isStandardizing, setIsStandardizing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isMarkingColdCaller, setIsMarkingColdCaller] = useState(false);
   const [isSendingWelcome, setIsSendingWelcome] = useState(false);
   const [isAllocatingColdCaller, setIsAllocatingColdCaller] = useState(false);
+  const [isAutoAssigning, setIsAutoAssigning] = useState(false);
 
   const handleCreateUser = async (userData: {
     email: string;
@@ -160,6 +162,25 @@ export default function Admin() {
       toast.error(error instanceof Error ? error.message : "Failed to allocate cold caller leads");
     } finally {
       setIsAllocatingColdCaller(false);
+    }
+  };
+
+  const handleAutoAssignLeads = async () => {
+    if (!currentUser) {
+      toast.error("You must be logged in");
+      return;
+    }
+
+    setIsAutoAssigning(true);
+    try {
+      const result = await autoAssignUnassignedLeads({ adminId: currentUser._id });
+      toast.success(
+        `Auto-assignment completed!\n${result.assignedCount} leads assigned to ${result.staffCount} staff members`
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to auto-assign leads");
+    } finally {
+      setIsAutoAssigning(false);
     }
   };
 
@@ -380,10 +401,12 @@ export default function Admin() {
               onMarkColdCallerLeads={handleManualMarkColdCallerLeads}
               onSendWelcomeMessages={handleSendWelcomeToRecentLeads}
               onDownloadAllLeads={handleDownloadCSV}
+              onAutoAssignLeads={handleAutoAssignLeads}
               isImporting={isImporting}
               isStandardizing={isStandardizing}
               isMarkingColdCaller={isMarkingColdCaller}
               isSendingWelcome={isSendingWelcome}
+              isAutoAssigning={isAutoAssigning}
             />
             <AllocateColdCallerDialog
               availableLeads={unallocatedColdCallerCount ?? 0}

@@ -88,57 +88,60 @@ export default function Leads() {
   const availableStatuses = ["Cold", "Hot", "Mature"];
 
   // Use client-side filtering for now
-  const leadsData = useQuery(
-    api.leadQueries.getLeads, 
-    user ? { userId: user._id, filter } : "skip"
-  ) || [];
+  const ITEMS_PER_PAGE = 50;
+  const [paginationOpts, setPaginationOpts] = useState({ numItems: ITEMS_PER_PAGE, cursor: null as string | null });
+  
+  const paginatedResult = useQuery(
+    api.leadQueries.getPaginatedLeads,
+    user ? {
+      userId: user._id,
+      filter,
+      search: search || undefined,
+      statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
+      sources: selectedSources.length > 0 ? selectedSources : undefined,
+      tags: selectedTags.length > 0 ? selectedTags.map(t => t as Id<"tags">) : undefined,
+      assignedToUsers: selectedAssignedTo.length > 0 ? selectedAssignedTo.map(u => u as Id<"users">) : undefined,
+      sortBy: sortBy || undefined,
+      paginationOpts,
+    } : "skip"
+  );
 
-  const sortedLeads = useMemo(() => {
-    if (!leadsData) return [];
-    return [...leadsData].sort((a: Doc<"leads">, b: Doc<"leads">) => {
-      if (sortBy === "newest") return (b._creationTime || 0) - (a._creationTime || 0);
-      if (sortBy === "oldest") return (a._creationTime || 0) - (b._creationTime || 0);
-      return 0;
-    });
-  }, [leadsData, sortBy]);
+  const [allLoadedLeads, setAllLoadedLeads] = useState<Doc<"leads">[]>([]);
 
-  const filteredLeads = sortedLeads?.filter((lead: any) => {
-    // Search filter
-    if (search) {
-      const query = search.toLowerCase();
-      const matchesSearch = 
-        lead.name?.toLowerCase().includes(query) ||
-        lead.email?.toLowerCase().includes(query) ||
-        lead.mobile?.toLowerCase().includes(query) ||
-        lead.company?.toLowerCase().includes(query) ||
-        lead.subject?.toLowerCase().includes(query) ||
-        lead.message?.toLowerCase().includes(query);
-      if (!matchesSearch) return false;
+  // Reset loaded leads when filters change
+  useMemo(() => {
+    setAllLoadedLeads([]);
+    setPaginationOpts({ numItems: ITEMS_PER_PAGE, cursor: null });
+  }, [filter, search, selectedStatuses, selectedSources, selectedTags, selectedAssignedTo, sortBy]);
+
+  // Append new leads when pagination result changes
+  useMemo(() => {
+    if (paginatedResult?.page) {
+      setAllLoadedLeads(prev => {
+        if (paginationOpts.cursor === null) {
+          return paginatedResult.page;
+        }
+        const existingIds = new Set(prev.map(l => l._id));
+        const newLeads = paginatedResult.page.filter(l => !existingIds.has(l._id));
+        return [...prev, ...newLeads];
+      });
     }
+  }, [paginatedResult, paginationOpts.cursor]);
 
-    // Tag filter
-    if (selectedTags && selectedTags.length > 0) {
-      const hasTag = selectedTags.some(tag => lead.tags?.includes(tag));
-      if (!hasTag) return false;
+  const { ref: loadMoreRef, inView } = useInView({
+    threshold: 0,
+  });
+
+  // Load more when scrolling to bottom
+  useMemo(() => {
+    if (inView && paginatedResult && !paginatedResult.isDone && paginatedResult.continueCursor) {
+      setPaginationOpts({ numItems: ITEMS_PER_PAGE, cursor: paginatedResult.continueCursor });
     }
+  }, [inView, paginatedResult]);
 
-    // Status filter
-    if (selectedStatuses && selectedStatuses.length > 0) {
-      if (!selectedStatuses.includes(lead.status)) return false;
-    }
+  const sortedLeads = allLoadedLeads;
 
-    // Source filter
-    if (selectedSources && selectedSources.length > 0) {
-      if (!selectedSources.includes(lead.source)) return false;
-    }
-
-    // Assigned filter
-    if (selectedAssignedTo && selectedAssignedTo.length > 0) {
-      if (!selectedAssignedTo.includes(lead.assignedTo)) return false;
-    }
-
-    return true;
-  }) || [];
+  const filteredLeads = sortedLeads || [];
 
   const handleOpenWhatsApp = (leadId: Id<"leads">) => {
     setWhatsAppLeadId(leadId);
@@ -289,7 +292,12 @@ export default function Leads() {
                   onOpenWhatsApp={handleOpenWhatsApp}
                 />
               ))}
-              {filteredLeads.length === 0 && (
+              {paginatedResult && !paginatedResult.isDone && (
+                <div ref={loadMoreRef} className="flex justify-center py-4">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              )}
+              {filteredLeads.length === 0 && paginatedResult?.isDone && (
                 <div className="p-8 text-center text-muted-foreground">
                   No leads found matching your criteria.
                 </div>
