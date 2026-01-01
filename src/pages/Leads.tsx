@@ -98,7 +98,10 @@ export default function Leads() {
 
   const availableStatuses = ["Cold", "Hot", "Mature"];
 
-  const leadsData = useQuery(api.leads.queries.getLeads, user ? { userId: user._id, filter } : "skip") || [];
+  const leadsData = useQuery(
+    api.leads.queries.getLeads, 
+    user ? { userId: user._id, filter } : "skip"
+  ) || [];
 
   const sortedLeads = useMemo(() => {
     if (!leadsData) return [];

@@ -294,10 +294,16 @@ export const getLeads = query({
   },
   handler: async (ctx, args) => {
     const userId = args.userId || await getAuthUserId(ctx);
-    if (!userId) return [];
+    if (!userId) {
+      console.error("getLeads called without userId and no auth context");
+      return [];
+    }
     
     const user = await ctx.db.get(userId);
-    if (!user) return [];
+    if (!user) {
+      console.error("User not found for userId:", userId);
+      return [];
+    }
 
     let leads;
 
