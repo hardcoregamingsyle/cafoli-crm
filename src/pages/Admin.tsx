@@ -1,28 +1,25 @@
 import AppLayout from "@/components/AppLayout";
 import BrevoKeyManager from "@/components/BrevoKeyManager";
+import UserManagement from "@/components/admin/UserManagement";
+import CreateUserDialog from "@/components/admin/CreateUserDialog";
+import AdminActions from "@/components/admin/AdminActions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Shield } from "lucide-react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Shield, Users, UserPlus, Trash2, LogIn, Download, RefreshCw, FolderClock } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import type { Id } from "@/convex/_generated/dataModel";
 import JSZip from "jszip";
 import * as Papa from "papaparse";
-import { useRef } from "react";
 
 export default function Admin() {
   const { user: currentUser, signIn } = useAuth();
   const allUsers = useQuery(api.users.getAllUsers, currentUser ? { userId: currentUser._id } : "skip") || [];
   const allLeadsForExport = useQuery(api.leads.queries.getAllLeadsForExport, currentUser ? { userId: currentUser._id } : "skip");
   const nextDownloadNumber = useQuery(api.leads.queries.getNextDownloadNumber);
+  
   const createUser = useMutation(api.users.createUser);
   const deleteUser = useMutation(api.users.deleteUser);
   const logExport = useMutation(api.leads.admin.logExport);
@@ -31,47 +28,28 @@ export default function Admin() {
   const manualMarkColdCallerLeads = useMutation(api.coldCallerLeads.manualMarkColdCallerLeads);
   const sendWelcomeToRecentLeads = useAction(api.whatsappTemplatesActions.sendWelcomeToRecentLeads);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isStandardizing, setIsStandardizing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isMarkingColdCaller, setIsMarkingColdCaller] = useState(false);
   const [isSendingWelcome, setIsSendingWelcome] = useState(false);
-  const [newUserData, setNewUserData] = useState({
-    email: "",
-    name: "",
-    password: "",
-    role: "staff" as "admin" | "staff",
-  });
 
-  const handleCreateUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!newUserData.email || !newUserData.name || !newUserData.password) {
-      toast.error("Please fill in all fields");
-      return;
-    }
-
+  const handleCreateUser = async (userData: {
+    email: string;
+    name: string;
+    password: string;
+    role: "admin" | "staff";
+  }) => {
     if (!currentUser) {
-      toast.error("You must be logged in");
-      return;
+      throw new Error("You must be logged in");
     }
 
-    try {
-      await createUser({
-        email: newUserData.email,
-        name: newUserData.name,
-        password: newUserData.password,
-        role: newUserData.role,
-        adminId: currentUser._id,
-      });
-      
-      toast.success("User created successfully");
-      setIsCreateOpen(false);
-      setNewUserData({ email: "", name: "", password: "", role: "staff" });
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to create user");
-    }
+    await createUser({
+      email: userData.email,
+      name: userData.name,
+      password: userData.password,
+      role: userData.role,
+      adminId: currentUser._id,
+    });
   };
 
   const handleDeleteUser = async (userId: Id<"users">) => {
@@ -86,7 +64,6 @@ export default function Admin() {
 
   const handleLoginAs = async (email: string) => {
     try {
-      // Get the user's actual password from the database
       const userToLogin = allUsers.find((u: any) => u.email === email);
       if (!userToLogin || !userToLogin.passwordHash) {
         toast.error("Cannot log in as this user - no password set");
@@ -169,7 +146,6 @@ export default function Admin() {
     }
 
     try {
-      // Get current date in dd-mm-yyyy format
       const now = new Date();
       const day = String(now.getDate()).padStart(2, '0');
       const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -180,7 +156,6 @@ export default function Admin() {
       const csvFilename = `${downloadNo}_${dateStr}-all-cafoli-leads.csv`;
       const zipFilename = `${downloadNo}_${dateStr}-all-cafoli-leads.zip`;
 
-      // Define CSV headers
       const headers = [
         'Name', 'Subject', 'Source', 'Mobile', 'Alt Mobile', 'Email', 'Alt Email',
         'Agency Name', 'Pincode', 'State', 'District', 'Station', 'Message',
@@ -188,7 +163,6 @@ export default function Admin() {
         'Pharmavends UID', 'IndiaMART Unique ID', 'Created At'
       ];
 
-      // Convert leads to CSV rows
       const rows = allLeadsForExport.map(lead => [
         lead.name || '',
         lead.subject || '',
@@ -213,7 +187,6 @@ export default function Admin() {
         new Date(lead._creationTime).toLocaleString()
       ]);
 
-      // Escape CSV values
       const escapeCsvValue = (value: string) => {
         if (value.includes(',') || value.includes('"') || value.includes('\n')) {
           return `"${value.replace(/"/g, '""')}"`;
@@ -221,25 +194,20 @@ export default function Admin() {
         return value;
       };
 
-      // Build CSV content
       const csvContent = [
         headers.map(escapeCsvValue).join(','),
         ...rows.map(row => row.map(cell => escapeCsvValue(String(cell))).join(','))
       ].join('\n');
 
-      // Create ZIP file
       const zip = new JSZip();
       zip.file(csvFilename, csvContent);
 
-      // Generate the ZIP file (password protection note: browser-based ZIP libraries 
-      // don't support native encryption - the password must be applied when opening)
       const zipBlob = await zip.generateAsync({ 
         type: "blob",
         compression: "DEFLATE",
         compressionOptions: { level: 9 }
       });
 
-      // Create download link
       const link = document.createElement('a');
       const url = URL.createObjectURL(zipBlob);
       
@@ -251,7 +219,6 @@ export default function Admin() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      // Log the export to database
       await logExport({
         userId: currentUser._id,
         downloadNumber: downloadNo,
@@ -284,10 +251,7 @@ export default function Admin() {
     document.body.removeChild(link);
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
+  const handleImportCSV = (file: File) => {
     if (!currentUser) {
       toast.error("You must be logged in");
       return;
@@ -302,9 +266,7 @@ export default function Admin() {
         try {
           const parsedLeads: any[] = [];
           
-          // Validate and map rows
           for (const row of results.data as any[]) {
-            // Skip empty rows or rows without required Name/Phone
             if (!row["Name"] && !row["Phone No"]) continue;
 
             parsedLeads.push({
@@ -337,7 +299,6 @@ export default function Admin() {
           });
 
           toast.success(`Successfully imported ${result.importedCount} leads`);
-          if (fileInputRef.current) fileInputRef.current.value = "";
         } catch (error) {
           console.error("Import error:", error);
           toast.error("Failed to import leads. Check console for details.");
@@ -383,225 +344,28 @@ export default function Admin() {
           </div>
           
           <div className="flex flex-wrap gap-2">
-            {/* Hidden file input */}
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileUpload}
-              accept=".csv"
-              className="hidden"
+            <AdminActions
+              onImportCSV={handleImportCSV}
+              onDownloadTemplate={handleDownloadTemplate}
+              onStandardizePhoneNumbers={handleStandardizePhoneNumbers}
+              onMarkColdCallerLeads={handleManualMarkColdCallerLeads}
+              onSendWelcomeMessages={handleSendWelcomeToRecentLeads}
+              onDownloadAllLeads={handleDownloadCSV}
+              isImporting={isImporting}
+              isStandardizing={isStandardizing}
+              isMarkingColdCaller={isMarkingColdCaller}
+              isSendingWelcome={isSendingWelcome}
             />
-
-            <Button 
-              variant="outline" 
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isImporting}
-            >
-              <Users className={`mr-2 h-4 w-4 ${isImporting ? 'animate-spin' : ''}`} />
-              {isImporting ? "Importing..." : "Import Leads CSV"}
-            </Button>
-
-            <Button variant="outline" onClick={handleDownloadTemplate}>
-              <Download className="mr-2 h-4 w-4" />
-              Template
-            </Button>
-
-            <Button 
-              variant="outline" 
-              onClick={handleStandardizePhoneNumbers}
-              disabled={isStandardizing}
-            >
-              <RefreshCw className={`mr-2 h-4 w-4 ${isStandardizing ? 'animate-spin' : ''}`} />
-              {isStandardizing ? "Standardizing..." : "Standardize Phone Numbers"}
-            </Button>
-
-            <Button 
-              variant="outline" 
-              onClick={handleManualMarkColdCallerLeads}
-              disabled={isMarkingColdCaller}
-            >
-              <FolderClock className={`mr-2 h-4 w-4 ${isMarkingColdCaller ? 'animate-spin' : ''}`} />
-              {isMarkingColdCaller ? "Marking..." : "Mark Cold Caller Leads"}
-            </Button>
-
-            <Button 
-              variant="outline" 
-              onClick={handleSendWelcomeToRecentLeads}
-              disabled={isSendingWelcome}
-            >
-              <RefreshCw className={`mr-2 h-4 w-4 ${isSendingWelcome ? 'animate-spin' : ''}`} />
-              {isSendingWelcome ? "Sending..." : "Send Welcome to Recent Leads"}
-            </Button>
-
-            <Button variant="outline" onClick={handleDownloadCSV}>
-              <Download className="mr-2 h-4 w-4" />
-              Download All Leads CSV
-            </Button>
-
-            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  Create User
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Create New User</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleCreateUser} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Username/Email</Label>
-                    <Input
-                      id="email"
-                      type="text"
-                      placeholder="username"
-                      value={newUserData.email}
-                      onChange={(e) => setNewUserData({ ...newUserData, email: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Full Name</Label>
-                    <Input
-                      id="name"
-                      type="text"
-                      placeholder="John Doe"
-                      value={newUserData.name}
-                      onChange={(e) => setNewUserData({ ...newUserData, name: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      placeholder="Enter password"
-                      value={newUserData.password}
-                      onChange={(e) => setNewUserData({ ...newUserData, password: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="role">Role</Label>
-                    <Select
-                      value={newUserData.role}
-                      onValueChange={(value: "admin" | "staff") => setNewUserData({ ...newUserData, role: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="staff">Staff</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button type="submit">Create User</Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
+            <CreateUserDialog onCreateUser={handleCreateUser} />
           </div>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              User Management
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {allUsers.map((user: any) => (
-                <div
-                  key={user._id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3">
-                      <div>
-                        <p className="font-medium">{user.name || "Unnamed User"}</p>
-                        <p className="text-sm text-muted-foreground">{user.email}</p>
-                      </div>
-                      <span
-                        className={`text-xs px-2 py-1 rounded-full ${
-                          user.role === "admin"
-                            ? "bg-purple-100 text-purple-700"
-                            : "bg-blue-100 text-blue-700"
-                        }`}
-                      >
-                        {user.role}
-                      </span>
-                      {user._id === currentUser?._id && (
-                        <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700">
-                          You
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    {user._id !== currentUser?._id && (
-                      <>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleLoginAs(user.email || "")}
-                        >
-                          <LogIn className="h-4 w-4 mr-1" />
-                          Login As
-                        </Button>
-                        
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-destructive hover:text-destructive"
-                              disabled={user.email?.toLowerCase() === "owner"}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete User</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to delete {user.name || user.email}? This action cannot be undone.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleDeleteUser(user._id)}
-                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                              >
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
-              
-              {allUsers.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
-                  No users found. Create your first user to get started.
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <UserManagement
+          users={allUsers}
+          currentUserId={currentUser?._id}
+          onDeleteUser={handleDeleteUser}
+          onLoginAs={handleLoginAs}
+        />
 
         {currentUser && <BrevoKeyManager userId={currentUser._id} />}
 
