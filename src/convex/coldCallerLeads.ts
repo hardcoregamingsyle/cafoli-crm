@@ -45,15 +45,12 @@ export const manualMarkColdCallerLeads = mutation({
       throw new Error("Only admins can manually mark cold caller leads");
     }
 
-    const now = Date.now();
-    const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
-    
+    // Remove 24-hour restriction for manual marking
     const unassignedLeads = await ctx.db
       .query("leads")
       .filter((q) => q.and(
         q.eq(q.field("assignedTo"), undefined),
-        q.neq(q.field("type"), "Irrelevant"),
-        q.lt(q.field("_creationTime"), twentyFourHoursAgo)
+        q.neq(q.field("type"), "Irrelevant")
       ))
       .collect();
     
@@ -69,7 +66,7 @@ export const manualMarkColdCallerLeads = mutation({
         // Add system comment
         await ctx.db.insert("comments", {
           leadId: lead._id,
-          content: "Lead manually marked as Cold Caller Lead by admin (unassigned for 24+ hours)",
+          content: "Lead manually marked as Cold Caller Lead by admin",
           isSystem: true,
         });
         
