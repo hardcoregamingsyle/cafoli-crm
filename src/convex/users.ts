@@ -147,9 +147,9 @@ export const updateUserRole = internalMutation({
 });
 
 export const getAllUsers = query({
-  args: {},
-  handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
+  args: { userId: v.optional(v.id("users")) },
+  handler: async (ctx, args) => {
+    const userId = args.userId;
     if (!userId) throw new Error("Unauthorized");
     
     const currentUser = await ctx.db.get(userId);

@@ -17,7 +17,7 @@ import * as Papa from "papaparse";
 
 export default function Admin() {
   const { user: currentUser, signIn } = useAuth();
-  const allUsers = useQuery(api.users.getAllUsers, currentUser ? {} : "skip") || [];
+  const allUsers = useQuery(api.users.getAllUsers, currentUser ? { userId: currentUser._id } : "skip") || [];
   const allLeadsForExport = useQuery(api.leadQueries.getAllLeadsForExport, currentUser ? { userId: currentUser._id } : "skip");
   const nextDownloadNumber = useQuery(api.leadQueries.getNextDownloadNumber);
   const unallocatedColdCallerCount = useQuery(
