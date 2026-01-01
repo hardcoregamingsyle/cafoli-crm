@@ -462,3 +462,16 @@ export const getLeadsWithUnreadCounts = query({
     return leadsWithUnread;
   },
 });
+
+export const getMyLeadsWithoutFollowUp = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const leads = await ctx.db
+      .query("leads")
+      .withIndex("by_assigned_to", (q) => q.eq("assignedTo", args.userId))
+      .filter((q) => q.eq(q.field("nextFollowUpDate"), undefined))
+      .collect();
+    
+    return leads;
+  },
+});

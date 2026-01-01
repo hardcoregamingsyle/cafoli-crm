@@ -85,6 +85,119 @@ export const manualMarkColdCallerLeads = mutation({
   },
 });
 
+// Get count of unallocated cold caller leads
+export const getUnallocatedColdCallerCount = query({
+  args: { adminId: v.id("users") },
+  handler: async (ctx, args) => {
+    const admin = await ctx.db.get(args.adminId);
+    if (!admin || admin.role !== ROLES.ADMIN) {
+      return 0;
+    }
+
+    const unallocatedLeads = await ctx.db
+      .query("leads")
+      .withIndex("by_is_cold_caller", (q) => q.eq("isColdCallerLead", true))
+      .filter((q) => q.eq(q.field("coldCallerAssignedTo"), undefined))
+      .collect();
+    
+    return unallocatedLeads.length;
+  },
+});
+
+// Manual allocation of cold caller leads by admin
+export const manualAllocateColdCallerLeads = mutation({
+  args: { 
+    adminId: v.id("users"),
+    leadsPerStaff: v.number()
+  },
+  handler: async (ctx, args) => {
+    const admin = await ctx.db.get(args.adminId);
+    if (!admin || admin.role !== ROLES.ADMIN) {
+      throw new Error("Only admins can allocate cold caller leads");
+    }
+
+    // Get all staff users
+    const allUsers = await ctx.db.query("users").collect();
+    const staffUsers = allUsers.filter(u => u.role === ROLES.STAFF);
+    
+    if (staffUsers.length === 0) {
+      throw new Error("No staff users found");
+    }
+
+    // Get unallocated cold caller leads
+    const availableLeads = await ctx.db
+      .query("leads")
+      .withIndex("by_is_cold_caller", (q) => q.eq("isColdCallerLead", true))
+      .filter((q) => q.eq(q.field("coldCallerAssignedTo"), undefined))
+      .collect();
+    
+    if (availableLeads.length === 0) {
+      throw new Error("No unallocated cold caller leads available");
+    }
+
+    const totalRequested = args.leadsPerStaff * staffUsers.length;
+    let allocatedCount = 0;
+    
+    // If requested more than available, distribute equally
+    if (totalRequested > availableLeads.length) {
+      const leadsPerStaffActual = Math.floor(availableLeads.length / staffUsers.length);
+      const remainder = availableLeads.length % staffUsers.length;
+      
+      let leadIndex = 0;
+      for (let i = 0; i < staffUsers.length; i++) {
+        const user = staffUsers[i];
+        const leadsToAssign = leadsPerStaffActual + (i < remainder ? 1 : 0);
+        
+        for (let j = 0; j < leadsToAssign && leadIndex < availableLeads.length; j++) {
+          const lead = availableLeads[leadIndex];
+          await ctx.db.patch(lead._id, {
+            coldCallerAssignedTo: user._id,
+            coldCallerAssignedAt: Date.now(),
+          });
+          
+          await ctx.db.insert("comments", {
+            leadId: lead._id,
+            content: `Cold Caller Lead allocated to ${user.name || user.email} by admin`,
+            isSystem: true,
+          });
+          
+          leadIndex++;
+          allocatedCount++;
+        }
+      }
+    } else {
+      // Allocate requested amount to each staff
+      let leadIndex = 0;
+      for (const user of staffUsers) {
+        const userLeads = availableLeads.slice(leadIndex, leadIndex + args.leadsPerStaff);
+        
+        for (const lead of userLeads) {
+          await ctx.db.patch(lead._id, {
+            coldCallerAssignedTo: user._id,
+            coldCallerAssignedAt: Date.now(),
+          });
+          
+          await ctx.db.insert("comments", {
+            leadId: lead._id,
+            content: `Cold Caller Lead allocated to ${user.name || user.email} by admin`,
+            isSystem: true,
+          });
+        }
+        
+        leadIndex += userLeads.length;
+        allocatedCount += userLeads.length;
+      }
+    }
+    
+    return { 
+      allocatedCount, 
+      staffCount: staffUsers.length,
+      availableLeads: availableLeads.length,
+      requested: totalRequested
+    };
+  },
+});
+
 // Allocate 10 cold caller leads to each staff member (Mon-Fri IST)
 export const allocateColdCallerLeads = internalMutation({
   args: {},

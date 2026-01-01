@@ -3,6 +3,7 @@ import BrevoKeyManager from "@/components/BrevoKeyManager";
 import UserManagement from "@/components/admin/UserManagement";
 import CreateUserDialog from "@/components/admin/CreateUserDialog";
 import AdminActions from "@/components/admin/AdminActions";
+import { AllocateColdCallerDialog } from "@/components/admin/AllocateColdCallerDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Shield } from "lucide-react";
 import { useQuery, useMutation, useAction } from "convex/react";
@@ -19,6 +20,10 @@ export default function Admin() {
   const allUsers = useQuery(api.users.getAllUsers, currentUser ? { userId: currentUser._id } : "skip") || [];
   const allLeadsForExport = useQuery(api.leadQueries.getAllLeadsForExport, currentUser ? { userId: currentUser._id } : "skip");
   const nextDownloadNumber = useQuery(api.leadQueries.getNextDownloadNumber);
+  const unallocatedColdCallerCount = useQuery(
+    api.coldCallerLeads.getUnallocatedColdCallerCount,
+    currentUser ? { adminId: currentUser._id } : "skip"
+  );
   
   const createUser = useMutation(api.users.createUser);
   const deleteUser = useMutation(api.users.deleteUser);
@@ -26,12 +31,14 @@ export default function Admin() {
   const standardizePhoneNumbers = useMutation(api.leads.admin.standardizeAllPhoneNumbers);
   const importLeads = useMutation(api.leads.admin.bulkImportLeads);
   const manualMarkColdCallerLeads = useMutation(api.coldCallerLeads.manualMarkColdCallerLeads);
+  const manualAllocateColdCallerLeads = useMutation(api.coldCallerLeads.manualAllocateColdCallerLeads);
   const sendWelcomeToRecentLeads = useAction(api.whatsappTemplatesActions.sendWelcomeToRecentLeads);
 
   const [isStandardizing, setIsStandardizing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isMarkingColdCaller, setIsMarkingColdCaller] = useState(false);
   const [isSendingWelcome, setIsSendingWelcome] = useState(false);
+  const [isAllocatingColdCaller, setIsAllocatingColdCaller] = useState(false);
 
   const handleCreateUser = async (userData: {
     email: string;
@@ -131,6 +138,28 @@ export default function Admin() {
       toast.error(error instanceof Error ? error.message : "Failed to send welcome messages");
     } finally {
       setIsSendingWelcome(false);
+    }
+  };
+
+  const handleAllocateColdCallerLeads = async (leadsPerStaff: number) => {
+    if (!currentUser) {
+      toast.error("You must be logged in");
+      return;
+    }
+
+    setIsAllocatingColdCaller(true);
+    try {
+      const result = await manualAllocateColdCallerLeads({
+        adminId: currentUser._id,
+        leadsPerStaff,
+      });
+      toast.success(
+        `Cold Caller Leads allocated successfully!\n${result.allocatedCount} leads allocated to ${result.staffCount} staff members\n(${result.availableLeads} available, ${result.requested} requested)`
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to allocate cold caller leads");
+    } finally {
+      setIsAllocatingColdCaller(false);
     }
   };
 
@@ -355,6 +384,11 @@ export default function Admin() {
               isStandardizing={isStandardizing}
               isMarkingColdCaller={isMarkingColdCaller}
               isSendingWelcome={isSendingWelcome}
+            />
+            <AllocateColdCallerDialog
+              availableLeads={unallocatedColdCallerCount ?? 0}
+              onAllocate={handleAllocateColdCallerLeads}
+              isAllocating={isAllocatingColdCaller}
             />
             <CreateUserDialog onCreateUser={handleCreateUser} />
           </div>
