@@ -25,6 +25,12 @@ async function sendTemplateMessageHelper(
   }
 
   try {
+    // Fetch the template from database to get its content
+    const templates = await ctx.runQuery("whatsappTemplatesQueries:getTemplates" as any);
+    const template = templates.find((t: any) => 
+      t.name === templateName && t.language === languageCode
+    );
+
     const response = await fetch(
       `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
       {
@@ -53,11 +59,20 @@ async function sendTemplateMessageHelper(
       throw new Error(`WhatsApp API error: ${JSON.stringify(data)}`);
     }
 
-    // Store message in database
+    // Extract template content from components
+    let templateContent = `Template: ${templateName}`;
+    if (template && template.components) {
+      const bodyComponent = template.components.find((c: any) => c.type === "BODY");
+      if (bodyComponent && bodyComponent.text) {
+        templateContent = bodyComponent.text;
+      }
+    }
+
+    // Store message in database with actual template content
     await ctx.runMutation("whatsappMutations:storeMessage" as any, {
       leadId: leadId,
       phoneNumber: phoneNumber,
-      content: `[Template: ${templateName}]`,
+      content: templateContent,
       direction: "outbound",
       status: "sent",
       externalId: data.messages?.[0]?.id || "",
