@@ -14,9 +14,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { Loader2, User, Lock } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
+import { toast } from "sonner";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { toast } from "sonner";
 
 interface AuthProps {
   redirectAfterAuth?: string;
@@ -46,6 +46,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       const email = (formData.get("email") as string).toLowerCase();
       const password = formData.get("password") as string;
       
+      // Use custom login mutation
       const userId = await login({ email, password });
       
       if (!userId) {
@@ -56,14 +57,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       
       toast.success("Login successful!");
       
-      // Wait a moment for auth state to update
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const redirect = redirectAfterAuth || "/dashboard";
-      navigate(redirect, { replace: true });
-    } catch (error) {
+      // Navigation will happen via useEffect when isAuthenticated becomes true
+    } catch (error: any) {
       console.error("Sign-in error:", error);
-      setError("Invalid username or password");
+      setError(error?.message || "Invalid username or password");
       setIsLoading(false);
     }
   };
