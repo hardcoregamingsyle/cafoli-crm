@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation } from "convex/react";
 import { Doc, Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
+import { api } from "@/convex/_generated/api";
 
 interface UseLeadEditorProps {
   lead: Doc<"leads">;
@@ -9,16 +10,8 @@ interface UseLeadEditorProps {
 }
 
 export function useLeadEditor({ lead, user }: UseLeadEditorProps) {
-  // Import api dynamically to avoid circular type issues
-  let apiRef: any = null;
-  try {
-    apiRef = require("@/convex/_generated/api").api;
-  } catch (e) {
-    console.error("Failed to load api", e);
-  }
-
-  const updateLead = useMutation(apiRef?.leads?.standard?.updateLead);
-  const addComment = useMutation(apiRef?.leads?.standard?.addComment);
+  const updateLead = useMutation(api.leads.standard.updateLead);
+  const addComment = useMutation(api.leads.standard.addComment);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editedLead, setEditedLead] = useState<Partial<Doc<"leads">>>({});

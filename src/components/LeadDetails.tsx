@@ -12,6 +12,7 @@ import { TagManager } from "@/components/TagManager";
 import { LeadInfo } from "@/components/leads/LeadInfo";
 import { LeadActivity } from "@/components/leads/LeadActivity";
 import { useLeadEditor } from "@/hooks/useLeadEditor";
+import { api } from "@/convex/_generated/api";
 
 interface LeadDetailsProps {
   leadId: Id<"leads">;
@@ -21,16 +22,8 @@ interface LeadDetailsProps {
 export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
   const { user } = useAuth();
   
-  // Import api dynamically to avoid circular type issues
-  let apiRef: any = null;
-  try {
-    apiRef = require("@/convex/_generated/api").api;
-  } catch (e) {
-    console.error("Failed to load api", e);
-  }
-  
-  const lead = useQuery(apiRef?.leadQueries?.getLead, { id: leadId, userId: user?._id });
-  const comments = useQuery(apiRef?.leadQueries?.getComments, { leadId });
+  const lead = useQuery(api.leadQueries.getLead, { id: leadId, userId: user?._id });
+  const comments = useQuery(api.leadQueries.getComments, { leadId });
   
   const {
     isEditing,
