@@ -113,7 +113,7 @@ export const getPaginatedLeads = query({
           }
           return search;
         })
-        .take(args.paginationOpts.numItems); 
+        .take(1000); // Increase limit for better search results
 
       results = applyFilters(results);
       results = sortLeads(results);

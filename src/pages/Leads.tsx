@@ -7,7 +7,8 @@ import { useState, useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Id, Doc } from "@/convex/_generated/dataModel";
 import { useSearchParams } from "react-router";
-import { Plus, Search, Loader2, RefreshCw } from "lucide-react";
+import { Plus, Search, Loader2, RefreshCw, ArrowUpDown, Filter, X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { useLocation } from "react-router";
 import { toast } from "sonner";
 import { useInView } from "react-intersection-observer";
@@ -16,6 +17,8 @@ import { LeadCard } from "@/components/LeadCard";
 import { CreateLeadDialog } from "@/components/leads/CreateLeadDialog";
 import { AssignLeadDialog } from "@/components/leads/AssignLeadDialog";
 import { LeadsFilterBar } from "@/components/leads/LeadsFilterBar";
+import { LeadsFilterSidebar } from "@/components/leads/LeadsFilterSidebar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChatWindow } from "@/components/whatsapp/ChatWindow";
 
@@ -42,6 +45,7 @@ export default function Leads() {
   const [selectedAssignedTo, setSelectedAssignedTo] = useState<string[]>([]);
   const [whatsAppDialogOpen, setWhatsAppDialogOpen] = useState(false);
   const [whatsAppLeadId, setWhatsAppLeadId] = useState<Id<"leads"> | null>(null);
+  const [filterSidebarOpen, setFilterSidebarOpen] = useState(false);
 
   const allTags = useQuery(api.tags.getAllTags) || [];
   const uniqueSources = useQuery(api.leads.queries.getUniqueSources) || [];
@@ -158,23 +162,95 @@ export default function Leads() {
           </div>
         </div>
 
-        <LeadsFilterBar 
-          selectedStatuses={selectedStatuses}
-          setSelectedStatuses={setSelectedStatuses}
-          selectedSources={selectedSources}
-          setSelectedSources={setSelectedSources}
-          selectedTags={selectedTags}
-          setSelectedTags={setSelectedTags}
-          selectedAssignedTo={selectedAssignedTo}
-          setSelectedAssignedTo={setSelectedAssignedTo}
-          allTags={allTags}
-          uniqueSources={uniqueSources}
-          allUsers={allUsers}
-          isAdmin={isAdmin}
-          availableStatuses={availableStatuses}
-          sortBy={sortBy}
-          setSortBy={setSortBy}
-        />
+        {/* Search and Filter Bar */}
+        <div className="flex gap-2 items-center">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name, email, phone, company, subject, or message..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          
+          {/* Sort Dropdown */}
+          <Select value={sortBy} onValueChange={setSortBy}>
+            <SelectTrigger className="w-[180px]">
+              <ArrowUpDown className="mr-2 h-4 w-4 opacity-50" />
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Newest First</SelectItem>
+              <SelectItem value="oldest">Oldest First</SelectItem>
+              <SelectItem value="next_followup">Next Follow-up</SelectItem>
+              <SelectItem value="last_contacted">Last Contacted</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Filter Button */}
+          <Button 
+            variant="outline" 
+            onClick={() => setFilterSidebarOpen(true)}
+            className="gap-2"
+          >
+            <Filter className="h-4 w-4" />
+            Filters
+            {(selectedStatuses.length + selectedSources.length + selectedTags.length + selectedAssignedTo.length) > 0 && (
+              <Badge variant="secondary" className="ml-1">
+                {selectedStatuses.length + selectedSources.length + selectedTags.length + selectedAssignedTo.length}
+              </Badge>
+            )}
+          </Button>
+        </div>
+
+        {/* Active Filters Display */}
+        {(selectedStatuses.length > 0 || selectedSources.length > 0 || selectedTags.length > 0 || selectedAssignedTo.length > 0) && (
+          <div className="flex flex-wrap gap-2">
+            {selectedStatuses.map(status => (
+              <Badge key={status} variant="secondary" className="gap-1">
+                {status}
+                <X 
+                  className="h-3 w-3 cursor-pointer" 
+                  onClick={() => setSelectedStatuses(selectedStatuses.filter(s => s !== status))}
+                />
+              </Badge>
+            ))}
+            {selectedSources.map(source => (
+              <Badge key={source} variant="secondary" className="gap-1">
+                {source}
+                <X 
+                  className="h-3 w-3 cursor-pointer" 
+                  onClick={() => setSelectedSources(selectedSources.filter(s => s !== source))}
+                />
+              </Badge>
+            ))}
+            {selectedTags.map(tagId => {
+              const tag = allTags.find(t => t._id === tagId);
+              return tag ? (
+                <Badge key={tagId} variant="secondary" className="gap-1" style={{ backgroundColor: tag.color, color: 'white' }}>
+                  {tag.name}
+                  <X 
+                    className="h-3 w-3 cursor-pointer" 
+                    onClick={() => setSelectedTags(selectedTags.filter(t => t !== tagId))}
+                  />
+                </Badge>
+              ) : null;
+            })}
+            {selectedAssignedTo.map(userId => {
+              const u = allUsers.find(user => user._id === userId);
+              return u ? (
+                <Badge key={userId} variant="secondary" className="gap-1">
+                  👤 {u.name || u.email}
+                  <X 
+                    className="h-3 w-3 cursor-pointer" 
+                    onClick={() => setSelectedAssignedTo(selectedAssignedTo.filter(id => id !== userId))}
+                  />
+                </Badge>
+              ) : null;
+            })}
+          </div>
+        )}
 
         <div className="flex-1 flex gap-4 min-h-0">
           {/* Leads List */}
@@ -230,6 +306,25 @@ export default function Leads() {
             </div>
           )}
         </div>
+
+        {/* Filter Sidebar */}
+        <LeadsFilterSidebar
+          open={filterSidebarOpen}
+          onOpenChange={setFilterSidebarOpen}
+          selectedStatuses={selectedStatuses}
+          setSelectedStatuses={setSelectedStatuses}
+          selectedSources={selectedSources}
+          setSelectedSources={setSelectedSources}
+          selectedTags={selectedTags}
+          setSelectedTags={setSelectedTags}
+          selectedAssignedTo={selectedAssignedTo}
+          setSelectedAssignedTo={setSelectedAssignedTo}
+          allTags={allTags}
+          uniqueSources={uniqueSources}
+          allUsers={allUsers}
+          isAdmin={isAdmin}
+          availableStatuses={availableStatuses}
+        />
 
         {/* WhatsApp Dialog */}
         <Dialog open={whatsAppDialogOpen} onOpenChange={setWhatsAppDialogOpen}>
