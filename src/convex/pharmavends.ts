@@ -26,7 +26,12 @@ export const fetchPharmavendsLeads = internalAction({
     
     try {
       console.log(`Fetching leads from: ${apiUrl}`);
-      const response = await fetch(apiUrl);
+      const response = await fetch(apiUrl, {
+        redirect: 'follow', // Follow redirects automatically
+        headers: {
+          'Accept': 'application/json',
+        }
+      });
       
       if (!response.ok) {
         console.error(`Google Script API error: ${response.status} ${response.statusText}`);
@@ -35,7 +40,8 @@ export const fetchPharmavendsLeads = internalAction({
       
       const contentType = response.headers.get("content-type");
       if (contentType && contentType.includes("text/html")) {
-        return { success: false, error: "Received HTML response" };
+        console.error("Received HTML response instead of JSON. The Google Apps Script may need to be redeployed or the URL updated.");
+        return { success: false, error: "Received HTML response - check Google Apps Script deployment" };
       }
 
       const data = await response.json();
@@ -165,17 +171,8 @@ export const fetchPharmavendsLeads = internalAction({
 export const manualSyncPharmavends = action({
   args: {},
   handler: async (ctx) => {
-    // Call the internal action
-    // We can't call internalAction from action directly in the same runtime easily if we want to return the result
-    // But since they are both node actions, we can just run the logic or call it via runAction if exposed.
-    // However, internal actions are for internal use.
-    // Let's just call the internal action via the scheduler or just duplicate logic? 
-    // Better: use ctx.runAction if it was public, but it is internal.
-    // Actually, we can just call the internal action from here if we change it to be a public action or just wrap it.
-    // Since we are in "use node", we can call other actions.
-    
-    // For simplicity, let's just return success and trigger the internal action in background
-    await ctx.scheduler.runAfter(0, "pharmavends:fetchPharmavendsLeads" as any, {});
+    // Trigger the internal action in background
+    await ctx.scheduler.runAfter(0, internal.pharmavends.fetchPharmavendsLeads, {});
     return { success: true, message: "Sync started in background" };
   }
 });
