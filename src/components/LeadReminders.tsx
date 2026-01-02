@@ -19,9 +19,15 @@ import { cn } from "@/lib/utils";
 import { api } from "@/convex/_generated/api";
 
 export function LeadReminders() {
-  const criticalLeads = useQuery(api.leads.queries.getCriticalOverdueLeads, {});
-  const coldLeads = useQuery(api.leads.queries.getColdOverdueLeads, {});
   const { user: currentUser } = useAuth();
+  const criticalLeads = useQuery(
+    api.leads.queries.getCriticalOverdueLeads,
+    currentUser ? { userId: currentUser._id } : "skip"
+  );
+  const coldLeads = useQuery(
+    api.leads.queries.getColdOverdueLeads,
+    currentUser ? { userId: currentUser._id } : "skip"
+  );
   const updatePreferences = useMutation(api.users.updatePreferences);
   const navigate = useNavigate();
 
