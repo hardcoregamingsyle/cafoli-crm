@@ -472,6 +472,7 @@ export const getMyLeadsWithoutFollowUp = query({
       .filter((q) => q.eq(q.field("nextFollowUpDate"), undefined))
       .collect();
     
-    return leads;
+    // Filter out irrelevant leads
+    return leads.filter(l => l.type !== "Irrelevant");
   },
 });

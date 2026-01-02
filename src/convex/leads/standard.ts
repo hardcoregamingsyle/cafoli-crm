@@ -43,6 +43,15 @@ export const createLead = mutation({
       lastActivity: Date.now(),
       searchText,
     });
+
+    // Log lead creation
+    await ctx.scheduler.runAfter(0, internal.activityLogs.logActivity, {
+      userId,
+      category: "Leads: Incoming",
+      action: `Created new lead: ${args.name}`,
+      leadId,
+      details: `Source: ${args.source}`,
+    });
     
     // Send welcome email if email exists
     if (args.email) {
@@ -112,6 +121,26 @@ export const updateLead = mutation({
     
     const lead = await ctx.db.get(args.id);
     if (!lead) throw new Error("Lead not found");
+
+    // Log status changes
+    if (args.patch.status && args.patch.status !== lead.status) {
+      await ctx.scheduler.runAfter(0, internal.activityLogs.logActivity, {
+        userId,
+        category: "Leads: Status",
+        action: `Changed status from ${lead.status} to ${args.patch.status}`,
+        leadId: args.id,
+      });
+    }
+
+    // Log details changes
+    if (args.patch.name || args.patch.mobile || args.patch.email) {
+      await ctx.scheduler.runAfter(0, internal.activityLogs.logActivity, {
+        userId,
+        category: "Leads: Details Change",
+        action: "Updated lead details",
+        leadId: args.id,
+      });
+    }
 
     // Validate tags array length (maximum 8 tags)
     if (args.patch.tags !== undefined && args.patch.tags.length > 8) {
@@ -200,6 +229,10 @@ export const assignLead = mutation({
     const lead = await ctx.db.get(args.leadId);
     
     if (!lead) throw new Error("Lead not found");
+
+    // Get assigned user name for logging
+    const assignedUser = await ctx.db.get(args.userId);
+    const assignedUserName = assignedUser?.name || assignedUser?.email || "Unknown";
     
     if (lead.adminAssignmentRequired && currentUser?.role !== ROLES.ADMIN) {
       throw new Error("This lead can only be assigned by an admin");
@@ -232,6 +265,14 @@ export const assignLead = mutation({
       nextFollowUpDate: args.nextFollowUpDate,
       lastActivity: Date.now(),
       adminAssignmentRequired: undefined, 
+    });
+
+    // Log assignment
+    await ctx.scheduler.runAfter(0, internal.activityLogs.logActivity, {
+      userId: currentUserId,
+      category: "Leads: Assignment",
+      action: `Assigned lead to ${assignedUserName}`,
+      leadId: args.leadId,
     });
   },
 });
