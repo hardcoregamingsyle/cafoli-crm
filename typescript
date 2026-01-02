@@ -1,3 +1,9 @@
-const navigation = [
-  ...(isAdmin ? adminNavItems : []),
-];
+// Send welcome message for new leads
+if (isNewLead) {
+  console.log(`Sending welcome message to new lead ${leadId}`);
+  try {
+    await ctx.runAction(internal.whatsapp.sendWelcomeMessage, {
+      leadId,
+      phoneNumber: args.from,
+    });
+  }

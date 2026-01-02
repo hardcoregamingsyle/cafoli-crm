@@ -1,6 +1,7 @@
 import { mutation, internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
+import { LOG_CATEGORIES } from "./activityLogs";
 
 export const storeMessage = internalMutation({
   args: {
@@ -61,7 +62,7 @@ export const storeMessage = internalMutation({
     }
 
     // Store message
-    await ctx.db.insert("messages", {
+    const messageId = await ctx.db.insert("messages", {
       chatId: chat._id,
       direction: args.direction,
       content: args.content,
@@ -72,6 +73,20 @@ export const storeMessage = internalMutation({
       mediaMimeType: args.mediaMimeType,
       externalId: args.externalId,
       quotedMessageId: quotedMessageId,
+    });
+
+    // Log activity
+    await ctx.scheduler.runAfter(0, internal.activityLogs.logActivity, {
+      category: args.direction === "inbound" ? LOG_CATEGORIES.WHATSAPP_INCOMING : LOG_CATEGORIES.WHATSAPP_OUTGOING,
+      action: args.direction === "inbound" ? "Received WhatsApp message" : "Sent WhatsApp message",
+      details: args.content.substring(0, 100) + (args.content.length > 100 ? "..." : ""),
+      leadId: args.leadId,
+      metadata: {
+        messageId: messageId,
+        externalId: args.externalId,
+        type: args.messageType,
+        direction: args.direction,
+      }
     });
   },
 });
@@ -167,6 +182,17 @@ export const updateMessageStatus = internalMutation({
         status: args.status,
       });
       console.log(`Updated message ${args.externalId} status to ${args.status}`);
+
+      // Log status change
+      const chat = await ctx.db.get(message.chatId);
+      if (chat) {
+        await ctx.scheduler.runAfter(0, internal.activityLogs.logActivity, {
+            category: LOG_CATEGORIES.WHATSAPP_STATUS,
+            action: `Message status updated: ${args.status}`,
+            leadId: chat.leadId,
+            details: `External ID: ${args.externalId}`,
+        });
+      }
     } else {
       console.log(`Message not found for external ID: ${args.externalId}`);
     }
@@ -198,6 +224,15 @@ export const createLeadFromWhatsApp = internalMutation({
       lastActivity: Date.now(),
       message: args.message,
     });
+
+    // Log lead creation
+    await ctx.scheduler.runAfter(0, internal.activityLogs.logActivity, {
+      category: LOG_CATEGORIES.LEAD_INCOMING,
+      action: "Created new lead from WhatsApp",
+      leadId: leadId,
+      details: `Phone: ${args.phoneNumber}`,
+    });
+
     return leadId;
   },
 });
