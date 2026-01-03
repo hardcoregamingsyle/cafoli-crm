@@ -429,9 +429,13 @@ export default function Admin() {
             <TabsTrigger value="test">Test Reports</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="users" className="mt-6">
+          <TabsContent value="users" className="mt-6 space-y-6">
+            <div className="flex justify-end">
+              <CreateUserDialog onCreateUser={handleCreateUser} />
+            </div>
             <UserManagement 
               users={allUsers}
+              currentUserId={currentUser?._id}
               onDeleteUser={handleDeleteUser}
               onLoginAs={handleLoginAs}
             />
