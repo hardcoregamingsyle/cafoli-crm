@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import { Doc } from "@/convex/_generated/dataModel";
 import { Calendar, Phone, Mail } from "lucide-react";
+import { useSearchParams } from "react-router";
 
 interface MandatoryFollowUpPopupProps {
   leads: Doc<"leads">[];
@@ -24,6 +25,8 @@ interface MandatoryFollowUpPopupProps {
 export function MandatoryFollowUpPopup({ leads }: MandatoryFollowUpPopupProps) {
   const { user } = useAuth();
   const updateLead = useMutation(api.leads.standard.updateLead);
+  const [searchParams] = useSearchParams();
+  const isTestMode = searchParams.get("test-mode") === "true";
 
   const [followUpDate, setFollowUpDate] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
@@ -81,9 +84,9 @@ export function MandatoryFollowUpPopup({ leads }: MandatoryFollowUpPopupProps) {
     <Dialog open={true} onOpenChange={() => {}}>
       <DialogContent 
         className="sm:max-w-[500px]" 
-        onInteractOutside={(e) => e.preventDefault()} 
-        onEscapeKeyDown={(e) => e.preventDefault()}
-        showCloseButton={false}
+        onInteractOutside={(e) => !isTestMode && e.preventDefault()} 
+        onEscapeKeyDown={(e) => !isTestMode && e.preventDefault()}
+        showCloseButton={isTestMode}
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

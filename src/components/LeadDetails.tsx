@@ -13,6 +13,7 @@ import { LeadInfo } from "@/components/leads/LeadInfo";
 import { LeadActivity } from "@/components/leads/LeadActivity";
 import { useLeadEditor } from "@/hooks/useLeadEditor";
 import { api } from "@/convex/_generated/api";
+import { useSearchParams } from "react-router";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +41,8 @@ interface LeadDetailsProps {
 
 export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const isTestMode = searchParams.get("test-mode") === "true";
   
   const lead = useQuery(api.leadQueries.getLead, { id: leadId, userId: user?._id });
   const comments = useQuery(api.leadQueries.getComments, { leadId });
@@ -302,11 +305,11 @@ export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
       </Dialog>
 
       {/* New Follow-up Date Dialog */}
-      <Dialog open={showNewFollowUpDialog} onOpenChange={() => {}}>
+      <Dialog open={showNewFollowUpDialog} onOpenChange={(open) => isTestMode && !open && setShowNewFollowUpDialog(false)}>
         <DialogContent 
-          showCloseButton={false}
-          onInteractOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}
+          showCloseButton={isTestMode}
+          onInteractOutside={(e) => !isTestMode && e.preventDefault()}
+          onEscapeKeyDown={(e) => !isTestMode && e.preventDefault()}
         >
           <DialogHeader>
             <DialogTitle>Set Next Follow-up</DialogTitle>

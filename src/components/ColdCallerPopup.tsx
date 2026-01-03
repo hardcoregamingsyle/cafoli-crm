@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useMutation } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
+import { useSearchParams } from "react-router";
 
 interface ColdCallerPopupProps {
   leads: Doc<"leads">[];
@@ -18,6 +19,8 @@ interface ColdCallerPopupProps {
 export function ColdCallerPopup({ leads, isOpen, onClose, userId }: ColdCallerPopupProps) {
   const [followUpDates, setFollowUpDates] = useState<Record<string, string>>({});
   const updateLead = useMutation(api.leads.standard.updateLead);
+  const [searchParams] = useSearchParams();
+  const isTestMode = searchParams.get("test-mode") === "true";
 
   const handleDateChange = (leadId: string, date: string) => {
     setFollowUpDates(prev => ({ ...prev, [leadId]: date }));
@@ -65,12 +68,12 @@ export function ColdCallerPopup({ leads, isOpen, onClose, userId }: ColdCallerPo
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={() => {}}>
+    <Dialog open={isOpen} onOpenChange={(open) => isTestMode && !open && onClose()}>
       <DialogContent 
         className="max-w-3xl max-h-[80vh] overflow-y-auto"
-        onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
-        showCloseButton={false}
+        onInteractOutside={(e) => !isTestMode && e.preventDefault()}
+        onEscapeKeyDown={(e) => !isTestMode && e.preventDefault()}
+        showCloseButton={isTestMode}
       >
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-blue-600">
