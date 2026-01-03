@@ -30,7 +30,6 @@ export const addGeminiApiKey = mutation({
     adminId: v.id("users"),
     apiKey: v.string(),
     label: v.optional(v.string()),
-    dailyLimit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const admin = await ctx.db.get(args.adminId);
@@ -42,7 +41,6 @@ export const addGeminiApiKey = mutation({
       apiKey: args.apiKey,
       label: args.label,
       isActive: true,
-      dailyLimit: args.dailyLimit || 1000, // Default limit
       usageCount: 0,
       lastResetAt: Date.now(),
     });

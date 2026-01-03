@@ -25,7 +25,6 @@ export default function GeminiKeyManager({ userId }: GeminiKeyManagerProps) {
   const [newKeyData, setNewKeyData] = useState({
     apiKey: "",
     label: "",
-    dailyLimit: "1000",
   });
 
   const handleAddKey = async (e: React.FormEvent) => {
@@ -41,12 +40,11 @@ export default function GeminiKeyManager({ userId }: GeminiKeyManagerProps) {
         adminId: userId,
         apiKey: newKeyData.apiKey,
         label: newKeyData.label || undefined,
-        dailyLimit: parseInt(newKeyData.dailyLimit) || 1000,
       });
       
       toast.success("Gemini API key added successfully");
       setIsAddOpen(false);
-      setNewKeyData({ apiKey: "", label: "", dailyLimit: "1000" });
+      setNewKeyData({ apiKey: "", label: "" });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to add API key");
     }
@@ -72,13 +70,6 @@ export default function GeminiKeyManager({ userId }: GeminiKeyManagerProps) {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete key");
     }
-  };
-
-  const formatUsage = (key: any) => {
-    const limit = key.dailyLimit || 1000;
-    const usage = key.usageCount || 0;
-    const percentage = Math.round((usage / limit) * 100);
-    return { usage, limit, percentage };
   };
 
   return (
@@ -122,19 +113,6 @@ export default function GeminiKeyManager({ userId }: GeminiKeyManagerProps) {
                     onChange={(e) => setNewKeyData({ ...newKeyData, label: e.target.value })}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="dailyLimit">Daily Limit</Label>
-                  <Input
-                    id="dailyLimit"
-                    type="number"
-                    placeholder="1000"
-                    value={newKeyData.dailyLimit}
-                    onChange={(e) => setNewKeyData({ ...newKeyData, dailyLimit: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Adjust based on your plan quotas.
-                  </p>
-                </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>
                     Cancel
@@ -156,10 +134,6 @@ export default function GeminiKeyManager({ userId }: GeminiKeyManagerProps) {
         ) : (
           <div className="space-y-3">
             {geminiKeys.map((key: any, index: number) => {
-              const { usage, limit, percentage } = formatUsage(key);
-              const isNearLimit = percentage >= 80;
-              const isAtLimit = percentage >= 100;
-
               return (
                 <div
                   key={key._id}
@@ -179,35 +153,13 @@ export default function GeminiKeyManager({ userId }: GeminiKeyManagerProps) {
                       >
                         {key.isActive ? "Active" : "Inactive"}
                       </span>
-                      {isAtLimit && (
-                        <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700">
-                          Limit Reached
-                        </span>
-                      )}
-                      {isNearLimit && !isAtLimit && (
-                        <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700">
-                          Near Limit
-                        </span>
-                      )}
                     </div>
                     <div className="text-xs text-muted-foreground font-mono">
                       {key.apiKey.substring(0, 10)}...{key.apiKey.substring(key.apiKey.length - 5)}
                     </div>
                     <div className="mt-2">
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>Usage: {usage} / {limit} ({percentage}%)</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                        <div
-                          className={`h-2 rounded-full transition-all ${
-                            isAtLimit
-                              ? "bg-red-500"
-                              : isNearLimit
-                              ? "bg-yellow-500"
-                              : "bg-green-500"
-                          }`}
-                          style={{ width: `${Math.min(percentage, 100)}%` }}
-                        />
+                        <span>Total Usage: {key.usageCount || 0} requests</span>
                       </div>
                     </div>
                   </div>
@@ -261,7 +213,7 @@ export default function GeminiKeyManager({ userId }: GeminiKeyManagerProps) {
         )}
         <div className="mt-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
           <p className="text-xs text-purple-800">
-            <strong>Note:</strong> Keys are used in rotation. If a key reaches its daily limit, the system will automatically switch to the next available active key.
+            <strong>Note:</strong> Keys are automatically rotated if an error occurs (e.g., rate limit reached).
           </p>
         </div>
       </CardContent>
