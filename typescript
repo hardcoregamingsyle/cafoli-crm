@@ -1,42 +1,376 @@
-import { useState } from "react";
-import { useMutation } from "convex/react";
-import { useAuth } from "@/hooks/use-auth";
-import { api } from "@/convex/_generated/api";
-import { Id, Doc } from "@/convex/_generated/dataModel";
-
+// src/convex/reports.ts
 // ... keep existing code
-  const [viewColdCallerLeads, setViewColdCallerLeads] = useState(false);
+export const getDetailedReportStats = internalQuery({
+  args: {
+    startDate: v.string(),
+    endDate: v.string(),
+    email: v.string(),
+    subject: v.string(),
+    body: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // 1. Overall Stats
+    const leads = await ctx.db
+      .query("leads")
+      .withIndex("by_creation_time", (q) => 
+        q.gte("_creationTime", args.startDate).lte("_creationTime", args.endDate)
+      )
+      .collect();
 
-  const allTags = useQuery(api.tags.getAllTags) || [];
-  const uniqueSources = useQuery(api.leadQueries.getUniqueSources) || [];
-  const allUsers = useQuery(api.users.getAllUsers, user ? { userId: user._id } : "skip") || [];
+    const followups = await ctx.db
+      .query("followups")
+      .withIndex("by_scheduled_at", (q) => 
+        q.gte("scheduledAt", args.startDate).lte("scheduledAt", args.endDate)
+      )
+      .collect();
 
-  const leadsWithoutFollowUp = useQuery(
-    api.leads.queries.getMyLeadsWithoutFollowUp,
-    user && filter === "mine" ? { userId: user._id } : "skip"
-  );
-  
-  const hasMandatoryFollowUps = leadsWithoutFollowUp && leadsWithoutFollowUp.length > 0;
-  const isLoadingMandatory = leadsWithoutFollowUp === undefined;
+    const overallStats = await generateStats(ctx, leads, followups, true);
 
-  const assignLead = useMutation(api.leads.standard.assignLead);
-  const coldCallerLeadsNeedingFollowUp = useQuery(
-    api.coldCallerLeads.getColdCallerLeadsNeedingFollowUp,
-    user ? {} : "skip"
-  ) || [];
+    // 2. Per User Stats
+    const users = await ctx.db.query("users").collect();
+    const staffUsers = users.filter(u => u.role === "staff" || u.role === "admin");
 
-  return (
-    <AppLayout>
-      {/* Show reminders first, then mandatory follow-up popup */}
-      {filter === "mine" && !isLoadingMandatory && !hasMandatoryFollowUps && <LeadReminders />}
-      {filter === "mine" && hasMandatoryFollowUps && <MandatoryFollowUpPopup leads={leadsWithoutFollowUp} />}
+    // Fetch Activity Logs for Emails
+    const emailLogs = await ctx.db
+      .query("activityLogs")
+      .withIndex("by_timestamp", (q) => q.gte("timestamp", args.startDate).lte("timestamp", args.endDate))
+      .filter(q => q.eq(q.field("category"), LOG_CATEGORIES.EMAIL))
+      .collect();
+
+    // Fetch Messages for WhatsApp
+    const messages = await ctx.db
+      .query("messages")
+      .withIndex("by_creation_time", (q) => q.gte("_creationTime", args.startDate).lte("_creationTime", args.endDate))
+      .collect();
+
+    // Calculate Combined Communication Stats
+    let totalEmailsSent = emailLogs.filter(l => l.action.includes("Sent")).length;
+    let totalWhatsappSent = 0;
+    let totalWhatsappReceived = 0;
+    let totalWhatsappTemplates = 0;
+    let totalWhatsappOutside24h = 0;
+
+    messages.forEach(m => {
+      if (m.direction === "outbound") {
+        totalWhatsappSent++;
+        if (m.messageType === "template") {
+          totalWhatsappTemplates++;
+          totalWhatsappOutside24h++;
+        }
+      } else if (m.direction === "inbound") {
+        totalWhatsappReceived++;
+      }
+    });
+
+    const communicationStats = {
+      emailsSent: totalEmailsSent,
+      whatsappSent: totalWhatsappSent,
+      whatsappReceived: totalWhatsappReceived,
+      whatsappTemplates: totalWhatsappTemplates,
+      whatsappOutside24h: totalWhatsappOutside24h
+    };
+
+    // Helper for counting
+    const countBy = (items: any[], key: string) => {
+      const counts: Record<string, number> = {};
+      items.forEach(item => {
+        const val = item[key] || "Unknown";
+        counts[val] = (counts[val] || 0) + 1;
+      });
+      return counts;
+    };
+
+    const userStats = staffUsers.map(user => {
+      const userId = user._id;
       
-      <div className="h-[calc(100vh-4rem)] flex flex-col gap-4">
-      // ... keep existing code
-    </AppLayout>
-  );
+      const userLeads = leads.filter(l => l.assignedTo === userId);
+      const userFollowups = followups.filter(f => f.assignedTo === userId);
+
+      const sources = countBy(userLeads, "source");
+      const status = countBy(userLeads, "status");
+      const relevancy = countBy(userLeads, "type");
+
+      // Punctuality
+      let punctualityCounts = {
+        "Overdue": 0,
+        "Overdue-Completed": 0,
+        "Timely-Completed": 0,
+      };
+
+      const now = Date.now();
+      userFollowups.forEach(f => {
+        if (f.status === "completed") {
+          if (f.completionStatus === "overdue") {
+            punctualityCounts["Overdue-Completed"]++;
+          } else {
+            punctualityCounts["Timely-Completed"]++;
+          }
+        } else if (f.status === "pending") {
+          if (now > f.scheduledAt + 20 * 60 * 1000) {
+            punctualityCounts["Overdue"]++;
+          }
+        }
+      });
+
+      return {
+        userId,
+        name: user.name || "Unknown",
+        leadsAssigned: userLeads.length,
+        sources,
+        status,
+        relevancy,
+        punctuality: punctualityCounts
+      };
+    });
+
+    return {
+      overall: overallStats,
+      userStats,
+      communicationStats
+    };
+  },
+});
+
+// Helper to generate HTML for PDF report
+function generateReportHTML(stats: any, title: string, dateRange: string): string {
+  const { overall, userStats, communicationStats } = stats;
+  
+  // Calculate total expenditure (assuming 0.80 INR per template/outside 24h message)
+  const totalOutside24h = communicationStats.whatsappOutside24h;
+  const totalExpenditure = (totalOutside24h * 0.80).toFixed(2);
+
+  // Determine dynamic columns from overall stats
+  const sourceColumns = overall.sources.map((s: any) => s.name);
+  const relevancyColumns = overall.relevancy.map((s: any) => s.name);
+  const statusColumns = overall.status.map((s: any) => s.name);
+
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; color: #333; font-size: 11px; }
+          h1 { color: #333; border-bottom: 2px solid #667eea; padding-bottom: 10px; }
+          h2 { color: #555; margin-top: 20px; margin-bottom: 10px; font-size: 16px; }
+          .header { background: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+          
+          table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 10px; }
+          th, td { padding: 6px 4px; text-align: center; border: 1px solid #ddd; }
+          th { background: #667eea; color: white; font-weight: bold; white-space: nowrap; }
+          td:first-child { text-align: left; font-weight: bold; }
+          tr:nth-child(even) { background-color: #f9f9f9; }
+          
+          .comm-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-top: 20px; }
+          .comm-item { background: #f0fdf4; padding: 15px; border-radius: 5px; border: 1px solid #bbf7d0; text-align: center; }
+          .comm-label { font-size: 11px; color: #166534; font-weight: bold; text-transform: uppercase; }
+          .comm-value { font-size: 20px; color: #14532d; margin-top: 5px; font-weight: bold; }
+
+          .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 10px; text-align: center; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>${title}</h1>
+          <p><strong>Period:</strong> ${dateRange}</p>
+          <p><strong>Generated:</strong> ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>
+        </div>
+
+        <h2>Team Performance Report</h2>
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th rowspan="2">User Name</th>
+                <th rowspan="2">Total Leads</th>
+                <th colspan="${sourceColumns.length || 1}">Lead Sources</th>
+                <th colspan="3">Follow-ups</th>
+                <th colspan="${relevancyColumns.length || 1}">Relevancy</th>
+                <th colspan="${statusColumns.length || 1}">Status</th>
+              </tr>
+              <tr>
+                ${sourceColumns.length ? sourceColumns.map((s: string) => `<th>${s}</th>`).join('') : '<th>-</th>'}
+                <th>Timely</th>
+                <th>Overdue Done</th>
+                <th>Overdue</th>
+                ${relevancyColumns.length ? relevancyColumns.map((s: string) => `<th>${s}</th>`).join('') : '<th>-</th>'}
+                ${statusColumns.length ? statusColumns.map((s: string) => `<th>${s}</th>`).join('') : '<th>-</th>'}
+              </tr>
+            </thead>
+            <tbody>
+              ${userStats.map((u: any) => `
+                <tr>
+                  <td>${u.name}</td>
+                  <td>${u.leadsAssigned}</td>
+                  ${sourceColumns.length ? sourceColumns.map((s: string) => `<td>${u.sources[s] || 0}</td>`).join('') : '<td>0</td>'}
+                  <td>${u.punctuality["Timely-Completed"]}</td>
+                  <td>${u.punctuality["Overdue-Completed"]}</td>
+                  <td>${u.punctuality["Overdue"]}</td>
+                  ${relevancyColumns.length ? relevancyColumns.map((s: string) => `<td>${u.relevancy[s] || 0}</td>`).join('') : '<td>0</td>'}
+                  ${statusColumns.length ? statusColumns.map((s: string) => `<td>${u.status[s] || 0}</td>`).join('') : '<td>0</td>'}
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <h2>Communication Statistics (Combined)</h2>
+        <div class="comm-stats">
+          <div class="comm-item" style="background: #eff6ff; border-color: #bfdbfe;">
+            <div class="comm-label" style="color: #1e40af;">Emails Sent</div>
+            <div class="comm-value" style="color: #1e3a8a;">${communicationStats.emailsSent}</div>
+          </div>
+          <div class="comm-item">
+            <div class="comm-label">WhatsApp Sent</div>
+            <div class="comm-value">${communicationStats.whatsappSent}</div>
+          </div>
+          <div class="comm-item">
+            <div class="comm-label">WhatsApp Received</div>
+            <div class="comm-value">${communicationStats.whatsappReceived}</div>
+          </div>
+          <div class="comm-item" style="background: #fff7ed; border-color: #fed7aa;">
+            <div class="comm-label" style="color: #9a3412;">Templates (Chargeable)</div>
+            <div class="comm-value" style="color: #7c2d12;">${communicationStats.whatsappTemplates}</div>
+          </div>
+          <div class="comm-item" style="background: #fef2f2; border-color: #fecaca;">
+            <div class="comm-label" style="color: #991b1b;">Est. Cost (₹)</div>
+            <div class="comm-value" style="color: #7f1d1d;">₹${totalExpenditure}</div>
+          </div>
+        </div>
+
+        <div class="footer">
+          <p>© ${new Date().getFullYear()} Cafoli Connect CRM - Automated Report</p>
+        </div>
+      </body>
+    </html>
+  `;
 }
 
-export function MandatoryFollowUpPopup({ leads }: MandatoryFollowUpPopupProps) {
-  // ... new implementation
-}
+export const sendScheduledReports = internalAction({
+  args: {
+    email: v.string(),
+    subject: v.string(),
+    body: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // 1. Overall Stats
+    const leads = await ctx.db
+      .query("leads")
+      .withIndex("by_creation_time", (q) => 
+        q.gte("_creationTime", args.startDate).lte("_creationTime", args.endDate)
+      )
+      .collect();
+
+    const followups = await ctx.db
+      .query("followups")
+      .withIndex("by_scheduled_at", (q) => 
+        q.gte("scheduledAt", args.startDate).lte("scheduledAt", args.endDate)
+      )
+      .collect();
+
+    const overallStats = await generateStats(ctx, leads, followups, true);
+
+    // 2. Per User Stats
+    const users = await ctx.db.query("users").collect();
+    const staffUsers = users.filter(u => u.role === "staff" || u.role === "admin");
+
+    // Fetch Activity Logs for Emails
+    const emailLogs = await ctx.db
+      .query("activityLogs")
+      .withIndex("by_timestamp", (q) => q.gte("timestamp", args.startDate).lte("timestamp", args.endDate))
+      .filter(q => q.eq(q.field("category"), LOG_CATEGORIES.EMAIL))
+      .collect();
+
+    // Fetch Messages for WhatsApp
+    const messages = await ctx.db
+      .query("messages")
+      .withIndex("by_creation_time", (q) => q.gte("_creationTime", args.startDate).lte("_creationTime", args.endDate))
+      .collect();
+
+    // Calculate Combined Communication Stats
+    let totalEmailsSent = emailLogs.filter(l => l.action.includes("Sent")).length;
+    let totalWhatsappSent = 0;
+    let totalWhatsappReceived = 0;
+    let totalWhatsappTemplates = 0;
+    let totalWhatsappOutside24h = 0;
+
+    messages.forEach(m => {
+      if (m.direction === "outbound") {
+        totalWhatsappSent++;
+        if (m.messageType === "template") {
+          totalWhatsappTemplates++;
+          totalWhatsappOutside24h++;
+        }
+      } else if (m.direction === "inbound") {
+        totalWhatsappReceived++;
+      }
+    });
+
+    const communicationStats = {
+      emailsSent: totalEmailsSent,
+      whatsappSent: totalWhatsappSent,
+      whatsappReceived: totalWhatsappReceived,
+      whatsappTemplates: totalWhatsappTemplates,
+      whatsappOutside24h: totalWhatsappOutside24h
+    };
+
+    // Helper for counting
+    const countBy = (items: any[], key: string) => {
+      const counts: Record<string, number> = {};
+      items.forEach(item => {
+        const val = item[key] || "Unknown";
+        counts[val] = (counts[val] || 0) + 1;
+      });
+      return counts;
+    };
+
+    const userStats = staffUsers.map(user => {
+      const userId = user._id;
+      
+      const userLeads = leads.filter(l => l.assignedTo === userId);
+      const userFollowups = followups.filter(f => f.assignedTo === userId);
+
+      const sources = countBy(userLeads, "source");
+      const status = countBy(userLeads, "status");
+      const relevancy = countBy(userLeads, "type");
+
+      // Punctuality
+      let punctualityCounts = {
+        "Overdue": 0,
+        "Overdue-Completed": 0,
+        "Timely-Completed": 0,
+      };
+
+      const now = Date.now();
+      userFollowups.forEach(f => {
+        if (f.status === "completed") {
+          if (f.completionStatus === "overdue") {
+            punctualityCounts["Overdue-Completed"]++;
+          } else {
+            punctualityCounts["Timely-Completed"]++;
+          }
+        } else if (f.status === "pending") {
+          if (now > f.scheduledAt + 20 * 60 * 1000) {
+            punctualityCounts["Overdue"]++;
+          }
+        }
+      });
+
+      return {
+        userId,
+        name: user.name || "Unknown",
+        leadsAssigned: userLeads.length,
+        sources,
+        status,
+        relevancy,
+        punctuality: punctualityCounts
+      };
+    });
+
+    return {
+      overall: overallStats,
+      userStats,
+      communicationStats
+    };
+  },
+});

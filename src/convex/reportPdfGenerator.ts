@@ -5,11 +5,16 @@ import { internal } from "./_generated/api";
 
 // Helper to generate HTML for PDF report
 function generateReportHTML(stats: any, title: string, dateRange: string): string {
-  const { overall, userStats } = stats;
+  const { overall, userStats, communicationStats } = stats;
   
   // Calculate total expenditure (assuming 0.80 INR per template/outside 24h message)
-  const totalOutside24h = userStats.reduce((acc: number, curr: any) => acc + curr.whatsappOutside24h, 0);
+  const totalOutside24h = communicationStats.whatsappOutside24h;
   const totalExpenditure = (totalOutside24h * 0.80).toFixed(2);
+
+  // Determine dynamic columns from overall stats
+  const sourceColumns = overall.sources.map((s: any) => s.name);
+  const relevancyColumns = overall.relevancy.map((s: any) => s.name);
+  const statusColumns = overall.status.map((s: any) => s.name);
 
   return `
     <!DOCTYPE html>
@@ -17,23 +22,23 @@ function generateReportHTML(stats: any, title: string, dateRange: string): strin
       <head>
         <meta charset="utf-8">
         <style>
-          body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
+          body { font-family: Arial, sans-serif; padding: 20px; color: #333; font-size: 11px; }
           h1 { color: #333; border-bottom: 2px solid #667eea; padding-bottom: 10px; }
-          h2 { color: #555; margin-top: 20px; margin-bottom: 10px; font-size: 18px; }
+          h2 { color: #555; margin-top: 20px; margin-bottom: 10px; font-size: 16px; }
           .header { background: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-          .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
-          .summary-item { background: #f9f9f9; padding: 10px; border-radius: 5px; border: 1px solid #eee; }
-          .summary-label { font-weight: bold; color: #667eea; font-size: 12px; text-transform: uppercase; }
-          .summary-value { font-size: 18px; color: #333; margin-top: 5px; }
-          .compact-list { list-style: none; padding: 0; margin: 0; font-size: 13px; }
-          .compact-list li { display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px dashed #eee; }
           
-          table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 12px; }
-          th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
-          th { background: #667eea; color: white; }
+          table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 10px; }
+          th, td { padding: 6px 4px; text-align: center; border: 1px solid #ddd; }
+          th { background: #667eea; color: white; font-weight: bold; white-space: nowrap; }
+          td:first-child { text-align: left; font-weight: bold; }
           tr:nth-child(even) { background-color: #f9f9f9; }
           
-          .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; text-align: center; }
+          .comm-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-top: 20px; }
+          .comm-item { background: #f0fdf4; padding: 15px; border-radius: 5px; border: 1px solid #bbf7d0; text-align: center; }
+          .comm-label { font-size: 11px; color: #166534; font-weight: bold; text-transform: uppercase; }
+          .comm-value { font-size: 20px; color: #14532d; margin-top: 5px; font-weight: bold; }
+
+          .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 10px; text-align: center; }
         </style>
       </head>
       <body>
@@ -43,84 +48,66 @@ function generateReportHTML(stats: any, title: string, dateRange: string): strin
           <p><strong>Generated:</strong> ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>
         </div>
 
-        <h2>Overall Summary</h2>
-        <div class="summary-grid">
-          <div class="summary-item">
-            <div class="summary-label">Total Leads</div>
-            <div class="summary-value">${overall.totalLeads}</div>
-          </div>
-          
-          <div class="summary-item">
-            <div class="summary-label">Sources</div>
-            <ul class="compact-list">
-              ${overall.sources.map((s: any) => `<li><span>${s.name}</span> <span>${s.count}</span></li>`).join('')}
-            </ul>
-          </div>
-
-          <div class="summary-item">
-            <div class="summary-label">Status</div>
-            <ul class="compact-list">
-              ${overall.status.map((s: any) => `<li><span>${s.name}</span> <span>${s.count}</span></li>`).join('')}
-            </ul>
-          </div>
-
-          <div class="summary-item">
-            <div class="summary-label">Relevancy</div>
-            <ul class="compact-list">
-              ${overall.relevancy.map((s: any) => `<li><span>${s.name}</span> <span>${s.count}</span></li>`).join('')}
-            </ul>
-          </div>
-          
-          <div class="summary-item">
-            <div class="summary-label">Assignment</div>
-            <ul class="compact-list">
-              ${overall.assignment.slice(0, 5).map((s: any) => `<li><span>${s.name}</span> <span>${s.count}</span></li>`).join('')}
-              ${overall.assignment.length > 5 ? `<li><span>Others</span> <span>${overall.assignment.slice(5).reduce((a:any, b:any) => a + b.count, 0)}</span></li>` : ''}
-            </ul>
-          </div>
-
-          <div class="summary-item">
-            <div class="summary-label">Follow-up Punctuality</div>
-            <ul class="compact-list">
-              ${overall.punctuality.map((s: any) => `<li><span>${s.name}</span> <span>${s.count}</span></li>`).join('')}
-            </ul>
-          </div>
+        <h2>Team Performance Report</h2>
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th rowspan="2">User Name</th>
+                <th rowspan="2">Total Leads</th>
+                <th colspan="${sourceColumns.length || 1}">Lead Sources</th>
+                <th colspan="3">Follow-ups</th>
+                <th colspan="${relevancyColumns.length || 1}">Relevancy</th>
+                <th colspan="${statusColumns.length || 1}">Status</th>
+              </tr>
+              <tr>
+                ${sourceColumns.length ? sourceColumns.map((s: string) => `<th>${s}</th>`).join('') : '<th>-</th>'}
+                <th>Timely</th>
+                <th>Overdue Done</th>
+                <th>Overdue</th>
+                ${relevancyColumns.length ? relevancyColumns.map((s: string) => `<th>${s}</th>`).join('') : '<th>-</th>'}
+                ${statusColumns.length ? statusColumns.map((s: string) => `<th>${s}</th>`).join('') : '<th>-</th>'}
+              </tr>
+            </thead>
+            <tbody>
+              ${userStats.map((u: any) => `
+                <tr>
+                  <td>${u.name}</td>
+                  <td>${u.leadsAssigned}</td>
+                  ${sourceColumns.length ? sourceColumns.map((s: string) => `<td>${u.sources[s] || 0}</td>`).join('') : '<td>0</td>'}
+                  <td>${u.punctuality["Timely-Completed"]}</td>
+                  <td>${u.punctuality["Overdue-Completed"]}</td>
+                  <td>${u.punctuality["Overdue"]}</td>
+                  ${relevancyColumns.length ? relevancyColumns.map((s: string) => `<td>${u.relevancy[s] || 0}</td>`).join('') : '<td>0</td>'}
+                  ${statusColumns.length ? statusColumns.map((s: string) => `<td>${u.status[s] || 0}</td>`).join('') : '<td>0</td>'}
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
         </div>
 
-        <h2>Team Performance & Activity</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>User Name</th>
-              <th>Leads</th>
-              <th>Emails Sent</th>
-              <th>WA Sent</th>
-              <th>WA Received</th>
-              <th>WA Templates</th>
-              <th>WA Outside 24h</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${userStats.map((u: any) => `
-              <tr>
-                <td>${u.name}</td>
-                <td>${u.leadsAssigned}</td>
-                <td>${u.emailsSent}</td>
-                <td>${u.whatsappSent}</td>
-                <td>${u.whatsappReceived}</td>
-                <td>${u.whatsappTemplates}</td>
-                <td>${u.whatsappOutside24h}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-
-        <div style="margin-top: 20px; padding: 15px; background: #eef2ff; border-radius: 5px; border: 1px solid #c7d2fe;">
-          <h3 style="margin: 0 0 10px 0; color: #4338ca;">Estimated WhatsApp Expenditure</h3>
-          <p style="margin: 0; font-size: 14px;">
-            Total Outside 24h Messages: <strong>${totalOutside24h}</strong><br/>
-            Estimated Cost (₹0.80/msg): <strong>₹${totalExpenditure}</strong>
-          </p>
+        <h2>Communication Statistics (Combined)</h2>
+        <div class="comm-stats">
+          <div class="comm-item" style="background: #eff6ff; border-color: #bfdbfe;">
+            <div class="comm-label" style="color: #1e40af;">Emails Sent</div>
+            <div class="comm-value" style="color: #1e3a8a;">${communicationStats.emailsSent}</div>
+          </div>
+          <div class="comm-item">
+            <div class="comm-label">WhatsApp Sent</div>
+            <div class="comm-value">${communicationStats.whatsappSent}</div>
+          </div>
+          <div class="comm-item">
+            <div class="comm-label">WhatsApp Received</div>
+            <div class="comm-value">${communicationStats.whatsappReceived}</div>
+          </div>
+          <div class="comm-item" style="background: #fff7ed; border-color: #fed7aa;">
+            <div class="comm-label" style="color: #9a3412;">Templates (Chargeable)</div>
+            <div class="comm-value" style="color: #7c2d12;">${communicationStats.whatsappTemplates}</div>
+          </div>
+          <div class="comm-item" style="background: #fef2f2; border-color: #fecaca;">
+            <div class="comm-label" style="color: #991b1b;">Est. Cost (₹)</div>
+            <div class="comm-value" style="color: #7f1d1d;">₹${totalExpenditure}</div>
+          </div>
         </div>
 
         <div class="footer">

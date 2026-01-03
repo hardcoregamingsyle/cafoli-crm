@@ -103,60 +103,71 @@ export const getDetailedReportStats = internalQuery({
       .withIndex("by_creation_time", (q) => q.gte("_creationTime", args.startDate).lte("_creationTime", args.endDate))
       .collect();
 
-    // Helper to map message to user
-    // We need to cache chat -> lead -> assignedTo
-    const chatMap = new Map<string, string>(); // chatId -> leadId
-    const leadMap = new Map<string, string>(); // leadId -> userId
+    // Calculate Combined Communication Stats
+    let totalEmailsSent = emailLogs.filter(l => l.action.includes("Sent")).length;
+    let totalWhatsappSent = 0;
+    let totalWhatsappReceived = 0;
+    let totalWhatsappTemplates = 0;
+    let totalWhatsappOutside24h = 0;
 
-    // Pre-fetch chats and leads involved in messages
-    const chatIds = [...new Set(messages.map(m => m.chatId))];
-    
-    // We can't fetch all chats efficiently if there are many, but we can try to fetch them as needed or in batches.
-    // For now, let's fetch all chats (might be heavy, but safe for now) or just iterate.
-    // Better: fetch chats by Id.
-    
-    for (const chatId of chatIds) {
-      const chat = await ctx.db.get(chatId);
-      if (chat) {
-        chatMap.set(chatId, chat.leadId);
-        if (!leadMap.has(chat.leadId)) {
-          const lead = await ctx.db.get(chat.leadId);
-          if (lead && lead.assignedTo) {
-            leadMap.set(chat.leadId, lead.assignedTo);
-          }
+    messages.forEach(m => {
+      if (m.direction === "outbound") {
+        totalWhatsappSent++;
+        if (m.messageType === "template") {
+          totalWhatsappTemplates++;
+          totalWhatsappOutside24h++;
         }
+      } else if (m.direction === "inbound") {
+        totalWhatsappReceived++;
       }
-    }
+    });
+
+    const communicationStats = {
+      emailsSent: totalEmailsSent,
+      whatsappSent: totalWhatsappSent,
+      whatsappReceived: totalWhatsappReceived,
+      whatsappTemplates: totalWhatsappTemplates,
+      whatsappOutside24h: totalWhatsappOutside24h
+    };
+
+    // Helper for counting
+    const countBy = (items: any[], key: string) => {
+      const counts: Record<string, number> = {};
+      items.forEach(item => {
+        const val = item[key] || "Unknown";
+        counts[val] = (counts[val] || 0) + 1;
+      });
+      return counts;
+    };
 
     const userStats = staffUsers.map(user => {
       const userId = user._id;
       
-      // Leads Assigned (from the leads fetched above)
-      const leadsAssigned = leads.filter(l => l.assignedTo === userId).length;
-      
-      // Emails
-      const emailsSent = emailLogs.filter(l => l.userId === userId && l.action.includes("Sent")).length;
+      const userLeads = leads.filter(l => l.assignedTo === userId);
+      const userFollowups = followups.filter(f => f.assignedTo === userId);
 
-      // WhatsApp
-      let whatsappSent = 0;
-      let whatsappReceived = 0;
-      let whatsappTemplates = 0;
-      let whatsappOutside24h = 0;
+      const sources = countBy(userLeads, "source");
+      const status = countBy(userLeads, "status");
+      const relevancy = countBy(userLeads, "type");
 
-      messages.forEach(m => {
-        const leadId = chatMap.get(m.chatId);
-        if (leadId) {
-          const assignedTo = leadMap.get(leadId);
-          if (assignedTo === userId) {
-            if (m.direction === "outbound") {
-              whatsappSent++;
-              if (m.messageType === "template") {
-                whatsappTemplates++;
-                whatsappOutside24h++; // Assuming templates are the ones outside 24h/chargeable
-              }
-            } else if (m.direction === "inbound") {
-              whatsappReceived++;
-            }
+      // Punctuality
+      let punctualityCounts = {
+        "Overdue": 0,
+        "Overdue-Completed": 0,
+        "Timely-Completed": 0,
+      };
+
+      const now = Date.now();
+      userFollowups.forEach(f => {
+        if (f.status === "completed") {
+          if (f.completionStatus === "overdue") {
+            punctualityCounts["Overdue-Completed"]++;
+          } else {
+            punctualityCounts["Timely-Completed"]++;
+          }
+        } else if (f.status === "pending") {
+          if (now > f.scheduledAt + 20 * 60 * 1000) {
+            punctualityCounts["Overdue"]++;
           }
         }
       });
@@ -164,18 +175,18 @@ export const getDetailedReportStats = internalQuery({
       return {
         userId,
         name: user.name || "Unknown",
-        leadsAssigned,
-        emailsSent,
-        whatsappSent,
-        whatsappReceived,
-        whatsappTemplates,
-        whatsappOutside24h
+        leadsAssigned: userLeads.length,
+        sources,
+        status,
+        relevancy,
+        punctuality: punctualityCounts
       };
     });
 
     return {
       overall: overallStats,
-      userStats
+      userStats,
+      communicationStats
     };
   },
 });
