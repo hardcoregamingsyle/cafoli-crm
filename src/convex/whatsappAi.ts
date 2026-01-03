@@ -21,6 +21,14 @@ export const generateAndSendAiReply = action({
     const productNames = products.map(p => p.name).join(", ");
 
     // 2. Generate content using the AI service
+    // Get system user if no userId provided
+    const systemUser = args.userId ? null : await ctx.runQuery(api.users.getSystemUser);
+    const userId = args.userId || systemUser?._id;
+    
+    if (!userId) {
+      throw new Error("No user ID available for AI generation");
+    }
+
     const aiResponse = (await ctx.runAction(api.ai.generateContent, {
       prompt: args.prompt || "Draft a reply to this conversation",
       type: "chat_reply",
@@ -29,7 +37,7 @@ export const generateAndSendAiReply = action({
         availableProducts: productNames,
         isAutoReply: args.isAutoReply
       },
-      userId: args.userId || (await ctx.runQuery(api.users.getSystemUser))?._id,
+      userId: userId,
       leadId: args.leadId,
     })) as string;
 

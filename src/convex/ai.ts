@@ -32,25 +32,9 @@ export const generateContent = action({
     let success = false;
     let generatedText = "";
 
-    // Check if we need to switch model for product queries
-    let preferredModel = "gemini-3-flash"; // Default
-    
-    // Simple heuristic to detect product queries if not explicitly set
-    const context = args.context || {};
-    const isProductQuery = context.availableProducts && args.prompt.toLowerCase().includes("product") || args.prompt.toLowerCase().includes("price") || args.prompt.toLowerCase().includes("image");
-    
-    if (isProductQuery) {
-        // User requested gemma-3-27b, but we'll map it to a high-reasoning model available in Gemini
-        // or try to use it if the provider supports it. 
-        // Since we are using GoogleGenerativeAI SDK, we stick to Gemini models.
-        // We'll use gemini-1.5-pro as the "smart" model for this.
-        preferredModel = "gemini-1.5-pro"; 
-    }
-
-    // List of models to try in order of preference as requested by user
-    // We iterate through models first, then keys, to prioritize better models
+    // List of models to try in order of preference
+    // Priority: gemini-3-flash -> gemini-2.5-flash-lite -> gemini-2.5-flash
     const modelsToTry = [
-      preferredModel,
       "gemini-3-flash", 
       "gemini-2.5-flash-lite",
       "gemini-2.5-flash",
@@ -82,7 +66,7 @@ export const generateContent = action({
           if (args.type === "chat_reply") {
             systemPrompt = `You are a helpful sales assistant. Draft a professional and friendly reply to the customer based on the context provided. 
             
-            IMPORTANT: You have access to a list of products: ${context.availableProducts || "None"}.
+            IMPORTANT: You have access to a list of products: ${args.context?.availableProducts || "None"}.
             If the user is asking about a specific product, price, or image, and it matches one of the products in the list, you MUST return a JSON object in this format:
             { "productName": "Exact Product Name From List", "message": "Optional message to accompany the product details" }
             

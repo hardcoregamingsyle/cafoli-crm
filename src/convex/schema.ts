@@ -1,6 +1,11 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+export const ROLES = {
+  ADMIN: "admin" as const,
+  STAFF: "staff" as const,
+};
+
 export default defineSchema({
   products: defineTable({
     name: v.string(),
@@ -284,10 +289,10 @@ export default defineSchema({
   aiSuggestions: defineTable({
     leadId: v.optional(v.id("leads")),
     userId: v.id("users"),
-    type: v.string(), // "chat_reply", "follow_up", "lead_analysis"
+    type: v.string(),
     content: v.string(),
-    originalContent: v.optional(v.string()), // For rewrites
-    status: v.string(), // "generated", "used", "discarded"
+    originalContent: v.optional(v.string()),
+    status: v.string(),
     metadata: v.optional(v.any()),
   })
   .index("by_lead", ["leadId"])
