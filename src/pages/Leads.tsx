@@ -54,6 +54,7 @@ export default function Leads() {
   const allUsers = useQuery(api.users.getAllUsers, user ? { userId: user._id } : "skip") || [];
 
   const assignLead = useMutation(api.leads.standard.assignLead);
+  const unassignIdle = useMutation(api.coldCallerLeads.unassignColdCallerLeadsWithoutFollowUp);
 
   const handleLeadSelect = (id: Id<"leads">) => {
     setSelectedLeadId(id);
@@ -169,13 +170,33 @@ export default function Leads() {
           </div>
           <div className="flex gap-2 w-full md:w-auto">
             {isAdmin && filter === "all" && (
-              <Button
-                variant={viewColdCallerLeads ? "default" : "outline"}
-                onClick={() => setViewColdCallerLeads(!viewColdCallerLeads)}
-                className="gap-2"
-              >
-                {viewColdCallerLeads ? "Show All Leads" : "Show Cold Caller Leads"}
-              </Button>
+              <>
+                {viewColdCallerLeads && (
+                  <Button
+                    variant="destructive"
+                    onClick={async () => {
+                      if (!user) return;
+                      if (!confirm("Are you sure you want to unassign all cold caller leads that have no follow-up date set? This will return them to the unassigned pool.")) return;
+                      try {
+                        const count = await unassignIdle({ adminId: user._id });
+                        toast.success(`Unassigned ${count} idle leads`);
+                      } catch (e) {
+                        toast.error("Failed to unassign leads");
+                        console.error(e);
+                      }
+                    }}
+                  >
+                    Unassign Idle Leads
+                  </Button>
+                )}
+                <Button
+                  variant={viewColdCallerLeads ? "default" : "outline"}
+                  onClick={() => setViewColdCallerLeads(!viewColdCallerLeads)}
+                  className="gap-2"
+                >
+                  {viewColdCallerLeads ? "Show All Leads" : "Show Cold Caller Leads"}
+                </Button>
+              </>
             )}
             <CreateLeadDialog 
               open={isCreateOpen} 

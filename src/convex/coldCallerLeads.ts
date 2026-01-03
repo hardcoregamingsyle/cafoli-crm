@@ -334,3 +334,39 @@ export const getOverdueColdCallerLeads = query({
     return enrichedLeads;
   },
 });
+
+// Unassign cold caller leads that have no follow-up date set
+export const unassignColdCallerLeadsWithoutFollowUp = mutation({
+  args: { adminId: v.id("users") },
+  handler: async (ctx, args) => {
+    const admin = await ctx.db.get(args.adminId);
+    if (!admin || admin.role !== ROLES.ADMIN) {
+      throw new Error("Unauthorized");
+    }
+
+    const leads = await ctx.db
+      .query("leads")
+      .withIndex("by_is_cold_caller", (q) => q.eq("isColdCallerLead", true))
+      .filter((q) => q.and(
+        q.neq(q.field("coldCallerAssignedTo"), undefined),
+        q.eq(q.field("assignedTo"), undefined),
+        q.eq(q.field("nextFollowUpDate"), undefined)
+      ))
+      .collect();
+
+    for (const lead of leads) {
+      await ctx.db.patch(lead._id, {
+        coldCallerAssignedTo: undefined,
+        coldCallerAssignedAt: undefined,
+      });
+      
+      await ctx.db.insert("comments", {
+        leadId: lead._id,
+        content: "Cold Caller assignment removed due to lack of follow-up (Admin action)",
+        isSystem: true,
+      });
+    }
+
+    return leads.length;
+  }
+});
