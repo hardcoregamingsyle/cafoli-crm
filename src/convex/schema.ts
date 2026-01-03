@@ -326,4 +326,12 @@ export default defineSchema({
   .index("by_assigned_to", ["assignedTo"])
   .index("by_status", ["status"])
   .index("by_lead", ["leadId"]),
+
+  quickReplies: defineTable({
+    name: v.string(),
+    message: v.string(),
+    category: v.string(),
+    usageCount: v.number(),
+  })
+  .index("by_category", ["category"]),
 });

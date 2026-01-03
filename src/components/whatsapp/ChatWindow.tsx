@@ -1,4 +1,5 @@
 import { TemplatesDialog } from "@/components/TemplatesDialog";
+import { QuickRepliesDialog } from "./QuickRepliesDialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -26,6 +27,7 @@ export function ChatWindow({ selectedLeadId, selectedLead }: ChatWindowProps) {
   const generateUploadUrl = useMutation(api.whatsappStorage.generateUploadUrl);
   const markChatAsRead = useMutation(api.whatsappMutations.markChatAsRead);
   const generateAndSendAiReply = useAction(api.whatsappAi.generateAndSendAiReply);
+  const incrementQuickReplyUsage = useMutation(api.quickReplies.incrementUsage);
 
   const [whatsappMessage, setWhatsappMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -205,6 +207,11 @@ export function ChatWindow({ selectedLeadId, selectedLead }: ChatWindowProps) {
     } finally {
       setIsGeneratingAi(false);
     }
+  };
+
+  const handleQuickReplySelect = async (message: string, quickReplyId: Id<"quickReplies">) => {
+    setWhatsappMessage(message);
+    await incrementQuickReplyUsage({ id: quickReplyId });
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -481,6 +488,12 @@ export function ChatWindow({ selectedLeadId, selectedLead }: ChatWindowProps) {
           >
             <Paperclip className="h-5 w-5" />
           </Button>
+          
+          <QuickRepliesDialog 
+            onSelectReply={handleQuickReplySelect}
+            disabled={!isWithinWindow}
+          />
+          
           <TemplatesDialog selectedLeadId={selectedLeadId} />
           
           <Button

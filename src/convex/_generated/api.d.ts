@@ -45,6 +45,7 @@ import type * as migrations_updateProductsSchema from "../migrations/updateProdu
 import type * as pharmavends from "../pharmavends.js";
 import type * as pharmavendsMutations from "../pharmavendsMutations.js";
 import type * as products from "../products.js";
+import type * as quickReplies from "../quickReplies.js";
 import type * as reportPdfGenerator from "../reportPdfGenerator.js";
 import type * as reports from "../reports.js";
 import type * as tags from "../tags.js";
@@ -106,6 +107,7 @@ declare const fullApi: ApiFromModules<{
   pharmavends: typeof pharmavends;
   pharmavendsMutations: typeof pharmavendsMutations;
   products: typeof products;
+  quickReplies: typeof quickReplies;
   reportPdfGenerator: typeof reportPdfGenerator;
   reports: typeof reports;
   tags: typeof tags;
