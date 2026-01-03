@@ -8,7 +8,7 @@ import { Id, Doc } from "./_generated/dataModel";
 export const generateContent = action({
   args: {
     prompt: v.string(),
-    type: v.string(), // "chat_reply", "lead_analysis", "follow_up_suggestion"
+    type: v.string(), // "chat_reply", "lead_analysis", "follow_up_suggestion", "campaign_email_content"
     context: v.optional(v.any()), // Additional context like lead details, chat history
     userId: v.id("users"),
     leadId: v.optional(v.id("leads")),
@@ -32,27 +32,31 @@ export const generateContent = action({
     let success = false;
     let generatedText = "";
 
-    // Try keys sequentially until one works
-    for (const key of allKeys) {
-      const genAI = new GoogleGenerativeAI(key.apiKey);
-      
-      // List of models to try in order of preference
-      // Including user requested "gemini-3-flash" and other fallbacks
-      const modelsToTry = [
-        "gemini-3-flash", 
-        "gemini-2.0-flash-exp", 
-        "gemini-1.5-flash", 
-        "gemini-1.5-flash-001", 
-        "gemini-1.5-pro", 
-        "gemini-pro"
-      ];
+    // List of models to try in order of preference as requested by user
+    // We iterate through models first, then keys, to prioritize better models
+    const modelsToTry = [
+      "gemini-3-flash", 
+      "gemini-2.5-flash-lite",
+      "gemini-2.5-flash",
+      // Fallbacks in case the above don't exist or are limited
+      "gemini-2.0-flash-exp", 
+      "gemini-1.5-flash", 
+      "gemini-1.5-flash-001", 
+      "gemini-1.5-pro", 
+      "gemini-pro"
+    ];
 
-      for (const modelName of modelsToTry) {
+    // Try models sequentially
+    for (const modelName of modelsToTry) {
+      // For each model, try all available keys
+      for (const key of allKeys) {
+        const genAI = new GoogleGenerativeAI(key.apiKey);
+        
         try {
           // Use JSON mode for structured data requests if supported by the model
           // Gemini 1.0 (gemini-pro) does not support responseMimeType
           const isJsonMode = args.type === "follow_up_suggestion";
-          const supportsJson = modelName.includes("1.5") || modelName.includes("2.0") || modelName.includes("3") || modelName.includes("flash");
+          const supportsJson = modelName.includes("1.5") || modelName.includes("2.0") || modelName.includes("2.5") || modelName.includes("3") || modelName.includes("flash");
           
           const model = genAI.getGenerativeModel({ 
             model: modelName,
@@ -85,15 +89,15 @@ export const generateContent = action({
 
           success = true;
           console.log(`Successfully generated content with model: ${modelName}`);
-          break; // Exit model loop on success
+          break; // Exit key loop on success
         } catch (error) {
           console.warn(`Model ${modelName} failed with key ${key.label || "..."}:`, error);
           lastError = error;
-          // Continue to next model
+          // Continue to next key
         }
       }
       
-      if (success) break; // Exit key loop on success
+      if (success) break; // Exit model loop on success
     }
 
     if (!success) {
