@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useMutation } from "convex/react";
 import { useAuth } from "@/hooks/use-auth";
 import {
   Dialog,
@@ -10,32 +10,31 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+import { Doc } from "@/convex/_generated/dataModel";
 import { Calendar, Phone, Mail } from "lucide-react";
 
-export function MandatoryFollowUpPopup() {
+interface MandatoryFollowUpPopupProps {
+  leads: Doc<"leads">[];
+}
+
+export function MandatoryFollowUpPopup({ leads }: MandatoryFollowUpPopupProps) {
   const { user } = useAuth();
-  const leadsWithoutFollowUp = useQuery(
-    api.leads.queries.getMyLeadsWithoutFollowUp,
-    user ? { userId: user._id } : "skip"
-  );
   const updateLead = useMutation(api.leads.standard.updateLead);
 
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [followUpDate, setFollowUpDate] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
 
-  if (!leadsWithoutFollowUp || leadsWithoutFollowUp.length === 0) {
+  if (!leads || leads.length === 0) {
     return null;
   }
 
-  const currentLead = leadsWithoutFollowUp[currentIndex];
-  const remainingCount = leadsWithoutFollowUp.length - currentIndex;
+  // Always take the first lead as the list shrinks when follow-ups are set
+  const currentLead = leads[0];
+  const remainingCount = leads.length;
 
   const getMinDateTime = () => {
     const now = new Date();
@@ -66,13 +65,9 @@ export function MandatoryFollowUpPopup() {
       });
 
       toast.success("Follow-up date set successfully");
+      setFollowUpDate("");
       
-      // Move to next lead or close
-      if (currentIndex < leadsWithoutFollowUp.length - 1) {
-        setCurrentIndex(currentIndex + 1);
-        setFollowUpDate("");
-      } else {
-        // All done
+      if (leads.length === 1) {
         toast.success("All follow-ups set!");
       }
     } catch (error) {
@@ -150,7 +145,7 @@ export function MandatoryFollowUpPopup() {
 
         <DialogFooter className="flex justify-between items-center">
           <span className="text-sm text-muted-foreground">
-            {currentIndex + 1} of {leadsWithoutFollowUp.length}
+            {remainingCount} remaining
           </span>
           <Button
             onClick={handleSetFollowUp}

@@ -1,27 +1,32 @@
-{/* Overdue Leads Popup */}
-<Dialog open={isOverduePopupOpen} onOpenChange={setIsOverduePopupOpen}>
-  <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-    <DialogHeader>
-      <DialogTitle>Overdue Leads</DialogTitle>
-      <DialogDescription>
-        {overdueLeads.length} leads are overdue. Assign them to a user to resolve.
-      </DialogDescription>
-    </DialogHeader>
-    
-    <div className="space-y-4">
-      {overdueLeads.map((lead) => (
-        <LeadCard
-          key={lead._id}
-          lead={lead}
-          // ...
-          onAssignToSelf={(id) => handleAssignToSelf(id)}
-          onAssignToUser={(leadId, userId) => handleAssignToUser(leadId, userId)}
-        />
+{/* Show reminders first, then mandatory follow-up popup */}
+{filter === "mine" && !hasMandatoryFollowUps && <LeadReminders />}
+{filter === "mine" && hasMandatoryFollowUps && <MandatoryFollowUpPopup leads={leadsWithoutFollowUp} />}
 
-        <span className="text-xs text-muted-foreground">
-          {new Date(lead._creationTime).toLocaleString()}
-        </span>
-      ))}
+// Determine current mode
+let mode: 'critical' | 'cold' | null = null;
+if (remindersEnabled) {
+  if (activeCriticalLeads.length > 0 && !closedBatches.includes('critical')) {
+    mode = 'critical';
+  } else if (activeColdLeads.length > 0 && !closedBatches.includes('cold')) {
+    mode = 'cold';
+  }
+}
+
+const leadsWithoutFollowUp = useQuery(
+  api.leads.queries.getMyLeadsWithoutFollowUp,
+  user && filter === "mine" ? { userId: user._id } : "skip"
+);
+  
+const hasMandatoryFollowUps = leadsWithoutFollowUp && leadsWithoutFollowUp.length > 0;
+
+const allUsers = useQuery(api.users.getAllUsers, user ? { userId: user._id } : "skip") || [];
+
+const assignLead = useMutation(api.leads.standard.assignLead);
+
+return (
+  <AppLayout>
+    <div className="h-[calc(100vh-4rem)] flex flex-col gap-4">
+      
     </div>
-  </DialogContent>
-</Dialog>
+  </AppLayout>
+);

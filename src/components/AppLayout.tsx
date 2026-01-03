@@ -37,10 +37,16 @@ export default function AppLayout({ children }: AppLayoutProps) {
   
   const ensureRole = useMutation(api.users.ensureRole);
   
+  // Mandatory Follow Up Logic
+  const leadsWithoutFollowUp = useQuery(
+    api.leads.queries.getMyLeadsWithoutFollowUp,
+    user ? { userId: user._id } : "skip"
+  );
+
   // Cold Caller Leads Logic
   const coldCallerLeadsNeedingFollowUp = useQuery(
     api.coldCallerLeads.getColdCallerLeadsNeedingFollowUp,
-    user ? {} : "skip"
+    user ? { userId: user._id } : "skip"
   ) || [];
 
   const [isColdCallerPopupOpen, setIsColdCallerPopupOpen] = useState(false);
@@ -271,8 +277,16 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <div className="min-h-screen bg-background flex">
-      <LeadReminders />
-      <MandatoryFollowUpPopup />
+      {/* Popups Sequence: 
+          1. Mandatory Follow Up (Set follow up date)
+          2. Lead Reminders (Hot/Mature then Cold)
+      */}
+      {leadsWithoutFollowUp && leadsWithoutFollowUp.length > 0 ? (
+        <MandatoryFollowUpPopup leads={leadsWithoutFollowUp} />
+      ) : (
+        <LeadReminders />
+      )}
+
       {/* Cold Caller Popup */}
       {user && coldCallerLeadsNeedingFollowUp.length > 0 && (
         <ColdCallerPopup

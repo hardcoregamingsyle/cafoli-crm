@@ -1,125 +1,42 @@
-import { Doc, Id } from "@/convex/_generated/dataModel";
+import { useState } from "react";
+import { useMutation } from "convex/react";
+import { useAuth } from "@/hooks/use-auth";
+import { api } from "@/convex/_generated/api";
+import { Id, Doc } from "@/convex/_generated/dataModel";
 
-interface LeadCardProps {
-  lead: Doc<"leads"> & { 
-    tagsData?: Doc<"tags">[]; 
-    unreadCount?: number;
-    assignedToName?: string;
-    coldCallerAssignedToName?: string;
-  };
-  isSelected: boolean;
-  //...
+// ... keep existing code
+  const [viewColdCallerLeads, setViewColdCallerLeads] = useState(false);
 
-const [allLoadedLeads, setAllLoadedLeads] = useState<Doc<"leads">[]>([]);
+  const allTags = useQuery(api.tags.getAllTags) || [];
+  const uniqueSources = useQuery(api.leadQueries.getUniqueSources) || [];
+  const allUsers = useQuery(api.users.getAllUsers, user ? { userId: user._id } : "skip") || [];
 
-const [selectedAssignedTo, setSelectedAssignedTo] = useState<string[]>([]);
-const [whatsAppDialogOpen, setWhatsAppDialogOpen] = useState(false);
-const [whatsAppLeadId, setWhatsAppLeadId] = useState<Id<"leads"> | null>(null);
-const [filterSidebarOpen, setFilterSidebarOpen] = useState(false);
-const [viewColdCallerLeads, setViewColdCallerLeads] = useState(false);
+  const leadsWithoutFollowUp = useQuery(
+    api.leads.queries.getMyLeadsWithoutFollowUp,
+    user && filter === "mine" ? { userId: user._id } : "skip"
+  );
+  
+  const hasMandatoryFollowUps = leadsWithoutFollowUp && leadsWithoutFollowUp.length > 0;
+  const isLoadingMandatory = leadsWithoutFollowUp === undefined;
 
-const allTags = useQuery(api.tags.getAllTags) || [];
+  const assignLead = useMutation(api.leads.standard.assignLead);
+  const coldCallerLeadsNeedingFollowUp = useQuery(
+    api.coldCallerLeads.getColdCallerLeadsNeedingFollowUp,
+    user ? {} : "skip"
+  ) || [];
 
-// Reset loaded leads when filters change
-useMemo(() => {
-  setAllLoadedLeads([]);
-  setPaginationOpts({ numItems: ITEMS_PER_PAGE, cursor: null });
-}, [filter, search, selectedStatuses, selectedSources, selectedTags, selectedAssignedTo, sortBy, viewColdCallerLeads]);
-
-const paginatedResult = useQuery(
-  api.leadQueries.getPaginatedLeads,
-  user ? {
-    userId: user._id,
-    filter: viewColdCallerLeads ? "cold_caller" : filter,
-    search: search || undefined,
-    // ...
-  } : "skip"
-);
-
-{isAdmin && filter === "all" && (
-  <Button
-    variant={viewColdCallerLeads ? "default" : "outline"}
-    onClick={() => setViewColdCallerLeads(!viewColdCallerLeads)}
-    className="gap-2"
-  >
-    {viewColdCallerLeads ? "Show All Leads" : "Show Cold Caller Leads"}
-  </Button>
-)}
-
-if (args.filter === "cold_caller") return l.isColdCallerLead === true;
-
-{lead.assignedToName && (
-  <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs">
-    👤 {lead.assignedToName}
-  </span>
-)}
-
-{lead.coldCallerAssignedToName && (
-  <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs border border-indigo-200">
-    📞 {lead.coldCallerAssignedToName}
-  </span>
-)}
-
-{lead.tagsData && lead.tagsData.length > 0 && (
-
-{filteredLeads.map((lead: Doc<"leads">) => (
-  <LeadCard
-    key={lead._id}
-    lead={lead}
-    // ...
-  />
-))}
+  return (
+    <AppLayout>
+      {/* Show reminders first, then mandatory follow-up popup */}
+      {filter === "mine" && !isLoadingMandatory && !hasMandatoryFollowUps && <LeadReminders />}
+      {filter === "mine" && hasMandatoryFollowUps && <MandatoryFollowUpPopup leads={leadsWithoutFollowUp} />}
+      
+      <div className="h-[calc(100vh-4rem)] flex flex-col gap-4">
+      // ... keep existing code
+    </AppLayout>
+  );
 }
 
-// Helper function to enrich leads with assigned user names and tags
-const enrichLeads = async (leads: any[]) => {
-  return await Promise.all(
-    leads.map(async (lead) => {
-      let enriched = { ...lead };
-      
-      if (lead.assignedTo) {
-        const assignedUser = await ctx.db.get(lead.assignedTo);
-        if (assignedUser && '_id' in assignedUser) {
-          const userName = (assignedUser as any).name || (assignedUser as any).email || "Unknown User";
-          enriched.assignedToName = userName;
-        }
-      }
-
-      if (lead.coldCallerAssignedTo) {
-        const assignedUser = await ctx.db.get(lead.coldCallerAssignedTo);
-        if (assignedUser && '_id' in assignedUser) {
-          const userName = (assignedUser as any).name || (assignedUser as any).email || "Unknown User";
-          enriched.coldCallerAssignedToName = userName;
-        }
-      }
-
-      if (lead.tags && lead.tags.length > 0) {
-        enriched.tagsData = await Promise.all(
-          lead.tags.map(async (tag: any) => {
-            const tagDoc = await ctx.db.get(tag);
-            return tagDoc;
-          })
-        );
-      }
-
-      return enriched;
-    })
-  );
-};
-
-if (hasFilters) {
-   const allLeads = await ctx.db.query("leads").order("desc").collect();
-   let filtered = allLeads.filter(l => {
-      if (args.filter === "unassigned") {
-        return !l.assignedTo && 
-               l.type !== "Irrelevant" && 
-               !l.isColdCallerLead;
-      }
-      if (args.filter === "irrelevant") return l.type === "Irrelevant";
-      if (args.filter === "all") return l.type !== "Irrelevant";
-      if (args.filter === "cold_caller") return l.isColdCallerLead === true;
-      return !l.assignedTo && l.type !== "Irrelevant" && !l.isColdCallerLead;
-   });
-
-   filtered = applyFilters(filtered);
+export function MandatoryFollowUpPopup({ leads }: MandatoryFollowUpPopupProps) {
+  // ... new implementation
 }

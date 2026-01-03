@@ -17,8 +17,6 @@ import { LeadCard } from "@/components/LeadCard";
 import { CreateLeadDialog } from "@/components/leads/CreateLeadDialog";
 import { AssignLeadDialog } from "@/components/leads/AssignLeadDialog";
 import { LeadsFilterSidebar } from "@/components/leads/LeadsFilterSidebar";
-import { MandatoryFollowUpPopup } from "@/components/MandatoryFollowUpPopup";
-import { LeadReminders } from "@/components/LeadReminders";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChatWindow } from "@/components/whatsapp/ChatWindow";
@@ -167,10 +165,6 @@ export default function Leads() {
 
   return (
     <AppLayout>
-      {/* Show reminders first, then mandatory follow-up popup */}
-      {filter === "mine" && <LeadReminders />}
-      {filter === "mine" && <MandatoryFollowUpPopup />}
-      
       <div className="h-[calc(100vh-4rem)] flex flex-col gap-4">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
