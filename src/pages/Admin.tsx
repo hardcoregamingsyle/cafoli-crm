@@ -213,7 +213,7 @@ export default function Admin() {
 
     setIsSendingReport(true);
     try {
-      const result = await sendTestReport({ email: currentUser.email });
+      const result = await sendTestReport({ email: currentUser.email.trim() });
       if (result.success) {
         toast.success(`Test report sent to ${currentUser.email}`);
       } else {

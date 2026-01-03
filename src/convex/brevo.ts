@@ -61,6 +61,11 @@ export const sendEmailInternal = internalAction({
       throw new Error("No available Brevo API keys. Please add keys in Admin panel.");
     }
 
+    const cleanEmail = args.to.trim();
+    if (!cleanEmail) {
+      throw new Error("Email address is required");
+    }
+
     try {
       const response = await fetch("https://api.brevo.com/v3/smtp/email", {
         method: "POST",
@@ -76,7 +81,7 @@ export const sendEmailInternal = internalAction({
           },
           to: [
             {
-              email: args.to,
+              email: cleanEmail,
               name: args.toName,
             },
           ],
@@ -100,7 +105,7 @@ export const sendEmailInternal = internalAction({
           // Retry with next key
           const nextKeyData = await getNextApiKey(ctx);
           if (nextKeyData) {
-            return await sendEmailWithKey(ctx, args, nextKeyData);
+            return await sendEmailWithKey(ctx, { ...args, to: cleanEmail }, nextKeyData);
           }
         }
         
@@ -121,6 +126,7 @@ export const sendEmailInternal = internalAction({
 
 // Helper function to send email with a specific key
 async function sendEmailWithKey(ctx: ActionCtx, args: any, keyData: { key: string; keyId: Id<"brevoApiKeys"> }) {
+  const cleanEmail = args.to.trim();
   const response = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: {
@@ -135,7 +141,7 @@ async function sendEmailWithKey(ctx: ActionCtx, args: any, keyData: { key: strin
       },
       to: [
         {
-          email: args.to,
+          email: cleanEmail,
           name: args.toName,
         },
       ],
@@ -157,6 +163,7 @@ async function sendEmailWithKey(ctx: ActionCtx, args: any, keyData: { key: strin
 
 // Helper for welcome email with specific key
 async function sendWelcomeEmailWithKey(ctx: ActionCtx, args: any, keyData: { key: string; keyId: Id<"brevoApiKeys"> }, htmlContent: string) {
+  const cleanEmail = args.leadEmail.trim();
   const response = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: {
@@ -171,7 +178,7 @@ async function sendWelcomeEmailWithKey(ctx: ActionCtx, args: any, keyData: { key
       },
       to: [
         {
-          email: args.leadEmail,
+          email: cleanEmail,
           name: args.leadName,
         },
       ],
@@ -217,6 +224,8 @@ export const sendWelcomeEmail = internalAction({
     if (!keyData) {
       throw new Error("No available Brevo API keys. Please add keys in Admin panel.");
     }
+
+    const cleanEmail = args.leadEmail.trim();
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -280,7 +289,7 @@ export const sendWelcomeEmail = internalAction({
           },
           to: [
             {
-              email: args.leadEmail,
+              email: cleanEmail,
               name: args.leadName,
             },
           ],
@@ -301,7 +310,7 @@ export const sendWelcomeEmail = internalAction({
           const nextKeyData = await getNextApiKey(ctx);
           if (nextKeyData) {
             // Retry with welcome email content
-            return await sendWelcomeEmailWithKey(ctx, args, nextKeyData, htmlContent);
+            return await sendWelcomeEmailWithKey(ctx, { ...args, leadEmail: cleanEmail }, nextKeyData, htmlContent);
           }
         }
         

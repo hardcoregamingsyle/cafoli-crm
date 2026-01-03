@@ -234,7 +234,7 @@ export const sendTestReport = action({
 
     try {
       await ctx.runAction(internal.brevo.sendEmailInternal, {
-        to: args.email,
+        to: args.email.trim(),
         toName: "Admin",
         subject: `Cafoli CRM - Test Report - ${dateRangeLabel}`,
         htmlContent: html,
