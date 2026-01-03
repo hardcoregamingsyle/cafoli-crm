@@ -27,6 +27,7 @@ import type * as crons from "../crons.js";
 import type * as debug from "../debug.js";
 import type * as emailActions from "../emailActions.js";
 import type * as emailTemplates from "../emailTemplates.js";
+import type * as geminiMutations from "../geminiMutations.js";
 import type * as http from "../http.js";
 import type * as indiamartMutations from "../indiamartMutations.js";
 import type * as leadQueries from "../leadQueries.js";
@@ -80,6 +81,7 @@ declare const fullApi: ApiFromModules<{
   debug: typeof debug;
   emailActions: typeof emailActions;
   emailTemplates: typeof emailTemplates;
+  geminiMutations: typeof geminiMutations;
   http: typeof http;
   indiamartMutations: typeof indiamartMutations;
   leadQueries: typeof leadQueries;

@@ -3,6 +3,7 @@ import BrevoKeyManager from "@/components/BrevoKeyManager";
 import UserManagement from "@/components/admin/UserManagement";
 import CreateUserDialog from "@/components/admin/CreateUserDialog";
 import AdminActions from "@/components/admin/AdminActions";
+import GeminiKeyManager from "@/components/GeminiKeyManager";
 import { AllocateColdCallerDialog } from "@/components/admin/AllocateColdCallerDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Shield } from "lucide-react";
@@ -14,6 +15,8 @@ import { useAuth } from "@/hooks/use-auth";
 import type { Id } from "@/convex/_generated/dataModel";
 import JSZip from "jszip";
 import * as Papa from "papaparse";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 
 export default function Admin() {
   const { user: currentUser, signIn } = useAuth();
@@ -408,99 +411,90 @@ export default function Admin() {
     });
   };
 
-  if (currentUser?.role !== "admin") {
-    return (
-      <AppLayout>
-        <div className="flex items-center justify-center h-[60vh]">
-          <Card className="max-w-md">
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <Shield className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
-                <p className="text-muted-foreground">
-                  You need admin privileges to access this page.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </AppLayout>
-    );
-  }
-
   return (
     <AppLayout>
-      <div className="space-y-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Admin Panel</h1>
-            <p className="text-muted-foreground">Manage users and system settings.</p>
-          </div>
-          
-          <div className="flex flex-wrap gap-2">
-            <AdminActions
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Admin Dashboard</h1>
+        </div>
+
+        <Tabs defaultValue="users" className="w-full">
+          <TabsList>
+            <TabsTrigger value="users">User Management</TabsTrigger>
+            <TabsTrigger value="integrations">Integrations</TabsTrigger>
+            <TabsTrigger value="system">System</TabsTrigger>
+            <TabsTrigger value="test">Test Reports</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="users" className="mt-6">
+            <UserManagement 
+              users={allUsers}
+              onDeleteUser={handleDeleteUser}
+              onLoginAs={handleLoginAs}
+            />
+          </TabsContent>
+
+          <TabsContent value="integrations" className="mt-6 space-y-6">
+            <div className="grid gap-6 md:grid-cols-2">
+              {currentUser && <BrevoKeyManager userId={currentUser._id} />}
+              {currentUser && <GeminiKeyManager userId={currentUser._id} />}
+            </div>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>Other Integrations</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                      <h3 className="font-medium">WhatsApp Business API</h3>
+                      <p className="text-sm text-muted-foreground">Connected via Meta Cloud API</p>
+                    </div>
+                    <Button variant="outline" onClick={() => window.open("https://developers.facebook.com/apps", "_blank")}>
+                      Manage in Meta
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="system" className="mt-6">
+            <AdminActions 
               onImportCSV={handleImportCSV}
               onDownloadTemplate={handleDownloadTemplate}
               onStandardizePhoneNumbers={handleStandardizePhoneNumbers}
               onMarkColdCallerLeads={handleManualMarkColdCallerLeads}
-              onSendWelcomeMessages={handleSendWelcomeToRecentLeads}
-              onDownloadAllLeads={handleDownloadCSV}
+              onSendWelcomeToRecentLeads={handleSendWelcomeToRecentLeads}
+              onAllocateColdCallerLeads={handleAllocateColdCallerLeads}
               onAutoAssignLeads={handleAutoAssignLeads}
               onSyncPharmavends={handleSyncPharmavends}
-              onSendTestReport={handleSendTestReport}
-              isImporting={isImporting}
+              onDownloadCSV={handleDownloadCSV}
               isStandardizing={isStandardizing}
+              isImporting={isImporting}
               isMarkingColdCaller={isMarkingColdCaller}
               isSendingWelcome={isSendingWelcome}
+              isAllocatingColdCaller={isAllocatingColdCaller}
               isAutoAssigning={isAutoAssigning}
               isSyncingPharmavends={isSyncingPharmavends}
-              isSendingReport={isSendingReport}
+              unallocatedColdCallerCount={unallocatedColdCallerCount}
             />
-            <AllocateColdCallerDialog
-              availableLeads={unallocatedColdCallerCount ?? 0}
-              onAllocate={handleAllocateColdCallerLeads}
-              isAllocating={isAllocatingColdCaller}
-            />
-            <CreateUserDialog onCreateUser={handleCreateUser} />
-          </div>
-        </div>
-
-        <UserManagement
-          users={allUsers}
-          currentUserId={currentUser?._id}
-          onDeleteUser={handleDeleteUser}
-          onLoginAs={handleLoginAs}
-        />
-
-        {currentUser && <BrevoKeyManager userId={currentUser._id} />}
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5" />
-              System Settings
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-4">
-              Configure integrations and system-wide preferences.
-            </p>
-            <div className="space-y-2">
-              <div className="flex justify-between items-center p-2 border rounded">
-                <span className="text-sm font-medium">Pharmavends API</span>
-                <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Pending</span>
-              </div>
-              <div className="flex justify-between items-center p-2 border rounded">
-                <span className="text-sm font-medium">IndiaMART API</span>
-                <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Pending</span>
-              </div>
-              <div className="flex justify-between items-center p-2 border rounded">
-                <span className="text-sm font-medium">WhatsApp API</span>
-                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Configured</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          </TabsContent>
+          
+          <TabsContent value="test" className="mt-6">
+             <Card>
+               <CardHeader>
+                 <CardTitle>Test Report Generation</CardTitle>
+               </CardHeader>
+               <CardContent>
+                 <Button onClick={handleSendTestReport} disabled={isSendingReport}>
+                   {isSendingReport ? "Sending..." : "Generate Test Report"}
+                 </Button>
+               </CardContent>
+             </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </AppLayout>
   );

@@ -1,3 +1,6 @@
 {
-  "plan": "1. Verify the fixes by checking if the 'Unauthorized' error persists (user should check).\n2. Confirm that the landing page redirects to /auth.\n3. If the sidebar issue persists, investigate user roles further."
+  "file_paths": [
+    "src/components/admin/AdminActions.tsx"
+  ],
+  "replace_files_in_context": false
 }

@@ -232,6 +232,16 @@ const schema = defineSchema(
       order: v.number(),
     }).index("by_active", ["isActive"]).index("by_order", ["order"]),
 
+    geminiApiKeys: defineTable({
+      apiKey: v.string(),
+      label: v.optional(v.string()),
+      isActive: v.boolean(),
+      dailyLimit: v.optional(v.number()),
+      usageCount: v.number(),
+      lastUsedAt: v.optional(v.number()),
+      lastResetAt: v.number(),
+    }).index("by_active", ["isActive"]),
+
     emailTemplates: defineTable({
       name: v.string(),
       subject: v.string(),
