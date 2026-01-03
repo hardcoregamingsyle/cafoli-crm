@@ -28,7 +28,7 @@ export function ProductUploadDialog({ disabled }: ProductUploadDialogProps) {
   const [brandName, setBrandName] = useState("");
   const [molecule, setMolecule] = useState("");
   const [mrp, setMrp] = useState("");
-  const [rate, setRate] = useState("");
+  const [packaging, setPackaging] = useState("");
   const [description, setDescription] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   
@@ -52,7 +52,7 @@ export function ProductUploadDialog({ disabled }: ProductUploadDialogProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !brandName || !mrp || !rate) {
+    if (!name || !brandName || !mrp || !packaging) {
       toast.error("Please fill in all required fields");
       return;
     }
@@ -77,7 +77,7 @@ export function ProductUploadDialog({ disabled }: ProductUploadDialogProps) {
         brandName,
         molecule,
         mrp,
-        rate,
+        packaging,
         images: imageStorageIds,
         description,
       });
@@ -89,7 +89,7 @@ export function ProductUploadDialog({ disabled }: ProductUploadDialogProps) {
       setBrandName("");
       setMolecule("");
       setMrp("");
-      setRate("");
+      setPackaging("");
       setDescription("");
       setSelectedFiles([]);
     } catch (error) {
@@ -142,8 +142,8 @@ export function ProductUploadDialog({ disabled }: ProductUploadDialogProps) {
               <Input id="mrp" value={mrp} onChange={(e) => setMrp(e.target.value)} required />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="rate">Rate *</Label>
-              <Input id="rate" value={rate} onChange={(e) => setRate(e.target.value)} required />
+              <Label htmlFor="packaging">Packaging *</Label>
+              <Input id="packaging" value={packaging} onChange={(e) => setPackaging(e.target.value)} required placeholder="e.g. 10x10 Strips" />
             </div>
           </div>
 

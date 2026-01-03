@@ -7,7 +7,7 @@ export const createProduct = mutation({
     brandName: v.string(),
     molecule: v.optional(v.string()),
     mrp: v.string(),
-    rate: v.string(),
+    packaging: v.string(),
     images: v.array(v.id("_storage")),
     description: v.optional(v.string()),
   },
@@ -17,7 +17,7 @@ export const createProduct = mutation({
       brandName: args.brandName,
       molecule: args.molecule,
       mrp: args.mrp,
-      rate: args.rate,
+      packaging: args.packaging,
       images: args.images,
       description: args.description,
     });

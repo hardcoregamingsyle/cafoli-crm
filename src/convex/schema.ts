@@ -12,7 +12,8 @@ export default defineSchema({
     brandName: v.string(),
     molecule: v.optional(v.string()),
     mrp: v.string(),
-    rate: v.string(),
+    packaging: v.optional(v.string()),
+    rate: v.optional(v.string()), // Temporary: will be removed after migration
     images: v.array(v.id("_storage")),
     description: v.optional(v.string()),
   }).index("by_name", ["name"]),

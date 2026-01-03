@@ -41,6 +41,7 @@ import type * as leads_queries from "../leads/queries.js";
 import type * as leads_standard from "../leads/standard.js";
 import type * as lib_passwordUtils from "../lib/passwordUtils.js";
 import type * as migrations from "../migrations.js";
+import type * as migrations_updateProductsSchema from "../migrations/updateProductsSchema.js";
 import type * as pharmavends from "../pharmavends.js";
 import type * as pharmavendsMutations from "../pharmavendsMutations.js";
 import type * as products from "../products.js";
@@ -101,6 +102,7 @@ declare const fullApi: ApiFromModules<{
   "leads/standard": typeof leads_standard;
   "lib/passwordUtils": typeof lib_passwordUtils;
   migrations: typeof migrations;
+  "migrations/updateProductsSchema": typeof migrations_updateProductsSchema;
   pharmavends: typeof pharmavends;
   pharmavendsMutations: typeof pharmavendsMutations;
   products: typeof products;

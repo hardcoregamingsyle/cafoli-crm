@@ -62,7 +62,7 @@ export const generateAndSendAiReply = action({
                                   `🏷️ Brand: ${product.brandName}\n` +
                                   `🧪 Molecule: ${product.molecule || "N/A"}\n` +
                                   `💰 MRP: ₹${product.mrp}\n` +
-                                  `💵 Rate: ₹${product.rate}\n\n` +
+                                  `📦 Packaging: ${product.packaging || "N/A"}\n\n` +
                                   `${product.description || ""}`;
                     
                     if (product.images && product.images.length > 0) {
