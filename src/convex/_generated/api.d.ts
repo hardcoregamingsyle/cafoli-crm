@@ -31,6 +31,7 @@ import type * as geminiMutations from "../geminiMutations.js";
 import type * as get_user from "../get_user.js";
 import type * as http from "../http.js";
 import type * as indiamartMutations from "../indiamartMutations.js";
+import type * as interventionRequests from "../interventionRequests.js";
 import type * as leadQueries from "../leadQueries.js";
 import type * as leadUtils from "../leadUtils.js";
 import type * as leads_admin from "../leads/admin.js";
@@ -90,6 +91,7 @@ declare const fullApi: ApiFromModules<{
   get_user: typeof get_user;
   http: typeof http;
   indiamartMutations: typeof indiamartMutations;
+  interventionRequests: typeof interventionRequests;
   leadQueries: typeof leadQueries;
   leadUtils: typeof leadUtils;
   "leads/admin": typeof leads_admin;

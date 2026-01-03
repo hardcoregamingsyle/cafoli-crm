@@ -15,13 +15,11 @@ export const generateAndSendAiReply = action({
     isAutoReply: v.optional(v.boolean()),
   },
   handler: async (ctx, args): Promise<string> => {
-    // 1. Fetch all products for context if needed
-    // We'll pass this to the AI generation action
+    // 1. Fetch all products for context
     const products = await ctx.runQuery(api.products.listProducts);
     const productNames = products.map(p => p.name).join(", ");
 
     // 2. Generate content using the AI service
-    // Get system user if no userId provided
     const systemUser = args.userId ? null : await ctx.runQuery(api.users.getSystemUser);
     const userId = args.userId || systemUser?._id;
     
@@ -46,16 +44,15 @@ export const generateAndSendAiReply = action({
     }
 
     // 3. Check if the response indicates a product match (JSON format)
-    // We'll try to parse it as JSON if it looks like it
     let messageToSend = aiResponse;
     let mediaToSend = null;
+    let productNotFound = false;
+    let requestedProductName = "";
 
     try {
-        // Simple check if response is JSON
         if (aiResponse.trim().startsWith("{") && aiResponse.trim().endsWith("}")) {
             const parsed = JSON.parse(aiResponse);
             if (parsed.productName) {
-                // Find the product
                 const product = products.find(p => p.name.toLowerCase() === parsed.productName.toLowerCase());
                 if (product) {
                     messageToSend = `Here are the details for ${product.name}:\nBrand: ${product.brandName}\nMolecule: ${product.molecule || "N/A"}\nMRP: ${product.mrp}\nRate: ${product.rate}\n${product.description || ""}`;
@@ -63,12 +60,15 @@ export const generateAndSendAiReply = action({
                     if (product.images && product.images.length > 0) {
                         mediaToSend = {
                             storageId: product.images[0],
-                            fileName: `${product.name}.jpg`, // Assumption
-                            mimeType: "image/jpeg" // Assumption
+                            fileName: `${product.name}.jpg`,
+                            mimeType: "image/jpeg"
                         };
                     }
                 } else {
-                    messageToSend = parsed.message || aiResponse;
+                    // Product not found in database
+                    productNotFound = true;
+                    requestedProductName = parsed.productName;
+                    messageToSend = "This product image and details will be shared shortly.";
                 }
             } else if (parsed.message) {
                 messageToSend = parsed.message;
@@ -96,6 +96,19 @@ export const generateAndSendAiReply = action({
             quotedMessageId: args.replyingToMessageId,
             quotedMessageExternalId: args.replyingToExternalId,
         });
+    }
+
+    // 5. If product not found, create intervention request
+    if (productNotFound && requestedProductName) {
+        const lead = await ctx.runQuery(api.leads.queries.getLead, { id: args.leadId });
+        if (lead && lead.assignedTo) {
+            await ctx.runMutation(api.interventionRequests.createInterventionRequest, {
+                leadId: args.leadId,
+                assignedTo: lead.assignedTo,
+                requestedProduct: requestedProductName,
+                customerMessage: args.prompt || "",
+            });
+        }
     }
 
     return messageToSend;

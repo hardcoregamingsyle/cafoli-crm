@@ -27,6 +27,7 @@ import { LeadReminders } from "./LeadReminders";
 import { MandatoryFollowUpPopup } from "./MandatoryFollowUpPopup";
 import { ColdCallerPopup } from "@/components/ColdCallerPopup";
 import { ProductUploadDialog } from "@/components/products/ProductUploadDialog";
+import { InterventionPopup } from "./InterventionPopup";
 import { api } from "@/convex/_generated/api";
 
 interface AppLayoutProps {
@@ -285,11 +286,15 @@ export default function AppLayout({ children }: AppLayoutProps) {
       {/* Popups Sequence: 
           1. Mandatory Follow Up (Set follow up date)
           2. Lead Reminders (Hot/Mature then Cold)
+          3. Intervention Requests (Product not found)
       */}
       {leadsWithoutFollowUp && leadsWithoutFollowUp.length > 0 ? (
         <MandatoryFollowUpPopup leads={leadsWithoutFollowUp} />
       ) : (
-        <LeadReminders />
+        <>
+          <LeadReminders />
+          {user && <InterventionPopup userId={user._id} />}
+        </>
       )}
 
       {/* Cold Caller Popup */}

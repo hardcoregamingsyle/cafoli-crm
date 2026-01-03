@@ -313,4 +313,16 @@ export default defineSchema({
   .index("by_category", ["category"])
   .index("by_user", ["userId"])
   .index("by_lead", ["leadId"]),
+
+  interventionRequests: defineTable({
+    leadId: v.id("leads"),
+    assignedTo: v.id("users"),
+    requestedProduct: v.string(),
+    customerMessage: v.string(),
+    status: v.union(v.literal("pending"), v.literal("resolved"), v.literal("dismissed")),
+    resolvedAt: v.optional(v.number()),
+  })
+  .index("by_assigned_to", ["assignedTo"])
+  .index("by_status", ["status"])
+  .index("by_lead", ["leadId"]),
 });
