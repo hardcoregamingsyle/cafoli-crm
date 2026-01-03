@@ -1,32 +1,77 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+// src/convex/schema.ts
 
-const fullPrompt = `${systemPrompt}\n\nContext: ${JSON.stringify(args.context)}\n\nPrompt: ${args.prompt}`;
+import { action, internalAction } from "./_generated/server";
+import { v } from "convex/values";
+import { internal, api } from "./_generated/api";
 
-const {
-  isEditing,
-  editedLead,
-  setEditedLead,
-  newComment,
-  setNewComment,
-  handleStatusChange,
-  handleTypeChange,
-  handleAddComment,
-  handleTagsChange,
-  startEditing,
-  cancelEditing,
-  saveEdits,
-  showFollowUpCheck,
-  showNewFollowUpDialog,
-  setShowNewFollowUpDialog,
-  handleFollowUpDone,
-  handleFollowUpNotDone,
-  handleNewFollowUpDate,
-} = useLeadEditor({ lead, user });
+export const createProduct = mutation({
+  args: {
+    name: v.string(),
+    brandName: v.string(),
+    molecule: v.optional(v.string()),
+    mrp: v.string(),
+    rate: v.string(),
+    images: v.array(v.id("_storage")),
+    description: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const productId = await ctx.db.insert("products", {
+      name: args.name,
+      brandName: args.brandName,
+      molecule: args.molecule,
+      mrp: args.mrp,
+      rate: args.rate,
+      images: args.images,
+      description: args.description,
+    });
+    return productId;
+  },
+});
+
+products: defineTable({
+  name: v.string(),
+  brandName: v.string(),
+  molecule: v.optional(v.string()),
+  mrp: v.string(),
+  rate: v.string(),
+  images: v.array(v.id("_storage")),
+  description: v.optional(v.string()),
+}).index("by_name", ["name"]),
+
+const productId = await ctx.db.insert("products", {
+  name: args.name,
+  brandName: args.brandName,
+  mrp: args.mrp,
+  rate: args.rate,
+  images: args.images,
+  description: args.description,
+});
+
+// 3. Check if the response indicates a product match (JSON format)
+// We'll try to parse it as JSON if it looks like it
+let messageToSend = aiResponse;
+let mediaToSend = null;
+
+try {
+    // Simple check if response is JSON
+    if (aiResponse.trim().startsWith("{") && aiResponse.trim().endsWith("}")) {
+        const parsed = JSON.parse(aiResponse);
+        if (parsed.productName) {
+            // Find the product
+            const product = products.find(p => p.name.toLowerCase() === parsed.productName.toLowerCase());
+            if (product) {
+                messageToSend = `Here are the details for ${product.name}:\nBrand: ${product.brandName}\nMolecule: ${product.molecule || "N/A"}\nMRP: ${product.mrp}\nRate: ${product.rate}\n${product.description || ""}`;
+                
+                if (product.images && product.images.length > 0) {
+                    mediaToSend = {
+                        type: "text",
+                        text: `Here are the details for ${product.name}:\nBrand: ${product.brandName}\nMolecule: ${product.molecule || "N/A"}\nMRP: ${product.mrp}\nRate: ${product.rate}\n${product.description || ""}`,
+                    };
+                }
+            }
+        }
+    }
+} catch (error) {
+    // If parsing fails, use the original response
+    messageToSend = aiResponse;
+}

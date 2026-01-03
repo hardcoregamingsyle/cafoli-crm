@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { LeadReminders } from "./LeadReminders";
 import { MandatoryFollowUpPopup } from "./MandatoryFollowUpPopup";
 import { ColdCallerPopup } from "@/components/ColdCallerPopup";
+import { ProductUploadDialog } from "@/components/products/ProductUploadDialog";
 import { api } from "@/convex/_generated/api";
 
 interface AppLayoutProps {
@@ -235,6 +236,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
             </Link>
           );
         })}
+        
+        <div className="pt-2 mt-2 border-t border-sidebar-border/50">
+           <ProductUploadDialog disabled={location.pathname === "/whatsapp"} />
+        </div>
       </div>
 
       <div className="p-4 border-t border-sidebar-border">

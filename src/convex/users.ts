@@ -1,5 +1,5 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { query, mutation, QueryCtx, internalQuery, internalMutation } from "./_generated/server";
+import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { ROLES } from "./schema";
 
@@ -285,5 +285,15 @@ export const createAccount = mutation({
       role: ROLES.STAFF,
       passwordHash: args.password,
     });
+  },
+});
+
+export const getSystemUser = query({
+  args: {},
+  handler: async (ctx) => {
+    // Return the first admin user or a specific system user
+    // For now, just return the first user found, preferably admin
+    const user = await ctx.db.query("users").filter(q => q.eq(q.field("role"), "admin")).first();
+    return user || await ctx.db.query("users").first();
   },
 });

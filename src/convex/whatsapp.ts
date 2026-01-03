@@ -331,7 +331,7 @@ export const handleIncomingMessage = internalAction({
         }
 
         // Store incoming message
-        await ctx.runMutation("whatsappMutations:storeMessage" as any, {
+        const messageId = await ctx.runMutation("whatsappMutations:storeMessage" as any, {
           leadId,
           phoneNumber: args.from,
           content: args.text,
@@ -356,6 +356,33 @@ export const handleIncomingMessage = internalAction({
           } catch (error) {
             console.error("Error sending welcome message:", error);
           }
+        } else {
+            // TRIGGER AUTO REPLY FOR EXISTING LEADS
+            // We only auto-reply to text messages for now to avoid loops or confusion with media
+            if (args.type === "text") {
+                console.log(`Triggering auto-reply for lead ${leadId}`);
+                // We use runAction to call the public action (or we can make it internal)
+                // Since generateAndSendAiReply is public, we use api.whatsappAi
+                // But we are in an internalAction, so we can call public actions via ctx.runAction(api...)
+                
+                // We need a userId. We'll use a system user or just pass undefined if we handle it.
+                // I updated generateAndSendAiReply to make userId optional.
+                
+                // Get recent messages for context
+                const recentMessages = await ctx.runQuery(api.whatsappQueries.getChatMessages, { leadId });
+                const contextMessages = recentMessages.slice(-5).map((m: any) => ({
+                    role: m.direction === "outbound" ? "assistant" : "user",
+                    content: m.content
+                }));
+
+                await ctx.runAction(api.whatsappAi.generateAndSendAiReply, {
+                    leadId,
+                    phoneNumber: args.from,
+                    context: { recentMessages: contextMessages },
+                    prompt: args.text, // Use the incoming message as the prompt/trigger
+                    isAutoReply: true
+                });
+            }
         }
 
         console.log(`Stored incoming message from ${args.from} for lead ${leadId}`);

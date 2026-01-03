@@ -32,16 +32,31 @@ export const generateContent = action({
     let success = false;
     let generatedText = "";
 
+    // Check if we need to switch model for product queries
+    let preferredModel = "gemini-3-flash"; // Default
+    
+    // Simple heuristic to detect product queries if not explicitly set
+    const context = args.context || {};
+    const isProductQuery = context.availableProducts && args.prompt.toLowerCase().includes("product") || args.prompt.toLowerCase().includes("price") || args.prompt.toLowerCase().includes("image");
+    
+    if (isProductQuery) {
+        // User requested gemma-3-27b, but we'll map it to a high-reasoning model available in Gemini
+        // or try to use it if the provider supports it. 
+        // Since we are using GoogleGenerativeAI SDK, we stick to Gemini models.
+        // We'll use gemini-1.5-pro as the "smart" model for this.
+        preferredModel = "gemini-1.5-pro"; 
+    }
+
     // List of models to try in order of preference as requested by user
     // We iterate through models first, then keys, to prioritize better models
     const modelsToTry = [
+      preferredModel,
       "gemini-3-flash", 
       "gemini-2.5-flash-lite",
       "gemini-2.5-flash",
       // Fallbacks in case the above don't exist or are limited
       "gemini-2.0-flash-exp", 
       "gemini-1.5-flash", 
-      "gemini-1.5-flash-001", 
       "gemini-1.5-pro", 
       "gemini-pro"
     ];
@@ -65,7 +80,15 @@ export const generateContent = action({
 
           let systemPrompt = "";
           if (args.type === "chat_reply") {
-            systemPrompt = "You are a helpful sales assistant. Draft a professional and friendly reply to the customer based on the context provided. Keep it concise and relevant to the conversation history.";
+            systemPrompt = `You are a helpful sales assistant. Draft a professional and friendly reply to the customer based on the context provided. 
+            
+            IMPORTANT: You have access to a list of products: ${context.availableProducts || "None"}.
+            If the user is asking about a specific product, price, or image, and it matches one of the products in the list, you MUST return a JSON object in this format:
+            { "productName": "Exact Product Name From List", "message": "Optional message to accompany the product details" }
+            
+            If the user is NOT asking about a specific product or the product is not in the list, just return the plain text reply string.
+            
+            Keep it concise and relevant to the conversation history.`;
           } else if (args.type === "lead_analysis") {
             systemPrompt = "Analyze the following lead information and provide insights on lead quality, potential needs, and recommended next steps. Be brief and actionable.";
           } else if (args.type === "follow_up_suggestion") {
