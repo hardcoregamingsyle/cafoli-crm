@@ -277,6 +277,39 @@ export const assignLead = mutation({
   },
 });
 
+export const unassignLead = mutation({
+  args: {
+    leadId: v.id("leads"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) throw new Error("Unauthorized");
+
+    const lead = await ctx.db.get(args.leadId);
+    if (!lead) throw new Error("Lead not found");
+
+    // Allow if user is admin OR if user is the one assigned to the lead
+    if (user.role !== ROLES.ADMIN && lead.assignedTo !== args.userId) {
+      throw new Error("You can only unassign leads assigned to you");
+    }
+
+    await ctx.db.patch(args.leadId, {
+      assignedTo: undefined,
+      nextFollowUpDate: undefined,
+      lastActivity: Date.now(),
+    });
+
+    // Log activity
+    await ctx.scheduler.runAfter(0, internal.activityLogs.logActivity, {
+      userId: args.userId,
+      category: "Leads: Assignment",
+      action: "Unassigned lead",
+      leadId: args.leadId,
+    });
+  },
+});
+
 export const addComment = mutation({
   args: {
     leadId: v.id("leads"),

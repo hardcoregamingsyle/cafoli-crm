@@ -54,6 +54,7 @@ export default function Leads() {
   const allUsers = useQuery(api.users.getAllUsers, user ? { userId: user._id } : "skip") || [];
 
   const assignLead = useMutation(api.leads.standard.assignLead);
+  const unassignLead = useMutation(api.leads.standard.unassignLead);
   const unassignIdle = useMutation(api.coldCallerLeads.unassignColdCallerLeadsWithoutFollowUp);
 
   const handleLeadSelect = (id: Id<"leads">) => {
@@ -65,6 +66,18 @@ export default function Leads() {
     setLeadToAssign(leadId);
     setFollowUpDate("");
     setIsAssignDialogOpen(true);
+  };
+
+  const handleUnassign = async (leadId: Id<"leads">) => {
+    if (!user) return;
+    if (!confirm("Are you sure you want to unassign this lead? It will return to the unassigned pool.")) return;
+    try {
+      await unassignLead({ leadId, userId: user._id });
+      toast.success("Lead unassigned successfully");
+    } catch (error) {
+      toast.error("Failed to unassign lead");
+      console.error(error);
+    }
   };
 
   const handleAssignToUser = async (leadId: Id<"leads">, userId: Id<"users">) => {
@@ -322,6 +335,7 @@ export default function Leads() {
                   onSelect={handleLeadSelect}
                   onAssignToSelf={handleAssignToSelf}
                   onAssignToUser={handleAssignToUser}
+                  onUnassign={filter === "mine" || user?.role === "admin" ? handleUnassign : undefined}
                   onOpenWhatsApp={handleOpenWhatsApp}
                 />
               ))}

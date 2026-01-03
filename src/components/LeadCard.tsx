@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Doc, Id } from "@/convex/_generated/dataModel";
-import { UserPlus, ThumbsUp, MessageCircle } from "lucide-react";
+import { UserPlus, ThumbsUp, MessageCircle, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 
 interface LeadCardProps {
@@ -20,6 +20,7 @@ interface LeadCardProps {
   onSelect: (id: Id<"leads">) => void;
   onAssignToSelf: (id: Id<"leads">) => void;
   onAssignToUser: (leadId: Id<"leads">, userId: Id<"users">) => void;
+  onUnassign?: (leadId: Id<"leads">) => void;
   onOpenWhatsApp?: (leadId: Id<"leads">) => void;
 }
 
@@ -33,6 +34,7 @@ export function LeadCard({
   onSelect,
   onAssignToSelf,
   onAssignToUser,
+  onUnassign,
   onOpenWhatsApp,
 }: LeadCardProps) {
   const hasUnreadMessages = (lead.unreadCount ?? 0) > 0;
@@ -133,6 +135,21 @@ export function LeadCard({
             </Button>
           )}
           
+          {onUnassign && lead.assignedTo && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+              onClick={(e) => {
+                e.stopPropagation();
+                onUnassign(lead._id);
+              }}
+            >
+              <UserMinus className="h-3 w-3 mr-1" />
+              Unassign
+            </Button>
+          )}
+
           {isUnassignedView && !lead.assignedTo && !viewIrrelevant && (
             <>
               {!isAdmin ? (
