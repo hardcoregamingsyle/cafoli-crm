@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Download, RefreshCw, Users, FolderClock } from "lucide-react";
+import { Download, RefreshCw, Users, FolderClock, Mail } from "lucide-react";
 import { useRef } from "react";
 
 interface AdminActionsProps {
@@ -11,12 +11,14 @@ interface AdminActionsProps {
   onDownloadAllLeads: () => void;
   onAutoAssignLeads: () => void;
   onSyncPharmavends: () => void;
+  onSendTestReport: () => void;
   isImporting: boolean;
   isStandardizing: boolean;
   isMarkingColdCaller: boolean;
   isSendingWelcome: boolean;
   isAutoAssigning: boolean;
   isSyncingPharmavends: boolean;
+  isSendingReport: boolean;
 }
 
 export default function AdminActions({
@@ -28,12 +30,14 @@ export default function AdminActions({
   onDownloadAllLeads,
   onAutoAssignLeads,
   onSyncPharmavends,
+  onSendTestReport,
   isImporting,
   isStandardizing,
   isMarkingColdCaller,
   isSendingWelcome,
   isAutoAssigning,
   isSyncingPharmavends,
+  isSendingReport,
 }: AdminActionsProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -102,6 +106,24 @@ export default function AdminActions({
       >
         <RefreshCw className={`mr-2 h-4 w-4 ${isSendingWelcome ? 'animate-spin' : ''}`} />
         {isSendingWelcome ? "Sending..." : "Send Welcome to Recent Leads"}
+      </Button>
+
+      <Button 
+        variant="outline" 
+        onClick={onAutoAssignLeads}
+        disabled={isAutoAssigning}
+      >
+        <Users className={`mr-2 h-4 w-4 ${isAutoAssigning ? 'animate-spin' : ''}`} />
+        {isAutoAssigning ? "Assigning..." : "Auto-Assign Leads"}
+      </Button>
+
+      <Button 
+        variant="outline" 
+        onClick={onSendTestReport}
+        disabled={isSendingReport}
+      >
+        <Mail className={`mr-2 h-4 w-4 ${isSendingReport ? 'animate-spin' : ''}`} />
+        {isSendingReport ? "Sending..." : "Send Test Report"}
       </Button>
 
       <Button variant="outline" onClick={onDownloadAllLeads}>

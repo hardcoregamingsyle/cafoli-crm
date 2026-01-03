@@ -35,6 +35,7 @@ export default function Admin() {
   const sendWelcomeToRecentLeads = useAction(api.whatsappTemplatesActions.sendWelcomeToRecentLeads);
   const autoAssignUnassignedLeads = useMutation(api.leads.autoAssign.autoAssignUnassignedLeads);
   const syncPharmavends = useAction(api.pharmavends.manualSyncPharmavends);
+  const sendTestReport = useAction(api.reportPdfGenerator.sendTestReport);
 
   const [isStandardizing, setIsStandardizing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -43,6 +44,7 @@ export default function Admin() {
   const [isAllocatingColdCaller, setIsAllocatingColdCaller] = useState(false);
   const [isAutoAssigning, setIsAutoAssigning] = useState(false);
   const [isSyncingPharmavends, setIsSyncingPharmavends] = useState(false);
+  const [isSendingReport, setIsSendingReport] = useState(false);
 
   const handleCreateUser = async (userData: {
     email: string;
@@ -200,6 +202,27 @@ export default function Admin() {
       toast.error(error instanceof Error ? error.message : "Failed to auto-assign leads");
     } finally {
       setIsAutoAssigning(false);
+    }
+  };
+
+  const handleSendTestReport = async () => {
+    if (!currentUser || !currentUser.email) {
+      toast.error("You must be logged in and have an email address");
+      return;
+    }
+
+    setIsSendingReport(true);
+    try {
+      const result = await sendTestReport({ email: currentUser.email });
+      if (result.success) {
+        toast.success(`Test report sent to ${currentUser.email}`);
+      } else {
+        toast.error(`Failed to send report: ${result.error}`);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to send test report");
+    } finally {
+      setIsSendingReport(false);
     }
   };
 
@@ -422,12 +445,14 @@ export default function Admin() {
               onDownloadAllLeads={handleDownloadCSV}
               onAutoAssignLeads={handleAutoAssignLeads}
               onSyncPharmavends={handleSyncPharmavends}
+              onSendTestReport={handleSendTestReport}
               isImporting={isImporting}
               isStandardizing={isStandardizing}
               isMarkingColdCaller={isMarkingColdCaller}
               isSendingWelcome={isSendingWelcome}
               isAutoAssigning={isAutoAssigning}
               isSyncingPharmavends={isSyncingPharmavends}
+              isSendingReport={isSendingReport}
             />
             <AllocateColdCallerDialog
               availableLeads={unallocatedColdCallerCount ?? 0}

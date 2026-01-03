@@ -3,6 +3,7 @@ import { query, internalQuery } from "./_generated/server";
 import { ROLES } from "./schema";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { Id } from "./_generated/dataModel";
+import { LOG_CATEGORIES } from "./activityLogs";
 
 export const getReportStats = internalQuery({
   args: {
@@ -59,6 +60,119 @@ export const getReportStats = internalQuery({
     }
 
     return generateStats(ctx, leads, followups, isAdmin);
+  },
+});
+
+export const getDetailedReportStats = internalQuery({
+  args: {
+    startDate: v.number(),
+    endDate: v.number(),
+  },
+  handler: async (ctx, args) => {
+    // 1. Overall Stats
+    const leads = await ctx.db
+      .query("leads")
+      .withIndex("by_creation_time", (q) => 
+        q.gte("_creationTime", args.startDate).lte("_creationTime", args.endDate)
+      )
+      .collect();
+
+    const followups = await ctx.db
+      .query("followups")
+      .withIndex("by_scheduled_at", (q) => 
+        q.gte("scheduledAt", args.startDate).lte("scheduledAt", args.endDate)
+      )
+      .collect();
+
+    const overallStats = await generateStats(ctx, leads, followups, true);
+
+    // 2. Per User Stats
+    const users = await ctx.db.query("users").collect();
+    const staffUsers = users.filter(u => u.role === "staff" || u.role === "admin");
+
+    // Fetch Activity Logs for Emails
+    const emailLogs = await ctx.db
+      .query("activityLogs")
+      .withIndex("by_timestamp", (q) => q.gte("timestamp", args.startDate).lte("timestamp", args.endDate))
+      .filter(q => q.eq(q.field("category"), LOG_CATEGORIES.EMAIL))
+      .collect();
+
+    // Fetch Messages for WhatsApp
+    const messages = await ctx.db
+      .query("messages")
+      .withIndex("by_creation_time", (q) => q.gte("_creationTime", args.startDate).lte("_creationTime", args.endDate))
+      .collect();
+
+    // Helper to map message to user
+    // We need to cache chat -> lead -> assignedTo
+    const chatMap = new Map<string, string>(); // chatId -> leadId
+    const leadMap = new Map<string, string>(); // leadId -> userId
+
+    // Pre-fetch chats and leads involved in messages
+    const chatIds = [...new Set(messages.map(m => m.chatId))];
+    
+    // We can't fetch all chats efficiently if there are many, but we can try to fetch them as needed or in batches.
+    // For now, let's fetch all chats (might be heavy, but safe for now) or just iterate.
+    // Better: fetch chats by Id.
+    
+    for (const chatId of chatIds) {
+      const chat = await ctx.db.get(chatId);
+      if (chat) {
+        chatMap.set(chatId, chat.leadId);
+        if (!leadMap.has(chat.leadId)) {
+          const lead = await ctx.db.get(chat.leadId);
+          if (lead && lead.assignedTo) {
+            leadMap.set(chat.leadId, lead.assignedTo);
+          }
+        }
+      }
+    }
+
+    const userStats = staffUsers.map(user => {
+      const userId = user._id;
+      
+      // Emails
+      const emailsSent = emailLogs.filter(l => l.userId === userId && l.action.includes("Sent")).length;
+
+      // WhatsApp
+      let whatsappSent = 0;
+      let whatsappReceived = 0;
+      let whatsappTemplates = 0;
+      let whatsappOutside24h = 0;
+
+      messages.forEach(m => {
+        const leadId = chatMap.get(m.chatId);
+        if (leadId) {
+          const assignedTo = leadMap.get(leadId);
+          if (assignedTo === userId) {
+            if (m.direction === "outbound") {
+              whatsappSent++;
+              if (m.messageType === "template") {
+                whatsappTemplates++;
+                whatsappOutside24h++; // Assuming templates are the ones outside 24h/chargeable
+              }
+            } else if (m.direction === "inbound") {
+              whatsappReceived++;
+            }
+          }
+        }
+      });
+
+      return {
+        userId,
+        name: user.name || "Unknown",
+        emailsSent,
+        whatsappSent,
+        whatsappReceived,
+        whatsappTemplates,
+        whatsappOutside24h
+      };
+    });
+
+    return {
+      overall: overallStats,
+      userStats
+    };
   },
 });
 
