@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useAction, useMutation, useQuery } from "convex/react";
-import { Check, CheckCheck, MessageSquare, MoreVertical, Paperclip, Phone, Reply, Send, Smile, Video, X, AlertTriangle, ImageIcon, HelpCircle, FileText } from "lucide-react";
+import { Check, CheckCheck, MessageSquare, MoreVertical, Paperclip, Phone, Reply, Send, Smile, Video, X, AlertTriangle, ImageIcon, HelpCircle, FileText, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/use-auth";
 
 interface ChatWindowProps {
   selectedLeadId: Id<"leads">;
@@ -17,15 +18,18 @@ interface ChatWindowProps {
 }
 
 export function ChatWindow({ selectedLeadId, selectedLead }: ChatWindowProps) {
+  const { user } = useAuth();
   const messages = useQuery(api.whatsappQueries.getChatMessages, { leadId: selectedLeadId }) || [];
   
   const sendWhatsAppMessage = useAction(api.whatsapp.sendWhatsAppMessage);
   const sendWhatsAppMedia = useAction(api.whatsapp.sendWhatsAppMedia);
   const generateUploadUrl = useMutation(api.whatsappStorage.generateUploadUrl);
   const markChatAsRead = useMutation(api.whatsappMutations.markChatAsRead);
+  const generateAiContent = useAction(api.ai.generateContent);
 
   const [whatsappMessage, setWhatsappMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [replyingTo, setReplyingTo] = useState<any>(null);
@@ -165,6 +169,38 @@ export function ChatWindow({ selectedLeadId, selectedLead }: ChatWindowProps) {
       toast.error(error instanceof Error ? error.message : "Failed to send message");
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleAiReply = async () => {
+    if (!user || !selectedLead) return;
+    
+    // Get last 10 messages for context
+    const recentMessages = messages.slice(-10).map((m: any) => ({
+      role: m.direction === "outbound" ? "assistant" : "user",
+      content: m.content
+    }));
+
+    setIsGeneratingAi(true);
+    try {
+      const result = await generateAiContent({
+        prompt: "Draft a reply to this conversation",
+        type: "chat_reply",
+        context: { 
+          leadName: selectedLead.name,
+          recentMessages 
+        },
+        userId: user._id,
+        leadId: selectedLead._id,
+      });
+      
+      setWhatsappMessage(result);
+      toast.success("AI reply generated");
+    } catch (error) {
+      toast.error("Failed to generate AI reply");
+      console.error(error);
+    } finally {
+      setIsGeneratingAi(false);
     }
   };
 
@@ -443,6 +479,18 @@ export function ChatWindow({ selectedLeadId, selectedLead }: ChatWindowProps) {
             <Paperclip className="h-5 w-5" />
           </Button>
           <TemplatesDialog selectedLeadId={selectedLeadId} />
+          
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`h-10 w-10 ${isGeneratingAi ? "text-purple-600 animate-pulse" : "text-muted-foreground hover:text-purple-600"}`}
+            title="Generate AI Reply"
+            onClick={handleAiReply}
+            disabled={isSending || isUploading || !isWithinWindow || isGeneratingAi}
+          >
+            <Sparkles className="h-5 w-5" />
+          </Button>
+
           <div className="flex-1 relative">
             <Input
               placeholder={isWithinWindow ? "Type a message or / for commands..." : "Session expired. Send a template."}
@@ -450,7 +498,7 @@ export function ChatWindow({ selectedLeadId, selectedLead }: ChatWindowProps) {
               onChange={handleInputChange}
               onKeyPress={handleKeyPress}
               className="pr-10"
-              disabled={isSending || isUploading || !isWithinWindow}
+              disabled={isSending || isUploading || !isWithinWindow || isGeneratingAi}
             />
             <Button 
               variant="ghost" 

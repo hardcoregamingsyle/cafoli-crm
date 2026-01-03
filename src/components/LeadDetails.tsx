@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Doc, Id } from "@/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
-import { Calendar, Save, User, X, ThumbsUp, Trash2 } from "lucide-react";
+import { Calendar, Save, User, X, ThumbsUp, Trash2, Sparkles, MessageSquarePlus, BrainCircuit } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -32,7 +32,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
+import { useAction } from "convex/react";
 
 interface LeadDetailsProps {
   leadId: Id<"leads">;
@@ -47,7 +49,12 @@ export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
   const lead = useQuery(api.leadQueries.getLead, { id: leadId, userId: user?._id });
   const comments = useQuery(api.leadQueries.getComments, { leadId });
   const deleteLead = useMutation(api.leads.admin.deleteLead);
+  const generateAiContent = useAction(api.ai.generateContent);
   
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [showAiDialog, setShowAiDialog] = useState(false);
+
   const {
     isEditing,
     editedLead,
@@ -70,6 +77,63 @@ export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
   } = useLeadEditor({ lead, user });
 
   const [tempFollowUpDate, setTempFollowUpDate] = useState<string>("");
+
+  const handleAiAnalysis = async () => {
+    if (!user || !lead) return;
+    setIsAnalyzing(true);
+    try {
+      const result = await generateAiContent({
+        prompt: "Analyze this lead",
+        type: "lead_analysis",
+        context: lead,
+        userId: user._id,
+        leadId: lead._id,
+      });
+      setAiAnalysis(result);
+    } catch (error) {
+      toast.error("Failed to generate analysis");
+      console.error(error);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleAiFollowUpSuggestion = async () => {
+    if (!user || !lead) return;
+    setIsAnalyzing(true);
+    try {
+      const result = await generateAiContent({
+        prompt: "Suggest follow-up",
+        type: "follow_up_suggestion",
+        context: { ...lead, comments },
+        userId: user._id,
+        leadId: lead._id,
+      });
+      
+      // Try to parse JSON if the AI returns it as requested
+      try {
+        // Clean up markdown code blocks if present
+        const cleanResult = result.replace(/```json/g, '').replace(/```/g, '');
+        const parsedResult = JSON.parse(cleanResult);
+        // Assuming the AI returns a JSON object with a "suggestion" field
+        if (parsedResult.suggestion) {
+          // Extract the follow-up date from the suggestion
+          const followUpDate = parsedResult.suggestion.date;
+          if (followUpDate) {
+            handleNewFollowUpDate(new Date(followUpDate).getTime());
+          }
+        }
+      } catch (error) {
+        // If parsing fails, just use the raw result
+        console.log("Failed to parse AI response:", error);
+      }
+    } catch (error) {
+      toast.error("Failed to generate follow-up suggestion");
+      console.error(error);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   const handleDelete = async () => {
     if (!user || !lead) return;
