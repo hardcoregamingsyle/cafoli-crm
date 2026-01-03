@@ -302,8 +302,12 @@ export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
       </Dialog>
 
       {/* New Follow-up Date Dialog */}
-      <Dialog open={showNewFollowUpDialog} onOpenChange={setShowNewFollowUpDialog}>
-        <DialogContent>
+      <Dialog open={showNewFollowUpDialog} onOpenChange={() => {}}>
+        <DialogContent 
+          showCloseButton={false}
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>Set Next Follow-up</DialogTitle>
             <DialogDescription>
@@ -320,9 +324,6 @@ export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNewFollowUpDialog(false)}>
-              Cancel
-            </Button>
             <Button 
               onClick={() => {
                 if (tempFollowUpDate) {
