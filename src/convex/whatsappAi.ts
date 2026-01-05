@@ -185,7 +185,7 @@ export const generateAndSendAiReply = action({
             }
             // Handle Full Catalogue
             else if (parsed.fullCatalogue) {
-                messageToSend = `Here is the link to all our products and ranges: https://cafoli.in/allproduct.aspx 📚`;
+                messageToSend = `It sounds like you're looking for our full product catalog! You can find all of our products listed here: https://cafoli.in/allproduct.aspx 📚`;
                 // We do NOT send all PDFs individually anymore as per user request to send the link
                 rangePdfsToSend = []; 
             }

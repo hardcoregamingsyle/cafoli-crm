@@ -93,7 +93,7 @@ export const generateContent = action({
             - Example: If list has "Gynae Range (Division: Main)" and user asks for "gyno", return { "rangeName": "Gynae Range" }
             
             2. FULL CATALOGUE REQUESTS:
-            When a customer asks for "all products", "full catalog", "complete list", "send me all PDFs", "product list", "all ranges", "all divisions", "catalogs":
+            When a customer asks for "all products", "full catalog", "complete list", "send me all PDFs", "product list", "all ranges", "all divisions", "catalogs", "catalouge":
             - Respond with JSON: { "fullCatalogue": true }
             - IMPORTANT: ONLY use this if the user asks for ALL/EVERYTHING. If they ask for a specific one (e.g. "Gynecology"), do NOT use this.
             
