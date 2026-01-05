@@ -47,6 +47,7 @@ export default function Leads() {
   const [filterSidebarOpen, setFilterSidebarOpen] = useState(false);
   const [viewColdCallerLeads, setViewColdCallerLeads] = useState(false);
   const [viewIrrelevantLeads, setViewIrrelevantLeads] = useState(false);
+  const [targetUserId, setTargetUserId] = useState<Id<"users"> | null>(null);
 
   const allTags = useQuery(api.tags.getAllTags) || [];
   const uniqueSources = useQuery(api.leadQueries.getUniqueSources) || [];
@@ -81,7 +82,11 @@ export default function Leads() {
 
   const handleAssignToUser = async (leadId: Id<"leads">, userId: Id<"users">) => {
     if (!user) return;
-    await assignLead({ leadId, userId, adminId: user._id });
+    setLeadToAssign(leadId);
+    setFollowUpDate("");
+    setIsAssignDialogOpen(true);
+    // Store the target user ID for admin assignment
+    setTargetUserId(userId);
   };
 
   const getMinDateTime = () => {
@@ -430,7 +435,7 @@ export default function Leads() {
             try {
               await assignLead({
                 leadId: leadToAssign,
-                userId: user._id,
+                userId: targetUserId || user._id,
                 adminId: user._id,
                 nextFollowUpDate: new Date(followUpDate).getTime(),
               });
@@ -438,6 +443,7 @@ export default function Leads() {
               setIsAssignDialogOpen(false);
               setLeadToAssign(null);
               setFollowUpDate("");
+              setTargetUserId(null);
             } catch (error) {
               toast.error("Failed to assign lead");
             }
@@ -446,6 +452,7 @@ export default function Leads() {
             setIsAssignDialogOpen(false);
             setLeadToAssign(null);
             setFollowUpDate("");
+            setTargetUserId(null);
           }}
           followUpDate={followUpDate}
           setFollowUpDate={setFollowUpDate}

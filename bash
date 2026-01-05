@@ -1,1 +1,1 @@
-grep -r "sendWhatsAppMessage" src
+npx convex run test_ai_comprehensive:runComprehensiveTests
