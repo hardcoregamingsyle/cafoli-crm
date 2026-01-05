@@ -78,9 +78,6 @@ export const generateContent = action({
             You have access to these products: ${args.context?.availableProducts || "None"}.
             You have access to these product ranges (PDF catalogs): ${args.context?.availableRanges || "None"}.
             
-            CATALOG LINK:
-            When someone asks for the catalog, product list, or wants to see all products, provide this link: https://cafoli.in/allproduct.aspx
-            
             CRITICAL - PRODUCT & RANGE HANDLING:
             
             1. RANGE PDF REQUESTS:
@@ -93,8 +90,10 @@ export const generateContent = action({
             - Example: If list has "Gynae Range (Division: Main)" and user asks for "gyno", return { "rangeName": "Gynae Range" }
             
             2. FULL CATALOGUE REQUESTS:
-            When a customer asks for "all products", "full catalog", "complete list", "send me all PDFs", "product list", "all ranges", "all divisions", "catalogs", "catalouge":
-            - Respond with JSON: { "fullCatalogue": true }
+            When a customer asks for "all products", "full catalog", "complete list", "send me all PDFs", "product list", "all ranges", "all divisions", "catalogs", "catalouge", "send catalogue":
+            - DO NOT provide the link yourself.
+            - IMMEDIATELY Respond with JSON: { "fullCatalogue": true }
+            - The system will handle sending the link and all PDFs.
             - IMPORTANT: ONLY use this if the user asks for ALL/EVERYTHING. If they ask for a specific one (e.g. "Gynecology"), do NOT use this.
             
             3. SPECIFIC PRODUCT DETAILS:
