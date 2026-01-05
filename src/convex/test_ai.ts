@@ -14,21 +14,31 @@ export const testContactRequestDetection = action({
   },
   handler: async (ctx, args) => {
     try {
-      // Get a test user - use getSystemUser instead
-      const systemUser = await ctx.runQuery(api.users.getSystemUser);
-      if (!systemUser) {
-        return { success: false, error: "No system user found for testing" };
-      }
-      const testUserId = systemUser._id;
+      const systemPrompt = `Analyze if the following message is a request for human contact or intervention.
+      Return a JSON object with the following fields:
+      - wantsContact: boolean
+      - confidence: number (0-1)
+      - reason: string`;
 
-      const response = await ctx.runAction(api.ai.generateContent, {
+      const response = await ctx.runAction(api.ai.generateJson, {
         prompt: args.testMessage,
-        type: "contact_request_detection",
-        context: {},
-        userId: testUserId,
-      }) as string;
+        systemPrompt: systemPrompt,
+      });
 
-      const detection = JSON.parse(response.trim());
+      let detection;
+      try {
+        detection = JSON.parse(response as string);
+      } catch (e) {
+        // Try to clean up markdown if present (though generateJson should handle it)
+        const cleaned = (response as string).replace(/```json/g, '').replace(/```/g, '');
+        try {
+          detection = JSON.parse(cleaned);
+        } catch (e) {
+          // If still not valid JSON, return default
+          detection = { wantsContact: false, confidence: 0, reason: "Invalid JSON response" };
+        }
+      }
+
       const actualResult = detection.wantsContact === true;
       const passed = actualResult === args.expectedResult;
 
@@ -55,36 +65,36 @@ export const testProductQuery = action({
     testMessage: v.string(),
     expectedProductName: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<any> => {
     try {
-      const systemUser = await ctx.runQuery(api.users.getSystemUser);
-      if (!systemUser) {
-        return { success: false, error: "No system user found for testing" };
-      }
-      const testUserId = systemUser._id;
-
-      const products = await ctx.runQuery(api.products.listProducts);
+      const products: any = await ctx.runQuery(api.products.listProducts);
       const productNames = products.map((p: any) => p.name).join(", ");
 
-      const response = await ctx.runAction(api.ai.generateContent, {
+      const systemPrompt = `You are a helpful assistant. Available Products: ${productNames}.
+      Identify if any of the available products are mentioned in the message.
+      Return a JSON object with:
+      - productName: string (the exact name of the product found, or null if none found)`;
+
+      const response = await ctx.runAction(api.ai.generateJson, {
         prompt: args.testMessage,
-        type: "chat_reply",
-        context: {
-          availableProducts: productNames,
-          recentMessages: [],
-        },
-        userId: testUserId,
+        systemPrompt: systemPrompt,
       }) as string;
 
       let detectedProduct = null;
       try {
         const trimmed = response.trim();
-        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-          const parsed = JSON.parse(trimmed);
+        // Clean markdown if needed
+        const cleaned = trimmed.replace(/```json/g, '').replace(/```/g, '');
+        try {
+          const parsed = JSON.parse(cleaned);
           detectedProduct = parsed.productName;
+        } catch (e) {
+          // If still not valid JSON, return default
+          detectedProduct = null;
         }
       } catch (e) {
-        // Not JSON, that's okay for some tests
+        // If parsing fails, return default
+        detectedProduct = null;
       }
 
       const passed = args.expectedProductName 

@@ -1,4 +1,25 @@
-const match = text.match(jsonBlockRegex);
+"use node";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { ActionCtx } from "../_generated/server";
+import { internal } from "../_generated/api";
+import { Doc, Id } from "../_generated/dataModel";
+
+export const modelsToTry = [
+  "gemini-2.0-flash",
+  "gemini-3-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-2.5-flash",
+  "gemini-2.0-flash-exp",
+  "gemini-1.5-flash",
+  "gemini-1.5-pro",
+  "gemini-pro"
+];
+
+export function extractJsonFromMarkdown(text: string): string {
+  // Try to find JSON inside markdown code blocks
+  // Using new RegExp with hex code for backtick (\x60) to avoid markdown parsing issues
+  const jsonBlockRegex = new RegExp("\\x60{3}(?:json)?\\s*([\\s\\S]*?)\\s*\\x60{3}");
+  const match = text.match(jsonBlockRegex);
   if (match && match[1]) {
     return match[1].trim();
   }

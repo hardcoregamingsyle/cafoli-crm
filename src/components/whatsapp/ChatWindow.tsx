@@ -22,8 +22,8 @@ export function ChatWindow({ selectedLeadId, selectedLead }: ChatWindowProps) {
   const { user } = useAuth();
   const messages = useQuery(api.whatsappQueries.getChatMessages, { leadId: selectedLeadId }) || [];
   
-  const sendWhatsAppMessage = useAction(api.whatsapp.sendWhatsAppMessage);
-  const sendWhatsAppMedia = useAction(api.whatsapp.sendWhatsAppMedia);
+  const sendWhatsAppMessage = useAction(api.whatsapp.messages.send);
+  const sendWhatsAppMedia = useAction(api.whatsapp.messages.sendMedia);
   const generateUploadUrl = useMutation(api.whatsappStorage.generateUploadUrl);
   const markChatAsRead = useMutation(api.whatsappMutations.markChatAsRead);
   const generateAndSendAiReply = useAction(api.whatsappAi.generateAndSendAiReply);

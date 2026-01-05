@@ -29,7 +29,7 @@ export function BlockConfigurationPanel({
   onUpdateBlockData,
 }: BlockConfigurationPanelProps) {
   const { user } = useAuth();
-  const generateAiContent = useAction(api.ai.generateContent);
+  const generateAi = useAction(api.ai.generate);
   const [isGenerating, setIsGenerating] = useState(false);
 
   const handleAiGenerateEmail = async () => {
@@ -43,11 +43,9 @@ export function BlockConfigurationPanel({
 
     setIsGenerating(true);
     try {
-      const content = await generateAiContent({
+      const content = await generateAi({
         prompt: `Write an email body for the subject: ${subject}`,
-        type: "campaign_email_content",
-        context: { subject },
-        userId: user._id,
+        systemPrompt: "You are an expert copywriter for email campaigns.",
       });
 
       onUpdateBlockData(selectedBlock.id, { content });

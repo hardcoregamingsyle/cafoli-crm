@@ -49,7 +49,8 @@ export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
   const lead = useQuery(api.leadQueries.getLead, { id: leadId, userId: user?._id });
   const comments = useQuery(api.leadQueries.getComments, { leadId });
   const deleteLead = useMutation(api.leads.admin.deleteLead);
-  const generateAiContent = useAction(api.ai.generateContent);
+  const generateAi = useAction(api.ai.generate);
+  const generateAiJson = useAction(api.ai.generateJson);
   
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
@@ -82,12 +83,9 @@ export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
     if (!user || !lead) return;
     setIsAnalyzing(true);
     try {
-      const result = await generateAiContent({
-        prompt: "Analyze this lead",
-        type: "lead_analysis",
-        context: lead,
-        userId: user._id,
-        leadId: lead._id,
+      const result = await generateAi({
+        prompt: `Analyze this lead based on the following details:\n${JSON.stringify(lead, null, 2)}`,
+        systemPrompt: "You are an expert CRM analyst. Analyze the lead and provide insights.",
       });
       setAiAnalysis(result);
     } catch (error) {
@@ -102,12 +100,9 @@ export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
     if (!user || !lead) return;
     setIsAnalyzing(true);
     try {
-      const result = await generateAiContent({
-        prompt: "Suggest follow-up",
-        type: "follow_up_suggestion",
-        context: { ...lead, comments },
-        userId: user._id,
-        leadId: lead._id,
+      const result = await generateAiJson({
+        prompt: `Suggest a follow-up date and strategy for this lead. Context:\n${JSON.stringify({ ...lead, comments }, null, 2)}`,
+        systemPrompt: "You are an expert CRM assistant. Suggest a follow-up. Return a JSON object with a 'suggestion' field containing a 'date' (ISO string) and 'reason'.",
       });
       
       // Try to parse JSON if the AI returns it as requested

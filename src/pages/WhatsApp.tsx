@@ -26,7 +26,7 @@ export default function WhatsApp() {
   const [selectedLeadId, setSelectedLeadId] = useState<Id<"leads"> | null>(null);
   const selectedLead = leads.find((l: any) => l._id === selectedLeadId);
 
-  const updateInterface = useAction(api.whatsapp.updateWhatsAppInterface);
+  const updateInterface = useAction(api.whatsapp.config.updateInterface);
   const sendBulkMessages = useAction(api.whatsappBulk.sendBulkWhatsAppMessages);
   const [isUpdating, setIsUpdating] = useState(false);
   

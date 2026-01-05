@@ -2,20 +2,7 @@
 import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { Doc, Id } from "./_generated/dataModel";
-
-// Helper to strip markdown code blocks from JSON
-function extractJsonFromMarkdown(text: string): string {
-  // Try to find JSON inside markdown code blocks
-  const jsonBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/;
-  const match = text.match(jsonBlockRegex);
-  if (match && match[1]) {
-    return match[1].trim();
-  }
-  // fallback: return entire text if no code block found
-  return text;
-}
+import { generateWithGemini, extractJsonFromMarkdown } from "./lib/gemini";
 
 export const generateAndSendAiReply = action({
   args: {
@@ -29,12 +16,6 @@ export const generateAndSendAiReply = action({
     isAutoReply: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-    if (!apiKey) {
-      console.error("Gemini API key not configured");
-      return;
-    }
-
     try {
       // Fetch available resources for context
       const products = await ctx.runQuery(api.products.listProducts);
@@ -42,9 +23,6 @@ export const generateAndSendAiReply = action({
 
       const productNames = products.map((p: any) => p.name).join(", ");
       const pdfNames = rangePdfs.map((p: any) => p.name).join(", ");
-
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
       const systemPrompt = `You are a helpful CRM assistant for a pharmaceutical company.
       You are chatting with a lead on WhatsApp.
@@ -67,9 +45,7 @@ export const generateAndSendAiReply = action({
       const chatContext = JSON.stringify(args.context);
       const userPrompt = `Context: ${chatContext}\n\nUser Message: ${args.prompt}`;
 
-      const result = await model.generateContent([systemPrompt, userPrompt]);
-      const response = result.response;
-      const text = response.text();
+      const { text } = await generateWithGemini(ctx, systemPrompt, userPrompt, { jsonMode: true });
       
       const jsonStr = extractJsonFromMarkdown(text);
       let aiAction;
@@ -85,7 +61,7 @@ export const generateAndSendAiReply = action({
 
       // Execute Action
       if (aiAction.action === "reply") {
-        await ctx.runAction(api.whatsapp.sendWhatsAppMessage, {
+        await ctx.runAction(api.whatsapp.messages.send, {
           leadId: args.leadId,
           phoneNumber: args.phoneNumber,
           message: aiAction.text,
@@ -99,7 +75,7 @@ export const generateAndSendAiReply = action({
            // Get metadata for mime type
            const metadata = await ctx.runQuery(internal.products.getStorageMetadata, { storageId });
            
-           await ctx.runAction(api.whatsapp.sendWhatsAppMedia, {
+           await ctx.runAction(api.whatsapp.messages.sendMedia, {
              leadId: args.leadId,
              phoneNumber: args.phoneNumber,
              storageId: storageId,
@@ -108,7 +84,7 @@ export const generateAndSendAiReply = action({
              message: aiAction.text
            });
         } else {
-           await ctx.runAction(api.whatsapp.sendWhatsAppMessage, {
+           await ctx.runAction(api.whatsapp.messages.send, {
              leadId: args.leadId,
              phoneNumber: args.phoneNumber,
              message: `I couldn't find the image for ${aiAction.resource_name}. ${aiAction.text}`,
@@ -119,7 +95,7 @@ export const generateAndSendAiReply = action({
          if (pdf) {
            const metadata = await ctx.runQuery(internal.products.getStorageMetadata, { storageId: pdf.storageId });
            
-           await ctx.runAction(api.whatsapp.sendWhatsAppMedia, {
+           await ctx.runAction(api.whatsapp.messages.sendMedia, {
              leadId: args.leadId,
              phoneNumber: args.phoneNumber,
              storageId: pdf.storageId,
@@ -128,14 +104,14 @@ export const generateAndSendAiReply = action({
              message: aiAction.text
            });
          } else {
-            await ctx.runAction(api.whatsapp.sendWhatsAppMessage, {
+            await ctx.runAction(api.whatsapp.messages.send, {
              leadId: args.leadId,
              phoneNumber: args.phoneNumber,
              message: `I couldn't find the PDF for ${aiAction.resource_name}. ${aiAction.text}`,
            });
          }
       } else if (aiAction.action === "intervention_request") {
-          await ctx.runAction(api.whatsapp.sendWhatsAppMessage, {
+          await ctx.runAction(api.whatsapp.messages.send, {
             leadId: args.leadId,
             phoneNumber: args.phoneNumber,
             message: aiAction.text,
@@ -155,7 +131,7 @@ export const generateAndSendAiReply = action({
               console.error("Failed to create intervention request", e);
           }
       } else if (aiAction.action === "contact_request") {
-          await ctx.runAction(api.whatsapp.sendWhatsAppMessage, {
+          await ctx.runAction(api.whatsapp.messages.send, {
             leadId: args.leadId,
             phoneNumber: args.phoneNumber,
             message: aiAction.text,
@@ -179,7 +155,7 @@ export const generateAndSendAiReply = action({
 
     } catch (error) {
       console.error("AI Generation Error", error);
-      await ctx.runAction(api.whatsapp.sendWhatsAppMessage, {
+      await ctx.runAction(api.whatsapp.messages.send, {
           leadId: args.leadId,
           phoneNumber: args.phoneNumber,
           message: "I'm having trouble processing your request right now. Please try again later.",
