@@ -328,6 +328,16 @@ export default defineSchema({
   .index("by_status", ["status"])
   .index("by_lead", ["leadId"]),
 
+  contactRequests: defineTable({
+    leadId: v.id("leads"),
+    assignedTo: v.id("users"),
+    customerMessage: v.string(),
+    status: v.union(v.literal("pending"), v.literal("acknowledged"), v.literal("completed")),
+    acknowledgedAt: v.optional(v.number()),
+  })
+    .index("by_assignedTo_and_status", ["assignedTo", "status"])
+    .index("by_leadId", ["leadId"]),
+
   quickReplies: defineTable({
     name: v.string(),
     message: v.string(),

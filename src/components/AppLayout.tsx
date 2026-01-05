@@ -30,6 +30,7 @@ import { ProductUploadDialog } from "@/components/products/ProductUploadDialog";
 import { InterventionPopup } from "./InterventionPopup";
 import { api } from "@/convex/_generated/api";
 import { FollowUpNotifications } from "./FollowUpNotifications";
+import { ContactRequestPopup } from "./ContactRequestPopup";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -283,13 +284,13 @@ export default function AppLayout({ children }: AppLayoutProps) {
   );
 
   return (
-    <div className="min-h-screen bg-background flex">
-      {/* Popups Sequence: 
-          1. Follow-up Notifications (10min, 5min, 1min, now)
-          2. Mandatory Follow Up (Set follow up date)
-          3. Lead Reminders (Hot/Mature then Cold)
-          4. Intervention Requests (Product not found)
-      */}
+    <div className="min-h-screen bg-background">
+      {/* Contact Request Popup - Highest Priority */}
+      <ContactRequestPopup />
+      
+      {/* Follow-up Notifications */}
+      <FollowUpNotifications />
+      
       {user && <FollowUpNotifications />}
       
       {leadsWithoutFollowUp && leadsWithoutFollowUp.length > 0 ? (

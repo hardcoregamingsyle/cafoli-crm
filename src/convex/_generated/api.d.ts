@@ -23,6 +23,7 @@ import type * as campaignQueries from "../campaignQueries.js";
 import type * as campaignSchema from "../campaignSchema.js";
 import type * as campaigns from "../campaigns.js";
 import type * as coldCallerLeads from "../coldCallerLeads.js";
+import type * as contactRequests from "../contactRequests.js";
 import type * as crons from "../crons.js";
 import type * as debug from "../debug.js";
 import type * as emailActions from "../emailActions.js";
@@ -85,6 +86,7 @@ declare const fullApi: ApiFromModules<{
   campaignSchema: typeof campaignSchema;
   campaigns: typeof campaigns;
   coldCallerLeads: typeof coldCallerLeads;
+  contactRequests: typeof contactRequests;
   crons: typeof crons;
   debug: typeof debug;
   emailActions: typeof emailActions;

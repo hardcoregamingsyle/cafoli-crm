@@ -43,21 +43,55 @@ export const generateAndSendAiReply = action({
       throw new Error("AI failed to generate a response");
     }
 
-    // 3. Check if the response indicates a product match (JSON format)
+    // 3. Check if customer is requesting to speak with salesperson
+    const contactKeywords = [
+      "speak", "talk", "contact", "call", "salesperson", "sales person",
+      "representative", "agent", "human", "person", "someone", "staff", "team member"
+    ];
+    
+    const userMessage = (args.prompt || "").toLowerCase();
+    const isContactRequest = contactKeywords.some(keyword => userMessage.includes(keyword));
+
+    if (isContactRequest) {
+      // Get lead details to find assigned user
+      const lead = await ctx.runQuery(api.leads.queries.getLead, { id: args.leadId });
+      
+      if (lead && lead.assignedTo) {
+        // Create contact request for assigned user
+        await ctx.runMutation(api.contactRequests.createContactRequest, {
+          leadId: args.leadId,
+          assignedTo: lead.assignedTo,
+          customerMessage: args.prompt || userMessage,
+        });
+
+        // Send automated response
+        const autoMessage = "Thank you for your request! A member of our team will contact you shortly. 🙏";
+        
+        await ctx.runAction(api.whatsapp.sendWhatsAppMessage, {
+          phoneNumber: args.phoneNumber,
+          message: autoMessage,
+          leadId: args.leadId,
+          quotedMessageId: args.replyingToMessageId,
+          quotedMessageExternalId: args.replyingToExternalId,
+        });
+
+        return autoMessage;
+      }
+    }
+
+    // 4. Check if the response indicates a product match (JSON format)
     let messageToSend = aiResponse;
     let mediaToSend = null;
     let productNotFound = false;
     let requestedProductName = "";
 
     try {
-        // Only try to parse as JSON if it looks like JSON
         const trimmedResponse = aiResponse.trim();
         if (trimmedResponse.startsWith("{") && trimmedResponse.endsWith("}")) {
             const parsed = JSON.parse(trimmedResponse);
             if (parsed.productName) {
                 const product = products.find(p => p.name.toLowerCase() === parsed.productName.toLowerCase());
                 if (product) {
-                    // Product found - send full details
                     messageToSend = `Here are the details for *${product.name}*:\n\n` +
                                   `🏷️ Brand: ${product.brandName}\n` +
                                   `🧪 Molecule: ${product.molecule || "N/A"}\n` +
@@ -73,23 +107,19 @@ export const generateAndSendAiReply = action({
                         };
                     }
                 } else {
-                    // Product not found in database - trigger intervention
                     productNotFound = true;
                     requestedProductName = parsed.productName;
                     messageToSend = "This product image and details will be shared shortly. 📦";
                 }
             } else if (parsed.message) {
-                // AI returned a JSON with just a message field
                 messageToSend = parsed.message;
             }
         }
-        // If not JSON format, use the response as-is (normal conversation)
     } catch (e) {
-        // Not valid JSON, treat as plain text response (normal conversation)
-        // This is expected for general chat messages
+        // Not valid JSON, treat as plain text response
     }
 
-    // 4. Send message immediately via WhatsApp
+    // 5. Send message immediately via WhatsApp
     if (mediaToSend) {
         await ctx.runAction(api.whatsapp.sendWhatsAppMedia, {
             phoneNumber: args.phoneNumber,
@@ -109,7 +139,7 @@ export const generateAndSendAiReply = action({
         });
     }
 
-    // 5. If product not found, create intervention request
+    // 6. If product not found, create intervention request
     if (productNotFound && requestedProductName) {
         const lead = await ctx.runQuery(api.leads.queries.getLead, { id: args.leadId });
         if (lead && lead.assignedTo) {
