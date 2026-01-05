@@ -36,10 +36,15 @@ export const generateAndSendAiReply = action({
         leadId: args.leadId,
       }) as string;
 
+      console.log("Contact request detection response:", detectionResponse);
+      
       const detection = JSON.parse(detectionResponse.trim());
+      console.log("Parsed detection:", detection);
+      
       isContactRequest = detection.wantsContact === true && detection.confidence !== "low";
+      console.log("Is contact request:", isContactRequest);
     } catch (e) {
-      console.warn("Failed to detect contact request with AI, skipping:", e);
+      console.error("Failed to detect contact request with AI:", e);
     }
 
     // 2. If contact request detected, handle it immediately and return

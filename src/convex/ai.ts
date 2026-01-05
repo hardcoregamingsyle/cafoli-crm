@@ -109,20 +109,22 @@ export const generateContent = action({
             Analyze the message and return ONLY a JSON response in this exact format:
             { "wantsContact": true/false, "confidence": "high"/"medium"/"low" }
             
-            Return wantsContact: true if the customer:
-            - Wants to speak with someone from the team
-            - Requests to talk to a salesperson, representative, or agent
-            - Asks to be contacted or called
+            Return wantsContact: true with high confidence if the customer:
+            - Explicitly wants to speak with someone from the team (e.g., "I want to talk to your representative", "I want to speak with someone", "Can I talk to a person")
+            - Requests to talk to a salesperson, representative, agent, or team member
+            - Asks to be contacted, called, or connected with staff
             - Wants to connect with a human or staff member
-            - Expresses desire for personal assistance or consultation
+            - Expresses desire for personal assistance, consultation, or human help
+            - Uses phrases like "talk to", "speak with", "contact", "representative", "salesperson", "agent", "team member", "human", "person from your team"
             
             Return wantsContact: false if the customer:
-            - Is just asking general questions
-            - Wants product information
-            - Is making casual conversation
+            - Is just asking general questions about products or services
+            - Wants product information, prices, or catalog
+            - Is making casual conversation or greetings
             - Is providing feedback without requesting contact
+            - Is asking about company information
             
-            Be intelligent about context and intent. Don't just look for keywords.`;
+            Be very sensitive to contact request keywords and phrases. Even if the message is short or informal, if it contains clear intent to speak with a person, return true with high confidence.`;
           } else if (args.type === "lead_analysis") {
             systemPrompt = "Analyze the following lead information and provide insights on lead quality, potential needs, and recommended next steps. Be brief and actionable.";
           } else if (args.type === "follow_up_suggestion") {
