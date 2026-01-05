@@ -24,6 +24,8 @@ export const generateAndSendAiReply = action({
 
     // 1. FIRST: Check if customer wants to speak with salesperson using AI
     let isContactRequest = false;
+    let contactConfidence = "low";
+    let contactReason = "";
     
     try {
       const detectionResponse = await ctx.runAction(api.ai.generateContent, {
@@ -41,13 +43,17 @@ export const generateAndSendAiReply = action({
       const detection = JSON.parse(detectionResponse.trim());
       console.log("Parsed detection:", detection);
       
-      isContactRequest = detection.wantsContact === true && detection.confidence !== "low";
-      console.log("Is contact request:", isContactRequest);
+      contactConfidence = detection.confidence || "low";
+      contactReason = detection.reason || "";
+      
+      // Only trigger contact request if confidence is high or medium
+      isContactRequest = detection.wantsContact === true && (contactConfidence === "high" || contactConfidence === "medium");
+      console.log("Is contact request:", isContactRequest, "Confidence:", contactConfidence, "Reason:", contactReason);
     } catch (e) {
       console.error("Failed to detect contact request with AI:", e);
     }
 
-    // 2. If contact request detected, handle it immediately and return
+    // 2. If contact request detected with sufficient confidence, handle it immediately and return
     if (isContactRequest) {
       const lead = await ctx.runQuery(api.leads.queries.getLead, { id: args.leadId });
       
@@ -59,8 +65,9 @@ export const generateAndSendAiReply = action({
           customerMessage: args.prompt || "",
         });
 
-        // Send automated response
-        const autoMessage = "Thank you for your request! A member of our team will contact you shortly. 🙏";
+        // Get configurable automated response or use default
+        const autoMessage = args.context?.contactRequestMessage || 
+          "Thank you for your request! A member of our team will contact you shortly. 🙏";
         
         await ctx.runAction(api.whatsapp.sendWhatsAppMessage, {
           phoneNumber: args.phoneNumber,
@@ -70,13 +77,14 @@ export const generateAndSendAiReply = action({
           quotedMessageExternalId: args.replyingToExternalId,
         });
 
+        console.log(`Contact request created for lead ${args.leadId} with confidence: ${contactConfidence}`);
         return autoMessage;
       }
     }
 
     // 3. If NOT a contact request, proceed with normal AI reply generation
     const products = await ctx.runQuery(api.products.listProducts);
-    const productNames = products.map(p => p.name).join(", ");
+    const productNames = products.map((p: any) => p.name).join(", ");
 
     const aiResponse = (await ctx.runAction(api.ai.generateContent, {
       prompt: args.prompt || "Draft a reply to this conversation",
@@ -105,7 +113,7 @@ export const generateAndSendAiReply = action({
         if (trimmedResponse.startsWith("{") && trimmedResponse.endsWith("}")) {
             const parsed = JSON.parse(trimmedResponse);
             if (parsed.productName) {
-                const product = products.find(p => p.name.toLowerCase() === parsed.productName.toLowerCase());
+                const product = products.find((p: any) => p.name.toLowerCase() === parsed.productName.toLowerCase());
                 if (product) {
                     messageToSend = `Here are the details for *${product.name}*:\n\n` +
                                   `🏷️ Brand: ${product.brandName}\n` +

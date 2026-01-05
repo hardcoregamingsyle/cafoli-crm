@@ -380,10 +380,16 @@ export const handleIncomingMessage = internalAction({
                         content: m.content
                     }));
 
+                    // Get configurable contact request message
+                    const contactRequestMessage = await ctx.runQuery(api.whatsappConfig.getContactRequestMessage);
+
                     await ctx.runAction(api.whatsappAi.generateAndSendAiReply, {
                         leadId,
                         phoneNumber: args.from,
-                        context: { recentMessages: contextMessages },
+                        context: { 
+                            recentMessages: contextMessages,
+                            contactRequestMessage 
+                        },
                         prompt: args.text,
                         isAutoReply: true
                     });

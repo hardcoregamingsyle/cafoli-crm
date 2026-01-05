@@ -80,6 +80,15 @@ export const generateContent = action({
             CATALOG LINK:
             When someone asks for the catalog, product list, or wants to see all products, provide this link: https://cafoli.in/allproduct.aspx
             
+            CRITICAL - PRODUCT DETAILS HANDLING:
+            When a customer asks for product details (price, MRP, specifications, image, etc.) for a specific product:
+            1. Check if the product name matches ANY product in the available list: ${args.context?.availableProducts || "None"}
+            2. If you find a match (even partial match), respond with JSON: { "productName": "Exact Product Name From List" }
+            3. If NO match is found, respond with JSON: { "productName": "Product Name Customer Asked About" }
+            4. DO NOT provide generic responses about visiting the website when asked for specific product details
+            5. DO NOT say you don't have pricing information - the system will fetch it automatically
+            6. ALWAYS use JSON format when product details are requested
+            
             IMAGE HANDLING:
             When a customer sends an image of a product:
             - Carefully analyze the image for any visible text, brand names, product names, or packaging details
@@ -96,7 +105,7 @@ export const generateContent = action({
             - For general questions (company info, greetings, how are you, etc.): Respond naturally in plain text as a helpful assistant
             - When asked for catalog/product list: Provide the catalog link in your response
             - ONLY use JSON format when:
-              * A customer specifically asks for product details (price, specifications, image, availability)
+              * A customer specifically asks for product details (price, specifications, image, availability, MRP, etc.)
               * A customer sends an image and asks about it (try to identify the product)
               * Format: { "productName": "Exact Product Name From List" } if found
               * Format: { "productName": "Product Name They Asked About" } if not in list
@@ -107,24 +116,27 @@ export const generateContent = action({
             systemPrompt = `You are analyzing a customer message to determine if they want to speak with a salesperson or team member.
             
             Analyze the message and return ONLY a JSON response in this exact format:
-            { "wantsContact": true/false, "confidence": "high"/"medium"/"low" }
+            { "wantsContact": true/false, "confidence": "high"/"medium"/"low", "reason": "brief explanation" }
             
-            Return wantsContact: true with high confidence if the customer:
-            - Explicitly wants to speak with someone from the team (e.g., "I want to talk to your representative", "I want to speak with someone", "Can I talk to a person")
-            - Requests to talk to a salesperson, representative, agent, or team member
-            - Asks to be contacted, called, or connected with staff
-            - Wants to connect with a human or staff member
-            - Expresses desire for personal assistance, consultation, or human help
-            - Uses phrases like "talk to", "speak with", "contact", "representative", "salesperson", "agent", "team member", "human", "person from your team"
+            Return wantsContact: true with HIGH confidence if the customer:
+            - Explicitly uses phrases: "talk to", "speak with", "contact", "call me", "reach out"
+            - Mentions: "representative", "salesperson", "agent", "team member", "staff", "person", "human", "someone from your team"
+            - Requests: "I want to talk", "I need to speak", "connect me with", "put me in touch"
+            - Examples: "I want to talk to your representative", "Can I speak with someone", "I need to contact your team"
             
-            Return wantsContact: false if the customer:
-            - Is just asking general questions about products or services
-            - Wants product information, prices, or catalog
-            - Is making casual conversation or greetings
-            - Is providing feedback without requesting contact
-            - Is asking about company information
+            Return wantsContact: true with MEDIUM confidence if:
+            - Message implies need for personal assistance but doesn't explicitly ask
+            - Uses indirect language like "need help from your team", "want to discuss with someone"
             
-            Be very sensitive to contact request keywords and phrases. Even if the message is short or informal, if it contains clear intent to speak with a person, return true with high confidence.`;
+            Return wantsContact: false with HIGH confidence if:
+            - Just asking about products, prices, or general information
+            - Making casual conversation or greetings
+            - Providing feedback without requesting contact
+            - Asking about company information
+            
+            IMPORTANT: Be VERY sensitive to direct contact request phrases. If you see "talk to", "speak with", "representative", "salesperson" - return true with high confidence.
+            
+            Always include a brief reason for your decision.`;
           } else if (args.type === "lead_analysis") {
             systemPrompt = "Analyze the following lead information and provide insights on lead quality, potential needs, and recommended next steps. Be brief and actionable.";
           } else if (args.type === "follow_up_suggestion") {

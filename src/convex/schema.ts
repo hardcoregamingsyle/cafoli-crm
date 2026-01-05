@@ -353,4 +353,9 @@ export default defineSchema({
     usageCount: v.number(),
   })
   .index("by_category", ["category"]),
+
+  whatsappConfig: defineTable({
+    key: v.string(),
+    value: v.string(),
+  }).index("by_key", ["key"]),
 });

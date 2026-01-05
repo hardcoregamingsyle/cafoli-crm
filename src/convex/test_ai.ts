@@ -1,90 +1,165 @@
-"use node";
-import { internalAction } from "./_generated/server";
+import { action } from "./_generated/server";
 import { v } from "convex/values";
-import { internal, api } from "./_generated/api";
+import { api } from "./_generated/api";
 
-export const testAiFeatures = internalAction({
+/**
+ * Test suite for AI functionality
+ * Run with: npx convex run test_ai:runAllTests
+ */
+
+export const testContactRequestDetection = action({
   args: {
-    userId: v.optional(v.id("users")),
+    testMessage: v.string(),
+    expectedResult: v.boolean(),
   },
   handler: async (ctx, args) => {
-    let userId = args.userId;
-    if (!userId) {
-        const user = await ctx.runQuery(internal.test_utils.getAnyUser);
-        if (!user) {
-            console.error("No users found in database to run tests with.");
-            return;
-        }
-        userId = user._id;
-    }
-
-    console.log("Starting AI Feature Tests with User:", userId);
-
-    // 1. Test Campaign Email Generation
-    console.log("\n--- Testing Campaign Email Generation ---");
     try {
-      const emailContent = await ctx.runAction(api.ai.generateContent, {
-        prompt: "Write an email body for the subject: Special Summer Offer",
-        type: "campaign_email_content",
-        context: { subject: "Special Summer Offer" },
-        userId: userId,
-      });
-      console.log("✅ Email Generation Success:");
-      console.log(emailContent.substring(0, 100) + "...");
-    } catch (e) {
-      console.error("❌ Email Generation Failed:", e);
-    }
+      // Get a test user - use getSystemUser instead
+      const systemUser = await ctx.runQuery(api.users.getSystemUser);
+      if (!systemUser) {
+        return { success: false, error: "No system user found for testing" };
+      }
+      const testUserId = systemUser._id;
 
-    // 2. Test Lead Analysis
-    console.log("\n--- Testing Lead Analysis ---");
+      const response = await ctx.runAction(api.ai.generateContent, {
+        prompt: args.testMessage,
+        type: "contact_request_detection",
+        context: {},
+        userId: testUserId,
+      }) as string;
+
+      const detection = JSON.parse(response.trim());
+      const actualResult = detection.wantsContact === true;
+      const passed = actualResult === args.expectedResult;
+
+      return {
+        success: true,
+        passed,
+        testMessage: args.testMessage,
+        expected: args.expectedResult,
+        actual: actualResult,
+        confidence: detection.confidence,
+        reason: detection.reason,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  },
+});
+
+export const testProductQuery = action({
+  args: {
+    testMessage: v.string(),
+    expectedProductName: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
     try {
-      const analysis = await ctx.runAction(api.ai.generateContent, {
-        prompt: "Analyze this lead",
-        type: "lead_analysis",
-        context: { 
-          name: "John Doe", 
-          company: "Tech Corp", 
-          status: "Cold", 
-          source: "Website" 
+      const systemUser = await ctx.runQuery(api.users.getSystemUser);
+      if (!systemUser) {
+        return { success: false, error: "No system user found for testing" };
+      }
+      const testUserId = systemUser._id;
+
+      const products = await ctx.runQuery(api.products.listProducts);
+      const productNames = products.map((p: any) => p.name).join(", ");
+
+      const response = await ctx.runAction(api.ai.generateContent, {
+        prompt: args.testMessage,
+        type: "chat_reply",
+        context: {
+          availableProducts: productNames,
+          recentMessages: [],
         },
-        userId: userId,
-      });
-      console.log("✅ Lead Analysis Success:");
-      console.log(analysis.substring(0, 100) + "...");
-    } catch (e) {
-      console.error("❌ Lead Analysis Failed:", e);
-    }
+        userId: testUserId,
+      }) as string;
 
-    // 3. Test Follow-up Suggestion (JSON Mode)
-    console.log("\n--- Testing Follow-up Suggestion (JSON) ---");
-    try {
-      const suggestion = await ctx.runAction(api.ai.generateContent, {
-        prompt: "Suggest follow-up",
-        type: "follow_up_suggestion",
-        context: { 
-          lastInteraction: "Customer asked about pricing but didn't reply to the quote sent yesterday." 
-        },
-        userId: userId,
-      });
-      console.log("✅ Follow-up Suggestion Success:");
-      console.log(suggestion);
-      
-      // Verify JSON parsing
+      let detectedProduct = null;
       try {
-        const cleanResult = suggestion.replace(/[\n\r]/g, '');
-        const parsed = JSON.parse(cleanResult);
-        if (parsed.days && parsed.message) {
-          console.log("✅ JSON Structure Valid");
-        } else {
-          console.warn("⚠️ JSON Structure Invalid (missing keys)");
+        const trimmed = response.trim();
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+          const parsed = JSON.parse(trimmed);
+          detectedProduct = parsed.productName;
         }
       } catch (e) {
-        console.error("❌ JSON Parsing Failed");
+        // Not JSON, that's okay for some tests
       }
-    } catch (e) {
-      console.error("❌ Follow-up Suggestion Failed:", e);
+
+      const passed = args.expectedProductName 
+        ? detectedProduct === args.expectedProductName
+        : detectedProduct !== null;
+
+      return {
+        success: true,
+        passed,
+        testMessage: args.testMessage,
+        expectedProduct: args.expectedProductName,
+        detectedProduct,
+        response: response.substring(0, 200), // First 200 chars
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  },
+});
+
+export const runAllTests = action({
+  args: {},
+  handler: async (ctx): Promise<any> => {
+    const results: any[] = [];
+
+    // Contact Request Detection Tests
+    const contactTests = [
+      { message: "I want to talk to your representative", expected: true },
+      { message: "Can I speak with someone from your team?", expected: true },
+      { message: "I need to contact a salesperson", expected: true },
+      { message: "Connect me with your agent", expected: true },
+      { message: "What is the price of this product?", expected: false },
+      { message: "Hello, how are you?", expected: false },
+      { message: "Tell me about your company", expected: false },
+    ];
+
+    for (const test of contactTests) {
+      const result: any = await ctx.runAction(api.test_ai.testContactRequestDetection, {
+        testMessage: test.message,
+        expectedResult: test.expected,
+      });
+      results.push({ type: "contact_detection", ...result });
     }
 
-    console.log("\nTests Completed.");
+    // Product Query Tests
+    const productTests = [
+      { message: "What is the price of VAONOPULSE?", expectedProduct: "VAONOPULSE" },
+      { message: "Show me details of VAONOPULSE", expectedProduct: "VAONOPULSE" },
+      { message: "I need information about VAONOPULSE", expectedProduct: "VAONOPULSE" },
+      { message: "Tell me about your company", expectedProduct: undefined },
+    ];
+
+    for (const test of productTests) {
+      const result: any = await ctx.runAction(api.test_ai.testProductQuery, {
+        testMessage: test.message,
+        expectedProductName: test.expectedProduct,
+      });
+      results.push({ type: "product_query", ...result });
+    }
+
+    const totalTests: number = results.length;
+    const passedTests: number = results.filter((r: any) => r.passed).length;
+    const failedTests = totalTests - passedTests;
+
+    return {
+      summary: {
+        total: totalTests,
+        passed: passedTests,
+        failed: failedTests,
+        successRate: `${((passedTests / totalTests) * 100).toFixed(1)}%`,
+      },
+      results,
+    };
   },
 });
