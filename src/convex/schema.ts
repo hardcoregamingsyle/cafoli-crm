@@ -101,6 +101,7 @@ export default defineSchema({
   .index("by_last_activity", ["lastActivity"])
   .index("by_cold_caller_assigned_to", ["coldCallerAssignedTo"])
   .index("by_is_cold_caller", ["isColdCallerLead"])
+  .index("by_type", ["type"])
   .searchIndex("search_name", {
     searchField: "name",
     filterFields: ["assignedTo"],

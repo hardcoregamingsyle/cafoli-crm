@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import { useSearchParams } from "react-router";
 import LeadDetails from "@/components/LeadDetails";
-import { Eye } from "lucide-react";
+import { Eye, ArrowLeft, X } from "lucide-react";
 
 interface ColdCallerPopupProps {
   leads: Doc<"leads">[];
@@ -91,13 +91,39 @@ export function ColdCallerPopup({ leads, isOpen, onClose, userId }: ColdCallerPo
     }
   };
 
-  // If a lead is selected, show LeadDetails
+  // If a lead is selected, show LeadDetails in a larger dialog content
   if (selectedLeadId) {
     return (
-      <LeadDetails 
-        leadId={selectedLeadId} 
-        onClose={() => setSelectedLeadId(null)} 
-      />
+      <Dialog open={isOpen} onOpenChange={(open) => {
+        if (!open) {
+          if (isTestMode) onClose();
+          // If user clicks outside or escape, we close the whole popup
+          onClose();
+        }
+      }}>
+        <DialogContent 
+          className="max-w-5xl h-[90vh] flex flex-col p-0 gap-0"
+          onInteractOutside={(e) => !isTestMode && e.preventDefault()}
+          onEscapeKeyDown={(e) => !isTestMode && e.preventDefault()}
+          showCloseButton={false}
+        >
+          <div className="p-2 border-b flex justify-between items-center bg-background">
+            <Button variant="ghost" onClick={() => setSelectedLeadId(null)} className="gap-2">
+              <ArrowLeft className="h-4 w-4" />
+              Back to List
+            </Button>
+            <Button variant="ghost" size="icon" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex-1 overflow-hidden p-4 bg-muted/10">
+            <LeadDetails 
+              leadId={selectedLeadId} 
+              onClose={() => setSelectedLeadId(null)} 
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     );
   }
 
