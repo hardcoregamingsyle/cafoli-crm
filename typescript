@@ -1,10 +1,2 @@
-await ctx.runAction(api.whatsappAi.generateAndSendAiReply, {
-    leadId,
-    phoneNumber: args.from,
-    context: { 
-        recentMessages: contextMessages,
-        contactRequestMessage 
-    },
-    prompt: args.text,
-    isAutoReply: true
-});
+      const isImage = args.mimeType.startsWith("image/");
+      const mediaType = isImage ? "image" : "document";

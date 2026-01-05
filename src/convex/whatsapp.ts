@@ -94,6 +94,7 @@ export const sendWhatsAppMedia = action({
     mimeType: v.string(),
   },
   handler: async (ctx, args) => {
+    console.log(`sendWhatsAppMedia called for ${args.fileName} (${args.mimeType}) to ${args.phoneNumber}`);
     const accessToken = process.env.CLOUD_API_ACCESS_TOKEN;
     const phoneNumberId = process.env.WA_PHONE_NUMBER_ID;
     

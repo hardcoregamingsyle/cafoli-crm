@@ -1,0 +1,184 @@
+const match = text.match(codeBlockRegex);
+  if (match && match[1]) {
+    return match[1].trim();
+  }
+  // If no code block, return the original text (assuming it might be raw JSON)
+  return text.trim();
+}
+
+export const generateAndSendAiReply = action({
+  args: {
+    leadId: v.id("leads"),
+    phoneNumber: v.string(),
+    context: v.any(),
+    prompt: v.string(),
+    isAutoReply: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    console.log(`Generating AI reply for lead ${args.leadId} (Auto-reply: ${args.isAutoReply}) - v15 Sequential Fix`);
+
+    // 1. Get available products and ranges for context
+    const products = await ctx.runQuery(api.products.listProducts);
+    const rangePdfs = await ctx.runQuery(api.products.listRangePdfs);
+    
+    // Format for AI context
+    const availableProducts = products.map(p => `${p.name} (Brand: ${p.brandName})`).join(", ");
+    const availableRanges = rangePdfs.map(r => `${r.name} (${r.division ? `Division: ${r.division}` : `Category: ${r.category}`})`).join(", ");
+    
+    const enrichedContext = {
+      ...args.context,
+      availableProducts,
+      availableRanges
+    };
+
+    // 2. Generate content using Gemini
+    let aiResponseText = "";
+    try {
+      aiResponseText = await ctx.runAction(api.ai.generateContent, {
+        prompt: args.prompt,
+        type: "chat_reply",
+        context: enrichedContext,
+        userId: args.leadId as any, // Using leadId as userId for tracking since this is automated
+        leadId: args.leadId,
+      });
+    } catch (error) {
+      console.error("Error generating AI content:", error);
+      // Fallback message if AI fails
+      await ctx.runAction(api.whatsapp.sendWhatsAppMessage, {
+        phoneNumber: args.phoneNumber,
+        message: "I apologize, but I'm having trouble processing your request right now. A human agent will be with you shortly.",
+        leadId: args.leadId,
+      });
+      return;
+    }
+
+    // 3. Parse response for JSON commands (product images, ranges, etc.)
+    let responseJson: any = null;
+    let messageContent = aiResponseText;
+
+    try {
+      // Attempt to parse if it looks like JSON
+      const cleanJson = extractJsonFromMarkdown(aiResponseText);
+      if (cleanJson.trim().startsWith("{")) {
+        responseJson = JSON.parse(cleanJson);
+        // If it's a JSON command, we might not have a text message, or it might be separate
+        // For now, if it's purely JSON, we don't send it as text.
+        messageContent = ""; // Don't send the JSON string as a message
+      }
+    } catch (e) {
+      // Not JSON, just normal text
+      console.log("AI response is not JSON, sending as text");
+    }
+
+    // 4. Send the text message first (if any)
+    if (messageContent) {
+      try {
+        await ctx.runAction(api.whatsapp.sendWhatsAppMessage, {
+          phoneNumber: args.phoneNumber,
+          message: messageContent,
+          leadId: args.leadId,
+        });
+      } catch (error) {
+        console.error("Failed to send text message part:", error);
+      }
+    }
+
+    // 5. Handle JSON commands (Images, PDFs, etc.)
+    if (responseJson) {
+      console.log("Processing AI JSON command:", JSON.stringify(responseJson));
+
+      // HANDLE FULL CATALOGUE REQUEST
+      if (responseJson.fullCatalogue) {
+        console.log("Sending full catalogue (all ranges)...");
+        
+        // Send a message first
+        await ctx.runAction(api.whatsapp.sendWhatsAppMessage, {
+          phoneNumber: args.phoneNumber,
+          message: "Here is our complete product catalog. Sending all range PDFs...",
+          leadId: args.leadId,
+        });
+
+        // Send all PDFs sequentially
+        for (const pdf of rangePdfs) {
+          try {
+            await new Promise(resolve => setTimeout(resolve, 1000)); // 1s delay
+            await ctx.runAction(api.whatsapp.sendWhatsAppMedia, {
+              phoneNumber: args.phoneNumber,
+              leadId: args.leadId,
+              storageId: pdf.storageId,
+              fileName: `${pdf.name}.pdf`,
+              mimeType: "application/pdf",
+              message: pdf.name
+            });
+          } catch (err) {
+            console.error(`Failed to send PDF ${pdf.name}:`, err);
+          }
+        }
+      }
+
+      // HANDLE SPECIFIC RANGE REQUEST
+      if (responseJson.rangeName) {
+        const range = rangePdfs.find(r => r.name.toLowerCase() === responseJson.rangeName.toLowerCase());
+        if (range) {
+          console.log(`Sending specific range: ${range.name}`);
+          try {
+            await new Promise(resolve => setTimeout(resolve, 1000)); // 1s delay
+            await ctx.runAction(api.whatsapp.sendWhatsAppMedia, {
+              phoneNumber: args.phoneNumber,
+              leadId: args.leadId,
+              storageId: range.storageId,
+              fileName: `${range.name}.pdf`,
+              mimeType: "application/pdf",
+              message: `Here is the ${range.name} PDF.`
+            });
+          } catch (err) {
+            console.error(`Failed to send range PDF ${range.name}:`, err);
+          }
+        } else {
+          console.log(`Requested range '${responseJson.rangeName}' not found.`);
+        }
+      }
+
+      // HANDLE PRODUCT IMAGE REQUESTS
+      if (responseJson.productNames && Array.isArray(responseJson.productNames)) {
+        console.log(`Processing product image requests for: ${responseJson.productNames.join(", ")}`);
+        
+        for (const requestedName of responseJson.productNames) {
+          // Find product (fuzzy match)
+          const product = products.find(p => 
+            p.name.toLowerCase().includes(requestedName.toLowerCase()) || 
+            (p.brandName && p.brandName.toLowerCase().includes(requestedName.toLowerCase()))
+          );
+
+          if (product && product.images && product.images.length > 0) {
+            console.log(`Found product '${product.name}' with ${product.images.length} images.`);
+            
+            // Send ALL images for the product sequentially
+            for (let i = 0; i < product.images.length; i++) {
+              const imageId = product.images[i];
+              try {
+                // Add delay to prevent OCC and ensure order
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                console.log(`Sending image ${i+1}/${product.images.length} for ${product.name}`);
+                
+                await ctx.runAction(api.whatsapp.sendWhatsAppMedia, {
+                  phoneNumber: args.phoneNumber,
+                  leadId: args.leadId,
+                  storageId: imageId,
+                  fileName: `${product.name.replace(/\s+/g, "_")}_${i+1}.jpg`,
+                  mimeType: "image/jpeg", // Assuming JPEG, but could be PNG. WhatsApp handles it.
+                  message: i === 0 ? `Here are the images for ${product.name}` : undefined
+                });
+              } catch (err) {
+                console.error(`Failed to send image ${i+1} for ${product.name}:`, err);
+              }
+            }
+          } else {
+            console.log(`Product '${requestedName}' not found or has no images.`);
+          }
+        }
+      }
+    }
+  },
+});
