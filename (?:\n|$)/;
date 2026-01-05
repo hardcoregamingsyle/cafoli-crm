@@ -1,3 +1,14 @@
+"use node";
+
+import { action } from "./_generated/server";
+import { v } from "convex/values";
+import { api, internal } from "./_generated/api";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+// Helper to strip markdown code blocks from JSON
+function extractJsonFromMarkdown(text: string): string {
+  // Try to find JSON inside markdown code blocks
+  const jsonBlockRegex = /(?:^|(?<=\n))\s*
   const jsonMatch = text.match(jsonBlockRegex);
   if (jsonMatch) {
     return jsonMatch[1];
@@ -20,6 +31,7 @@ export const generateAndSendAiReply = action({
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
     if (!apiKey) {
       console.error("Gemini API key not configured");
+      // Fail gracefully if no key
       return;
     }
 
@@ -175,4 +187,3 @@ export const generateAndSendAiReply = action({
     }
   }
 });
->>>>>>> REPLACE
