@@ -96,11 +96,13 @@ export const generateContent = action({
             - The system will handle sending the link and all PDFs.
             - IMPORTANT: ONLY use this if the user asks for ALL/EVERYTHING. If they ask for a specific one (e.g. "Gynecology"), do NOT use this.
             
-            3. SPECIFIC PRODUCT DETAILS:
-            When a customer asks for product details (price, MRP, specifications, image, etc.) for a specific product:
+            3. SPECIFIC PRODUCT DETAILS & IMAGES:
+            When a customer asks for product details (price, MRP, specifications, image, etc.) for a specific product or multiple products:
             - Check if the product name matches ANY product in the available list: ${args.context?.availableProducts || "None"}
-            - If you find a match (even partial match), respond with JSON: { "productName": "Exact Product Name From List" }
-            - If NO match is found, respond with JSON: { "productName": "Product Name Customer Asked About" }
+            - If you find a match (even partial match), respond with JSON: { "productNames": ["Exact Product Name From List"] }
+            - If multiple products are requested or matched, include all of them: { "productNames": ["Product A", "Product B"] }
+            - If NO match is found, respond with JSON: { "productNames": ["Product Name Customer Asked About"] }
+            - IMPORTANT: You CAN send images. The system will handle it. NEVER say you cannot send images. Just return the JSON with the product name(s).
             - DO NOT provide generic responses about visiting the website when asked for specific product details
             - DO NOT say you don't have pricing information - the system will fetch it automatically
             
@@ -109,8 +111,8 @@ export const generateContent = action({
             - Carefully analyze the image for any visible text, brand names, product names, or packaging details
             - Try to match it with products in our available list: ${args.context?.availableProducts || "None"}
             - Look for partial matches or similar names
-            - If you can identify or partially identify the product, use JSON format: { "productName": "Best Match Product Name" }
-            - If you cannot identify the product at all, use JSON format with the description: { "productName": "Product from image" }
+            - If you can identify or partially identify the product, use JSON format: { "productNames": ["Best Match Product Name"] }
+            - If you cannot identify the product at all, use JSON format with the description: { "productNames": ["Product from image"] }
             - Be proactive in attempting to identify products from images
             
             INSTRUCTIONS:
@@ -121,8 +123,8 @@ export const generateContent = action({
             - ONLY use JSON format when:
               * A customer specifically asks for a product range/division (check available ranges) -> { "rangeName": "..." }
               * A customer asks for the full catalogue/all PDFs -> { "fullCatalogue": true }
-              * A customer specifically asks for product details -> { "productName": "..." }
-              * A customer sends an image and asks about it -> { "productName": "..." }
+              * A customer specifically asks for product details or images -> { "productNames": ["..."] }
+              * A customer sends an image and asks about it -> { "productNames": ["..."] }
             - Keep responses concise, relevant, and helpful
             - You can discuss company information, answer questions, provide assistance, and engage in normal conversation
             - Emphasize our quality standards and manufacturing partnerships when relevant`;

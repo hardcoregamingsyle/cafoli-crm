@@ -1,3 +1,3 @@
 {
-  "plan": "1. Verify that the new JSON parsing logic correctly extracts JSON even if the AI includes conversational text.\n2. Confirm that multiple PDFs are sent if multiple ranges match the request (e.g. 'Paediatrick' matching both 'Matrizen' and 'Tinybud' divisions).\n3. Monitor logs to ensure 'Parsed AI JSON' appears, confirming successful JSON handling."
+  "plan": "1. Verify that the AI now correctly identifies multiple products and returns them in the JSON response.\n2. Test sending a request for multiple products to ensure the system sends a combined text message with details for all products.\n3. Confirm that the system sends images for all identified products.\n4. Verify that the 'full catalogue' request still works as expected, sending the link and all range PDFs."
 }

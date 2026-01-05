@@ -119,7 +119,7 @@ export const generateAndSendAiReply = action({
 
     // 4. Check if the response indicates a product match or range match (JSON format)
     let messageToSend = aiResponse;
-    let mediaToSend = null;
+    let mediasToSend: any[] = [];
     let productNotFound = false;
     let requestedProductName = "";
     let rangePdfsToSend: any[] = [];
@@ -132,28 +132,51 @@ export const generateAndSendAiReply = action({
         if (jsonString.startsWith("{") && jsonString.endsWith("}")) {
             const parsed = JSON.parse(jsonString);
             
-            // Handle Product Match
-            if (parsed.productName) {
-                const product = products.find((p: any) => p.name.toLowerCase() === parsed.productName.toLowerCase());
-                if (product) {
-                    messageToSend = `Here are the details for *${product.name}*:\n\n` +
-                                  `🏷️ Brand: ${product.brandName}\n` +
-                                  `🧪 Molecule: ${product.molecule || "N/A"}\n` +
-                                  `💰 MRP: ₹${product.mrp}\n` +
-                                  `📦 Packaging: ${product.packaging || "N/A"}\n\n` +
-                                  `${product.description || ""}`;
-                    
-                    if (product.images && product.images.length > 0) {
-                        mediaToSend = {
-                            storageId: product.images[0],
-                            fileName: `${product.name}.jpg`,
-                            mimeType: "image/jpeg"
-                        };
+            // Handle Product Match (Single or Multiple)
+            if (parsed.productNames || parsed.productName) {
+                const names = parsed.productNames || [parsed.productName];
+                const matchedProducts = [];
+                const notFoundNames = [];
+
+                for (const name of names) {
+                    const product = products.find((p: any) => p.name.toLowerCase() === name.toLowerCase());
+                    if (product) {
+                        matchedProducts.push(product);
+                    } else {
+                        notFoundNames.push(name);
                     }
-                } else {
-                    productNotFound = true;
-                    requestedProductName = parsed.productName;
-                    messageToSend = "This product image and details will be shared shortly. 📦";
+                }
+
+                if (matchedProducts.length > 0) {
+                    messageToSend = matchedProducts.map((product: any) => 
+                        `Here are the details for *${product.name}*:\\n` +
+                        `🏷️ Brand: ${product.brandName}\\n` +
+                        `🧪 Molecule: ${product.molecule || "N/A"}\\n` +
+                        `💰 MRP: ₹${product.mrp}\\n` +
+                        `📦 Packaging: ${product.packaging || "N/A"}\\n` +
+                        `${product.description || ""}`
+                    ).join("\n\n-------------------\n\n");
+                    
+                    // Collect images for all matched products
+                    for (const product of matchedProducts) {
+                        if (product.images && product.images.length > 0) {
+                            mediasToSend.push({
+                                storageId: product.images[0],
+                                fileName: `${product.name}.jpg`,
+                                mimeType: "image/jpeg",
+                                caption: product.name
+                            });
+                        }
+                    }
+                } 
+                
+                if (notFoundNames.length > 0) {
+                    if (matchedProducts.length === 0) {
+                        productNotFound = true;
+                        requestedProductName = notFoundNames[0];
+                        messageToSend = "This product image and details will be shared shortly. 📦";
+                    }
+                    // If we found some products but not others, we just send what we found.
                 }
             } 
             // Handle Range Match
@@ -173,11 +196,7 @@ export const generateAndSendAiReply = action({
                         const range = matchingRanges[0];
                         const divisionInfo = range.division ? ` (${range.division})` : "";
                         messageToSend = `Here is the PDF for *${range.name}*${divisionInfo}. 📄`;
-                        mediaToSend = {
-                            storageId: range.storageId,
-                            fileName: `${range.name}.pdf`,
-                            mimeType: "application/pdf"
-                        };
+                        rangePdfsToSend = [range];
                     }
                 } else {
                     messageToSend = `I couldn't find the PDF for ${parsed.rangeName}. Please check the name and try again.`;
@@ -185,7 +204,7 @@ export const generateAndSendAiReply = action({
             }
             // Handle Full Catalogue
             else if (parsed.fullCatalogue) {
-                messageToSend = `Here is the link to our full product catalog: https://cafoli.in/allproduct.aspx 📚\n\nI am also sending you all our range PDFs below. 👇`;
+                messageToSend = `It sounds like you're looking for our full product catalog! You can find all of our products listed here: https://cafoli.in/allproduct.aspx 📚\n\nI am also sending you all our range PDFs below. 👇`;
                 rangePdfsToSend = rangePdfs; 
             }
             else if (parsed.message) {
@@ -198,47 +217,41 @@ export const generateAndSendAiReply = action({
     }
 
     // 5. Send message immediately via WhatsApp
-    if (rangePdfsToSend.length > 0) {
-        // Send initial message
-        await ctx.runAction(api.whatsapp.sendWhatsAppMessage, {
-            phoneNumber: args.phoneNumber,
-            message: messageToSend,
-            leadId: args.leadId,
-            quotedMessageId: args.replyingToMessageId,
-            quotedMessageExternalId: args.replyingToExternalId,
-        });
-        
-        // Send all PDFs
-        for (const range of rangePdfsToSend) {
-            const caption = range.category === "THERAPEUTIC" 
-                ? `${range.name} (Therapeutic Range)`
-                : `${range.name}${range.division ? ` (${range.division})` : ""}`;
+    
+    // Send initial text message
+    await ctx.runAction(api.whatsapp.sendWhatsAppMessage, {
+        phoneNumber: args.phoneNumber,
+        message: messageToSend,
+        leadId: args.leadId,
+        quotedMessageId: args.replyingToMessageId,
+        quotedMessageExternalId: args.replyingToExternalId,
+    });
+    
+    // Send Range PDFs
+    for (const range of rangePdfsToSend) {
+        const caption = range.category === "THERAPEUTIC" 
+            ? `${range.name} (Therapeutic Range)`
+            : `${range.name}${range.division ? ` (${range.division})` : ""}`;
 
-            await ctx.runAction(api.whatsapp.sendWhatsAppMedia, {
-                phoneNumber: args.phoneNumber,
-                message: caption,
-                leadId: args.leadId,
-                storageId: range.storageId,
-                fileName: `${range.name}.pdf`,
-                mimeType: "application/pdf",
-            });
-        }
-    } else if (mediaToSend) {
         await ctx.runAction(api.whatsapp.sendWhatsAppMedia, {
             phoneNumber: args.phoneNumber,
-            message: messageToSend,
+            message: caption,
             leadId: args.leadId,
-            storageId: mediaToSend.storageId,
-            fileName: mediaToSend.fileName,
-            mimeType: mediaToSend.mimeType,
+            storageId: range.storageId,
+            fileName: `${range.name}.pdf`,
+            mimeType: "application/pdf",
         });
-    } else {
-        await ctx.runAction(api.whatsapp.sendWhatsAppMessage, {
+    }
+
+    // Send Product Images
+    for (const media of mediasToSend) {
+        await ctx.runAction(api.whatsapp.sendWhatsAppMedia, {
             phoneNumber: args.phoneNumber,
-            message: messageToSend,
+            message: media.caption || "",
             leadId: args.leadId,
-            quotedMessageId: args.replyingToMessageId,
-            quotedMessageExternalId: args.replyingToExternalId,
+            storageId: media.storageId,
+            fileName: media.fileName,
+            mimeType: media.mimeType,
         });
     }
 
