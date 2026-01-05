@@ -266,9 +266,13 @@ export const generateAndSendAiReply = action({
     console.log(`Is auto-reply: ${args.isAutoReply}`);
     
     // Send Product Images FIRST (before Range PDFs)
-    // Use Promise.allSettled to send all images in parallel and not fail if one fails
+    // Use sequential execution to avoid Optimistic Concurrency Control errors
     if (mediasToSend.length > 0) {
-        const imagePromises = mediasToSend.map(async (media, i) => {
+        for (const [i, media] of mediasToSend.entries()) {
+            // Add delay before sending media (especially after text or previous media)
+            // This helps prevent OCC errors and rate limiting
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
             console.log(`[${i+1}/${mediasToSend.length}] Attempting to send product image:`);
             console.log(`  - File: ${media.fileName}`);
             console.log(`  - Storage ID: ${media.storageId}`);
@@ -280,7 +284,7 @@ export const generateAndSendAiReply = action({
                 const fileUrl = await ctx.storage.getUrl(media.storageId);
                 if (!fileUrl) {
                     console.error(`✗ Storage ID ${media.storageId} returned null URL!`);
-                    throw new Error(`Storage ID ${media.storageId} returned null URL`);
+                    continue;
                 }
                 console.log(`✓ File URL retrieved: ${fileUrl.substring(0, 50)}...`);
                 
@@ -293,24 +297,21 @@ export const generateAndSendAiReply = action({
                     mimeType: media.mimeType,
                 });
                 console.log(`✓ Successfully sent image: ${media.fileName}`);
-                return { success: true, fileName: media.fileName };
             } catch (error) {
                 console.error(`✗ Failed to send image ${media.fileName}:`, error);
                 console.error(`Error details:`, JSON.stringify(error, null, 2));
-                return { success: false, fileName: media.fileName, error };
             }
-        });
-        
-        const results = await Promise.allSettled(imagePromises);
-        const successCount = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
-        console.log(`✓ Sent ${successCount}/${mediasToSend.length} product images successfully`);
+        }
     }
     
     console.log(`Sending ${rangePdfsToSend.length} range PDFs...`);
     
-    // Send Range PDFs in parallel
+    // Send Range PDFs sequentially
     if (rangePdfsToSend.length > 0) {
-        const pdfPromises = rangePdfsToSend.map(async (range) => {
+        for (const [i, range] of rangePdfsToSend.entries()) {
+            // Add delay
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
             const caption = range.category === "THERAPEUTIC" 
                 ? `${range.name} (Therapeutic Range)`
                 : `${range.name}${range.division ? ` (${range.division})` : ""}`;
@@ -325,16 +326,10 @@ export const generateAndSendAiReply = action({
                     mimeType: "application/pdf",
                 });
                 console.log(`✓ Successfully sent range PDF: ${range.name}`);
-                return { success: true, name: range.name };
             } catch (error) {
                 console.error(`✗ Failed to send range PDF ${range.name}:`, error);
-                return { success: false, name: range.name, error };
             }
-        });
-        
-        const results = await Promise.allSettled(pdfPromises);
-        const successCount = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
-        console.log(`✓ Sent ${successCount}/${rangePdfsToSend.length} range PDFs successfully`);
+        }
     }
 
     // 6. If product not found, create intervention request
