@@ -52,8 +52,8 @@ export function RangePdfListManager() {
         <TableHeader>
           <TableRow>
             <TableHead>Name</TableHead>
-            <TableHead>Type</TableHead>
             <TableHead>Division</TableHead>
+            <TableHead>Therapeutic</TableHead>
             <TableHead>File</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
@@ -70,15 +70,23 @@ export function RangePdfListManager() {
               <TableRow key={pdf._id}>
                 <TableCell className="font-medium">{pdf.name}</TableCell>
                 <TableCell>
-                  <span className={`text-xs px-2 py-1 rounded-full ${
-                    pdf.category === "THERAPEUTIC" 
-                      ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200" 
-                      : "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-                  }`}>
-                    {pdf.category === "THERAPEUTIC" ? "Therapeutic" : "Division"}
-                  </span>
+                  {pdf.category === "DIVISION" ? (
+                    <span className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-2 py-1 rounded-full text-xs">
+                      {pdf.division}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
                 </TableCell>
-                <TableCell>{pdf.division || "-"}</TableCell>
+                <TableCell>
+                  {pdf.category === "THERAPEUTIC" ? (
+                    <span className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 px-2 py-1 rounded-full text-xs">
+                      Therapeutic
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-muted-foreground" />
