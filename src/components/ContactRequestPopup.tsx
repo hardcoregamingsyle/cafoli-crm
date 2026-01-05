@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
@@ -27,6 +27,16 @@ export function ContactRequestPopup() {
 
   const acknowledgeRequest = useMutation(api.contactRequests.acknowledgeContactRequest);
 
+  // Debug logging
+  useEffect(() => {
+    if (pendingRequests) {
+      console.log("ContactRequestPopup - Pending requests:", pendingRequests.length);
+      if (pendingRequests.length > 0) {
+        console.log("ContactRequestPopup - First request:", pendingRequests[0]);
+      }
+    }
+  }, [pendingRequests]);
+
   const currentRequest = pendingRequests?.[0];
 
   const handleGoToWhatsApp = async () => {
@@ -38,12 +48,22 @@ export function ContactRequestPopup() {
       navigate(`/whatsapp?leadId=${currentRequest.leadId}`);
       toast.success("Navigating to WhatsApp chat");
     } catch (error) {
+      console.error("Failed to acknowledge request:", error);
       toast.error("Failed to acknowledge request");
       setIsNavigating(false);
     }
   };
 
-  if (!currentRequest || !currentRequest.lead) return null;
+  // Don't render if no requests or no lead data
+  if (!currentRequest || !currentRequest.lead) {
+    console.log("ContactRequestPopup - Not rendering:", { 
+      hasRequest: !!currentRequest, 
+      hasLead: !!currentRequest?.lead 
+    });
+    return null;
+  }
+
+  console.log("ContactRequestPopup - Rendering popup for lead:", currentRequest.lead.name);
 
   const getInitials = (name: string) => {
     return name

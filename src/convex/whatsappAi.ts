@@ -58,12 +58,16 @@ export const generateAndSendAiReply = action({
       const lead = await ctx.runQuery(api.leads.queries.getLead, { id: args.leadId });
       
       if (lead && lead.assignedTo) {
+        console.log(`Creating contact request for lead ${args.leadId}, assigned to ${lead.assignedTo}`);
+        
         // Create contact request for assigned user
-        await ctx.runMutation(api.contactRequests.createContactRequest, {
+        const requestId = await ctx.runMutation(api.contactRequests.createContactRequest, {
           leadId: args.leadId,
           assignedTo: lead.assignedTo,
           customerMessage: args.prompt || "",
         });
+
+        console.log(`Contact request created with ID: ${requestId}`);
 
         // Get configurable automated response or use default
         const autoMessage = args.context?.contactRequestMessage || 
@@ -79,6 +83,8 @@ export const generateAndSendAiReply = action({
 
         console.log(`Contact request created for lead ${args.leadId} with confidence: ${contactConfidence}`);
         return autoMessage;
+      } else {
+        console.log(`Lead ${args.leadId} has no assignedTo user, skipping contact request`);
       }
     }
 
