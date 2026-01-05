@@ -142,32 +142,38 @@ export const generateAndSendAiReply = action({
                     const product = products.find((p: any) => p.name.toLowerCase() === name.toLowerCase());
                     if (product) {
                         matchedProducts.push(product);
+                        console.log(`Found product: ${product.name}, images:`, product.images);
                     } else {
                         notFoundNames.push(name);
+                        console.log(`Product not found: ${name}`);
                     }
                 }
 
                 if (matchedProducts.length > 0) {
                     messageToSend = matchedProducts.map((product: any) => 
-                        `Here are the details for *${product.name}*:\\n` +
-                        `🏷️ Brand: ${product.brandName}\\n` +
-                        `🧪 Molecule: ${product.molecule || "N/A"}\\n` +
-                        `💰 MRP: ₹${product.mrp}\\n` +
-                        `📦 Packaging: ${product.packaging || "N/A"}\\n` +
+                        `Here are the details for *${product.name}*:\n` +
+                        `🏷️ Brand: ${product.brandName}\n` +
+                        `🧪 Molecule: ${product.molecule || "N/A"}\n` +
+                        `💰 MRP: ₹${product.mrp}\n` +
+                        `📦 Packaging: ${product.packaging || "N/A"}\n` +
                         `${product.description || ""}`
                     ).join("\n\n-------------------\n\n");
                     
                     // Collect images for all matched products
                     for (const product of matchedProducts) {
                         if (product.images && product.images.length > 0) {
+                            console.log(`Adding image for product ${product.name}: ${product.images[0]}`);
                             mediasToSend.push({
                                 storageId: product.images[0],
                                 fileName: `${product.name}.jpg`,
                                 mimeType: "image/jpeg",
-                                caption: product.name
+                                caption: `${product.name}`
                             });
+                        } else {
+                            console.log(`No images found for product: ${product.name}`);
                         }
                     }
+                    console.log(`Total images to send: ${mediasToSend.length}`);
                 } 
                 
                 if (notFoundNames.length > 0) {
@@ -176,19 +182,15 @@ export const generateAndSendAiReply = action({
                         requestedProductName = notFoundNames[0];
                         messageToSend = "This product image and details will be shared shortly. 📦";
                     }
-                    // If we found some products but not others, we just send what we found.
                 }
             } 
             // Handle Range Match
             else if (parsed.rangeName) {
-                // Find ALL ranges that match the name (ignoring case)
-                // This handles cases where the same range name exists in multiple divisions
                 const matchingRanges = rangePdfs.filter((r: any) => 
                     r.name.toLowerCase() === parsed.rangeName.toLowerCase()
                 );
 
                 if (matchingRanges.length > 0) {
-                    // If multiple matches, send all of them
                     if (matchingRanges.length > 1) {
                         messageToSend = `Here are the PDFs for *${parsed.rangeName}*. 📄`;
                         rangePdfsToSend = matchingRanges;
@@ -212,7 +214,6 @@ export const generateAndSendAiReply = action({
             }
         }
     } catch (e) {
-        // Not valid JSON, treat as plain text response
         console.log("Failed to parse AI JSON response:", e);
     }
 
@@ -227,32 +228,47 @@ export const generateAndSendAiReply = action({
         quotedMessageExternalId: args.replyingToExternalId,
     });
     
+    console.log(`Sending ${mediasToSend.length} product images...`);
+    
+    // Send Product Images FIRST (before Range PDFs)
+    for (const media of mediasToSend) {
+        console.log(`Sending product image: ${media.fileName} with storageId: ${media.storageId}`);
+        try {
+            await ctx.runAction(api.whatsapp.sendWhatsAppMedia, {
+                phoneNumber: args.phoneNumber,
+                message: media.caption || "",
+                leadId: args.leadId,
+                storageId: media.storageId,
+                fileName: media.fileName,
+                mimeType: media.mimeType,
+            });
+            console.log(`Successfully sent image: ${media.fileName}`);
+        } catch (error) {
+            console.error(`Failed to send image ${media.fileName}:`, error);
+        }
+    }
+    
+    console.log(`Sending ${rangePdfsToSend.length} range PDFs...`);
+    
     // Send Range PDFs
     for (const range of rangePdfsToSend) {
         const caption = range.category === "THERAPEUTIC" 
             ? `${range.name} (Therapeutic Range)`
             : `${range.name}${range.division ? ` (${range.division})` : ""}`;
 
-        await ctx.runAction(api.whatsapp.sendWhatsAppMedia, {
-            phoneNumber: args.phoneNumber,
-            message: caption,
-            leadId: args.leadId,
-            storageId: range.storageId,
-            fileName: `${range.name}.pdf`,
-            mimeType: "application/pdf",
-        });
-    }
-
-    // Send Product Images
-    for (const media of mediasToSend) {
-        await ctx.runAction(api.whatsapp.sendWhatsAppMedia, {
-            phoneNumber: args.phoneNumber,
-            message: media.caption || "",
-            leadId: args.leadId,
-            storageId: media.storageId,
-            fileName: media.fileName,
-            mimeType: media.mimeType,
-        });
+        try {
+            await ctx.runAction(api.whatsapp.sendWhatsAppMedia, {
+                phoneNumber: args.phoneNumber,
+                message: caption,
+                leadId: args.leadId,
+                storageId: range.storageId,
+                fileName: `${range.name}.pdf`,
+                mimeType: "application/pdf",
+            });
+            console.log(`Successfully sent range PDF: ${range.name}`);
+        } catch (error) {
+            console.error(`Failed to send range PDF ${range.name}:`, error);
+        }
     }
 
     // 6. If product not found, create intervention request
