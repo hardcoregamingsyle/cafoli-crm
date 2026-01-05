@@ -37,7 +37,7 @@ export default function Admin() {
   const importLeads = useMutation(api.leads.admin.bulkImportLeads);
   const manualMarkColdCallerLeads = useMutation(api.coldCallerLeads.manualMarkColdCallerLeads);
   const manualAllocateColdCallerLeads = useMutation(api.coldCallerLeads.manualAllocateColdCallerLeads);
-  const sendWelcomeToRecentLeads = useAction(api.whatsappTemplatesActions.sendWelcomeToRecentLeads);
+  const sendWelcomeToRecentLeads = useAction(api.brevo.sendWelcomeEmailToRecentLeads);
   const autoAssignUnassignedLeads = useMutation(api.leads.autoAssign.autoAssignUnassignedLeads);
   const syncPharmavends = useAction(api.pharmavends.manualSyncPharmavends);
   const sendTestReport = useAction(api.reportPdfGenerator.sendTestReport);
@@ -160,7 +160,7 @@ export default function Admin() {
     try {
       const result = await sendWelcomeToRecentLeads({});
       toast.success(
-        `Welcome messages sent successfully!\n${result.messagesSent} messages sent to ${result.leadsProcessed} leads\n${result.errors} errors`
+        `Welcome emails sent successfully!\n${result.emailsSent} emails sent to ${result.leadsProcessed} leads\n${result.errors} errors`
       );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to send welcome messages");

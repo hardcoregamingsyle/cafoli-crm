@@ -336,3 +336,60 @@ export const sendWelcomeEmail = internalAction({
     }
   },
 });
+
+// Send welcome emails to leads created in the past 150 hours
+export const sendWelcomeEmailToRecentLeads = action({
+  args: {},
+  handler: async (ctx): Promise<{ success: boolean; leadsProcessed: number; emailsSent: number; errors: number }> => {
+    const now = Date.now();
+    const cutoffTime = now - (150 * 60 * 60 * 1000); // 150 hours ago
+    
+    // Get all leads created in the past 150 hours
+    // We can reuse the same query as the whatsapp one or a generic one
+    // Using internal.leads.queries.getAllLeads if available or similar
+    // For now, I'll use the same query used in whatsappTemplatesActions if accessible, or just query leads directly via a new internal query if needed.
+    // Actually, let's use a runQuery to get leads.
+    
+    // We need a query to get leads. I'll assume we can use 'leads:getLeads' or similar, but let's check what's available.
+    // whatsappTemplatesActions uses "whatsappMutations:getLeadsForMatching".
+    // I'll define a helper internal query in this file or use an existing one.
+    
+    // To be safe and self-contained, I'll rely on the existing 'whatsappMutations:getLeadsForMatching' which returns all leads, 
+    // OR better, I should add a query in brevoQueries.ts or similar.
+    // But to keep it simple and avoid circular deps or missing files, I'll use the one I saw in whatsappTemplatesActions for now: "whatsappMutations:getLeadsForMatching"
+    // Wait, that might be confusing.
+    
+    // Let's look at what we have in context. src/convex/leads/queries.ts is likely.
+    // I'll assume I can query leads.
+    
+    const allLeads: any[] = await ctx.runQuery(internal.brevoQueries.getRecentLeadsForEmail, { cutoffTime });
+    
+    let sentCount = 0;
+    let errorCount = 0;
+    
+    for (const lead of allLeads) {
+      if (lead.email && !lead.welcomeEmailSent) {
+         try {
+            await ctx.runAction(internal.brevo.sendWelcomeEmail, {
+              leadName: lead.name,
+              leadEmail: lead.email,
+              source: lead.source || "Website",
+            });
+            // We should mark it as sent.
+            await ctx.runMutation(internal.brevoMutations.markWelcomeEmailSent, { leadId: lead._id });
+            sentCount++;
+         } catch (error) {
+            console.error(`Failed to send welcome email to ${lead.email}:`, error);
+            errorCount++;
+         }
+      }
+    }
+    
+    return {
+      success: true,
+      leadsProcessed: allLeads.length,
+      emailsSent: sentCount,
+      errors: errorCount,
+    };
+  },
+});

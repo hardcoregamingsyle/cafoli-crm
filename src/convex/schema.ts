@@ -89,6 +89,9 @@ export default defineSchema({
       callDuration: v.optional(v.string()),
     })),
     
+    // Email flags
+    welcomeEmailSent: v.optional(v.boolean()),
+    
     // Combined search field
     searchText: v.optional(v.string()),
   })

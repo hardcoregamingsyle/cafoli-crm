@@ -120,3 +120,10 @@ export const resetDailyUsageInternal = internalMutation({
     });
   },
 });
+
+export const markWelcomeEmailSent = internalMutation({
+  args: { leadId: v.id("leads") },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.leadId, { welcomeEmailSent: true });
+  },
+});

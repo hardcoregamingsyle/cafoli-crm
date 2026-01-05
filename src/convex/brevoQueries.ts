@@ -28,3 +28,18 @@ export const incrementUsage = internalMutation({
     });
   },
 });
+
+export const getRecentLeadsForEmail = internalQuery({
+  args: { cutoffTime: v.number() },
+  handler: async (ctx, args): Promise<Doc<"leads">[]> => {
+    // Fetch recent leads, ordered by creation time descending
+    // We take a reasonable limit (e.g. 1000) to avoid fetching the whole table
+    // and then filter by the cutoff time
+    const leads = await ctx.db
+      .query("leads")
+      .order("desc")
+      .take(1000);
+
+    return leads.filter((lead) => lead._creationTime >= args.cutoffTime);
+  },
+});
