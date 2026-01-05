@@ -129,25 +129,44 @@ export const generateAndSendAiReply = action({
         const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
         const jsonString = jsonMatch ? jsonMatch[0] : aiResponse.trim();
         
+        console.log("AI Response:", aiResponse);
+        console.log("Extracted JSON string:", jsonString);
+        
         if (jsonString.startsWith("{") && jsonString.endsWith("}")) {
             const parsed = JSON.parse(jsonString);
+            console.log("Parsed JSON:", JSON.stringify(parsed, null, 2));
             
             // Handle Product Match (Single or Multiple)
             if (parsed.productNames || parsed.productName) {
                 const names = parsed.productNames || [parsed.productName];
+                console.log("Looking for products:", names);
+                console.log("Available products:", products.map((p: any) => p.name));
+                
                 const matchedProducts = [];
                 const notFoundNames = [];
 
                 for (const name of names) {
-                    const product = products.find((p: any) => p.name.toLowerCase() === name.toLowerCase());
+                    // Try exact match first
+                    let product = products.find((p: any) => p.name.toLowerCase() === name.toLowerCase());
+                    
+                    // If no exact match, try partial match
+                    if (!product) {
+                        product = products.find((p: any) => 
+                            p.name.toLowerCase().includes(name.toLowerCase()) || 
+                            name.toLowerCase().includes(p.name.toLowerCase())
+                        );
+                    }
+                    
                     if (product) {
                         matchedProducts.push(product);
-                        console.log(`Found product: ${product.name}, images:`, product.images);
+                        console.log(`✓ Found product: ${product.name}, images:`, product.images);
                     } else {
                         notFoundNames.push(name);
-                        console.log(`Product not found: ${name}`);
+                        console.log(`✗ Product not found: ${name}`);
                     }
                 }
+
+                console.log(`Matched ${matchedProducts.length} products, ${notFoundNames.length} not found`);
 
                 if (matchedProducts.length > 0) {
                     messageToSend = matchedProducts.map((product: any) => 
@@ -162,7 +181,7 @@ export const generateAndSendAiReply = action({
                     // Collect images for all matched products
                     for (const product of matchedProducts) {
                         if (product.images && product.images.length > 0) {
-                            console.log(`Adding image for product ${product.name}: ${product.images[0]}`);
+                            console.log(`✓ Adding image for product ${product.name}: ${product.images[0]}`);
                             mediasToSend.push({
                                 storageId: product.images[0],
                                 fileName: `${product.name}.jpg`,
@@ -170,10 +189,10 @@ export const generateAndSendAiReply = action({
                                 caption: `${product.name}`
                             });
                         } else {
-                            console.log(`No images found for product: ${product.name}`);
+                            console.log(`✗ No images found for product: ${product.name}`);
                         }
                     }
-                    console.log(`Total images to send: ${mediasToSend.length}`);
+                    console.log(`Total images queued to send: ${mediasToSend.length}`);
                 } 
                 
                 if (notFoundNames.length > 0) {
@@ -230,10 +249,28 @@ export const generateAndSendAiReply = action({
     
     console.log(`Sending ${mediasToSend.length} product images...`);
     
+    console.log(`=== MEDIA SENDING PHASE ===`);
+    console.log(`Product images to send: ${mediasToSend.length}`);
+    console.log(`Range PDFs to send: ${rangePdfsToSend.length}`);
+    
     // Send Product Images FIRST (before Range PDFs)
-    for (const media of mediasToSend) {
-        console.log(`Sending product image: ${media.fileName} with storageId: ${media.storageId}`);
+    for (let i = 0; i < mediasToSend.length; i++) {
+        const media = mediasToSend[i];
+        console.log(`[${i+1}/${mediasToSend.length}] Attempting to send product image:`);
+        console.log(`  - File: ${media.fileName}`);
+        console.log(`  - Storage ID: ${media.storageId}`);
+        console.log(`  - MIME Type: ${media.mimeType}`);
+        console.log(`  - Caption: ${media.caption}`);
+        
         try {
+            // Verify storage ID exists
+            const fileUrl = await ctx.storage.getUrl(media.storageId);
+            if (!fileUrl) {
+                console.error(`✗ Storage ID ${media.storageId} returned null URL!`);
+                continue;
+            }
+            console.log(`✓ File URL retrieved: ${fileUrl.substring(0, 50)}...`);
+            
             await ctx.runAction(api.whatsapp.sendWhatsAppMedia, {
                 phoneNumber: args.phoneNumber,
                 message: media.caption || "",
@@ -242,9 +279,10 @@ export const generateAndSendAiReply = action({
                 fileName: media.fileName,
                 mimeType: media.mimeType,
             });
-            console.log(`Successfully sent image: ${media.fileName}`);
+            console.log(`✓ Successfully sent image: ${media.fileName}`);
         } catch (error) {
-            console.error(`Failed to send image ${media.fileName}:`, error);
+            console.error(`✗ Failed to send image ${media.fileName}:`, error);
+            console.error(`Error details:`, JSON.stringify(error, null, 2));
         }
     }
     
