@@ -17,7 +17,7 @@ http.route({
 
       const verifyToken = process.env.WEBHOOK_VERIFICATION_TOKEN || "cafoli_webhook_verify_2025";
 
-      console.log("WhatsApp webhook verification attempt:", { 
+      console.log("🔐 WhatsApp webhook verification attempt:", { 
         mode, 
         receivedToken: token, 
         expectedToken: verifyToken,
@@ -46,7 +46,7 @@ http.route({
         return new Response("Forbidden", { status: 403 });
       }
     } catch (error) {
-      console.error("Webhook verification error:", error);
+      console.error("❌ Webhook verification error:", error);
       return new Response("Internal Server Error", { status: 500 });
     }
   }),
@@ -60,16 +60,17 @@ http.route({
     try {
       const body = await req.json();
       
-      console.log("Received WhatsApp webhook:", JSON.stringify(body, null, 2));
+      console.log("📨 Received WhatsApp webhook:", JSON.stringify(body, null, 2));
 
       // Process status updates (sent, delivered, read)
       if (body.entry?.[0]?.changes?.[0]?.value?.statuses) {
         const statuses = body.entry[0].changes[0].value.statuses;
+        console.log(`📊 Processing ${statuses.length} status update(s)`);
         
         for (const statusUpdate of statuses) {
-          await ctx.runAction("whatsapp:handleStatusUpdate" as any, {
+          await ctx.runAction(internal.whatsapp.webhook.handleStatusUpdate, {
             messageId: statusUpdate.id,
-            status: statusUpdate.status, // "sent", "delivered", "read", "failed"
+            status: statusUpdate.status,
           });
         }
       }
@@ -79,6 +80,8 @@ http.route({
         const value = body.entry[0].changes[0].value;
         const messages = value.messages;
         const contacts = value.contacts || [];
+        
+        console.log(`📥 Processing ${messages.length} incoming message(s)`);
         
         for (const message of messages) {
           // Extract sender name from contacts
@@ -129,9 +132,9 @@ http.route({
             mediaMimeType = message.audio.mime_type;
           }
 
-          console.log(`Processing incoming message - Type: ${message.type}, Text: "${textContent}"`);
+          console.log(`📝 Processing message - Type: ${message.type}, From: ${message.from}, Text: "${textContent}"`);
 
-          await ctx.runAction("whatsapp:handleIncomingMessage" as any, {
+          await ctx.runAction(internal.whatsapp.webhook.handleIncomingMessage, {
             from: message.from,
             messageId: message.id,
             timestamp: message.timestamp,
@@ -151,7 +154,7 @@ http.route({
         headers: { "Content-Type": "application/json" },
       });
     } catch (error) {
-      console.error("Webhook processing error:", error);
+      console.error("❌ Webhook processing error:", error);
       return new Response(JSON.stringify({ error: "Internal server error" }), {
         status: 500,
         headers: { "Content-Type": "application/json" },

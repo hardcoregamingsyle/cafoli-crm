@@ -1,15 +1,111 @@
-export async function generateWithGemini(
-  ctx: ActionCtx,
-  systemPrompt: string,
-  userPrompt: string,
-  config: {
-    jsonMode?: boolean;
-    model?: string;
-  } = {}
-) {
-  // ...
-  // Try models sequentially
-  const models = config.model ? [config.model] : modelsToTry;
-  for (const modelName of models) {
+// src/convex/http.ts
+http.route({
+  path: "/webhooks/whatsapp",
+  method: "POST",
+  handler: httpAction(async (ctx, req) => {
+    try {
+      const body = await req.json();
 
-}
+      console.log("📨 Received WhatsApp webhook:", JSON.stringify(body, null, 2));
+
+      // Process status updates (sent, delivered, read)
+      if (body.entry?.[0]?.changes?.[0]?.value?.statuses) {
+        const statuses = body.entry[0].changes[0].value.statuses;
+        console.log(`📊 Processing ${statuses.length} status update(s)`);
+        
+        for (const statusUpdate of statuses) {
+          await ctx.runAction(internal.whatsapp.webhook.handleStatusUpdate, {
+            messageId: statusUpdate.id,
+            status: statusUpdate.status,
+          });
+        }
+      }
+
+      // Process incoming messages
+      if (body.entry?.[0]?.changes?.[0]?.value?.messages) {
+        console.log("🟢 Entering message processing block."); // New log
+        const value = body.entry[0].changes[0].value;
+        const messages = value.messages;
+        const contacts = value.contacts || [];
+        
+        console.log(`📥 Processing ${messages.length} incoming message(s). Value object:`, JSON.stringify(value, null, 2)); // Modified log
+        
+        for (const message of messages) {
+          // Extract sender name from contacts
+          const contact = contacts.find((c: any) => c.wa_id === message.from);
+          const senderName = contact?.profile?.name;
+
+          // Extract text content - handle button replies and regular text
+          let textContent = "";
+          if (message.type === "button" && message.button) {
+            // Button reply - extract the button text/payload
+            textContent = message.button.text || message.button.payload || "";
+          } else if (message.type === "interactive" && message.interactive) {
+            // Interactive button reply
+            if (message.interactive.type === "button_reply") {
+              textContent = message.interactive.button_reply?.title || "";
+            } else if (message.interactive.type === "list_reply") {
+              textContent = message.interactive.list_reply?.title || "";
+            }
+          } else if (message.text?.body) {
+            // Regular text message
+            textContent = message.text.body;
+          }
+
+          // Extract media information based on message type
+          let mediaId = null;
+          let mediaCaption = null;
+          let mediaMimeType = null;
+          let mediaFilename = null;
+
+          if (message.type === "image" && message.image) {
+            mediaId = message.image.id;
+            mediaCaption = message.image.caption;
+            mediaMimeType = message.image.mime_type;
+            textContent = textContent || mediaCaption || "";
+          } else if (message.type === "document" && message.document) {
+            mediaId = message.document.id;
+            mediaCaption = message.document.caption;
+            mediaMimeType = message.document.mime_type;
+            mediaFilename = message.document.filename;
+            textContent = textContent || mediaCaption || "";
+          } else if (message.type === "video" && message.video) {
+            mediaId = message.video.id;
+            mediaCaption = message.video.caption;
+            mediaMimeType = message.video.mime_type;
+            textContent = textContent || mediaCaption || "";
+          } else if (message.type === "audio" && message.audio) {
+            mediaId = message.audio.id;
+            mediaMimeType = message.audio.mime_type;
+          }
+
+          console.log(`📝 Processing message - Type: ${message.type}, From: ${message.from}, Text: \"${textContent}\"`);
+
+          await ctx.runAction(internal.whatsapp.webhook.handleIncomingMessage, {
+            from: message.from,
+            messageId: message.id,
+            timestamp: message.timestamp,
+            text: textContent,
+            type: message.type,
+            mediaId: mediaId || undefined,
+            mediaMimeType: mediaMimeType || undefined,
+            mediaFilename: mediaFilename || undefined,
+            senderName,
+            quotedMessageExternalId: message.context?.id,
+          });
+        }
+      }
+
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("❌ Webhook processing error:", error);
+      return new Response(JSON.stringify({ error: "Internal server error" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }),
+});

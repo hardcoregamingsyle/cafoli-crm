@@ -20,8 +20,10 @@ export const handleIncomingMessage = internalAction({
   },
   handler: async (ctx, args) => {
     try {
+      console.log("🔵 handleIncomingMessage called", { from: args.from, messageId: args.messageId, text: args.text });
+      
       // Find lead by phone number
-      const allLeads = await ctx.runQuery("whatsappMutations:getLeadsForMatching" as any, {});
+      const allLeads = await ctx.runQuery(internal.whatsappMutations.getLeadsForMatching, {});
       
       // Clean phone number (remove + and spaces)
       const cleanPhone = args.from.replace(/[\s+]/g, "");
@@ -36,14 +38,16 @@ export const handleIncomingMessage = internalAction({
 
       if (matchingLeads && matchingLeads.length > 0) {
         leadId = matchingLeads[0]._id;
+        console.log("✅ Found existing lead:", leadId);
       } else {
-        console.log(`No lead found for phone number: ${args.from}. Creating new lead.`);
-        leadId = await ctx.runMutation("whatsappMutations:createLeadFromWhatsApp" as any, {
+        console.log(`⚠️ No lead found for phone number: ${args.from}. Creating new lead.`);
+        leadId = await ctx.runMutation(internal.whatsappMutations.createLeadFromWhatsApp, {
           phoneNumber: args.from,
           name: args.senderName,
           message: args.text,
         });
         isNewLead = true;
+        console.log("✅ Created new lead:", leadId);
       }
 
       if (leadId) {
@@ -78,9 +82,10 @@ export const handleIncomingMessage = internalAction({
               // Upload to Convex storage
               const storageId = await ctx.storage.store(fileBlob);
               mediaUrl = await ctx.storage.getUrl(storageId);
+              console.log("✅ Media downloaded and stored:", mediaUrl);
             }
           } catch (error) {
-            console.error("Error downloading incoming media:", error);
+            console.error("❌ Error downloading incoming media:", error);
           }
         }
 
@@ -93,7 +98,7 @@ export const handleIncomingMessage = internalAction({
         }
 
         // Store incoming message
-        const messageId = await ctx.runMutation("whatsappMutations:storeMessage" as any, {
+        await ctx.runMutation(internal.whatsappMutations.storeMessage, {
           leadId,
           phoneNumber: args.from,
           content: args.text,
@@ -106,17 +111,20 @@ export const handleIncomingMessage = internalAction({
           mediaMimeType: args.mediaMimeType || undefined,
           quotedMessageExternalId: args.quotedMessageExternalId,
         });
+        
+        console.log("✅ Message stored in database");
 
         // Send welcome message for new leads
         if (isNewLead) {
-          console.log(`Sending welcome message to new lead ${leadId}`);
+          console.log(`📤 Sending welcome message to new lead ${leadId}`);
           try {
             await ctx.runAction(internal.whatsappTemplates.sendWelcomeMessage, {
               leadId,
               phoneNumber: args.from,
             });
+            console.log("✅ Welcome message sent");
           } catch (error) {
-            console.error("Error sending welcome message:", error);
+            console.error("❌ Error sending welcome message:", error);
           }
         } else {
             // TRIGGER AUTO REPLY FOR EXISTING LEADS - BUT ONLY IF CHAT IS NOT ACTIVE
@@ -125,7 +133,7 @@ export const handleIncomingMessage = internalAction({
                 const isChatActive = await ctx.runQuery(api.activeChatSessions.isLeadChatActive, { leadId });
                 
                 if (!isChatActive) {
-                    console.log(`Triggering auto-reply for lead ${leadId} (chat not active)`);
+                    console.log(`🤖 Triggering auto-reply for lead ${leadId} (chat not active)`);
                     
                     const recentMessages = await ctx.runQuery(api.whatsappQueries.getChatMessages, { leadId });
                     const contextMessages = recentMessages.slice(-5).map((m: any) => ({
@@ -149,19 +157,21 @@ export const handleIncomingMessage = internalAction({
                             prompt: args.text,
                             isAutoReply: true
                         });
+                        console.log("✅ Auto-reply sent");
                     } else {
-                        console.error("Could not find whatsappAi.generateAndSendAiReply action");
+                        console.error("❌ Could not find whatsappAi.generateAndSendAiReply action");
                     }
                 } else {
-                    console.log(`Skipping auto-reply for lead ${leadId} (chat is actively being viewed)`);
+                    console.log(`⏭️ Skipping auto-reply for lead ${leadId} (chat is actively being viewed)`);
                 }
             }
         }
 
-        console.log(`Stored incoming message from ${args.from} for lead ${leadId}`);
+        console.log(`✅ Successfully processed incoming message from ${args.from} for lead ${leadId}`);
       }
     } catch (error) {
-      console.error("Error handling incoming message:", error);
+      console.error("❌ Error handling incoming message:", error);
+      throw error;
     }
   },
 });
@@ -174,13 +184,14 @@ export const handleStatusUpdate = internalAction({
   },
   handler: async (ctx, args) => {
     try {
-      await ctx.runMutation("whatsappMutations:updateMessageStatus" as any, {
+      console.log(`📊 Status update: ${args.messageId} -> ${args.status}`);
+      await ctx.runMutation(internal.whatsappMutations.updateMessageStatus, {
         externalId: args.messageId,
         status: args.status,
       });
-      console.log(`Updated message ${args.messageId} to status: ${args.status}`);
+      console.log(`✅ Updated message ${args.messageId} to status: ${args.status}`);
     } catch (error) {
-      console.error("Error handling status update:", error);
+      console.error("❌ Error handling status update:", error);
     }
   },
 });
