@@ -15,11 +15,6 @@ export const generateAndSendAiReply = action({
     isAutoReply: v.optional(v.boolean()),
   },
   handler: async (ctx, args): Promise<string> => {
-    // 1. Fetch all products for context
-    const products = await ctx.runQuery(api.products.listProducts);
-    const productNames = products.map(p => p.name).join(", ");
-
-    // 2. Generate content using the AI service
     const systemUser = args.userId ? null : await ctx.runQuery(api.users.getSystemUser);
     const userId = args.userId || systemUser?._id;
     
@@ -27,23 +22,7 @@ export const generateAndSendAiReply = action({
       throw new Error("No user ID available for AI generation");
     }
 
-    const aiResponse = (await ctx.runAction(api.ai.generateContent, {
-      prompt: args.prompt || "Draft a reply to this conversation",
-      type: "chat_reply",
-      context: {
-        ...args.context,
-        availableProducts: productNames,
-        isAutoReply: args.isAutoReply
-      },
-      userId: userId,
-      leadId: args.leadId,
-    })) as string;
-
-    if (!aiResponse) {
-      throw new Error("AI failed to generate a response");
-    }
-
-    // 3. Use AI to intelligently detect if customer wants to speak with salesperson
+    // 1. FIRST: Check if customer wants to speak with salesperson using AI
     let isContactRequest = false;
     
     try {
@@ -63,8 +42,8 @@ export const generateAndSendAiReply = action({
       console.warn("Failed to detect contact request with AI, skipping:", e);
     }
 
+    // 2. If contact request detected, handle it immediately and return
     if (isContactRequest) {
-      // Get lead details to find assigned user
       const lead = await ctx.runQuery(api.leads.queries.getLead, { id: args.leadId });
       
       if (lead && lead.assignedTo) {
@@ -88,6 +67,26 @@ export const generateAndSendAiReply = action({
 
         return autoMessage;
       }
+    }
+
+    // 3. If NOT a contact request, proceed with normal AI reply generation
+    const products = await ctx.runQuery(api.products.listProducts);
+    const productNames = products.map(p => p.name).join(", ");
+
+    const aiResponse = (await ctx.runAction(api.ai.generateContent, {
+      prompt: args.prompt || "Draft a reply to this conversation",
+      type: "chat_reply",
+      context: {
+        ...args.context,
+        availableProducts: productNames,
+        isAutoReply: args.isAutoReply
+      },
+      userId: userId,
+      leadId: args.leadId,
+    })) as string;
+
+    if (!aiResponse) {
+      throw new Error("AI failed to generate a response");
     }
 
     // 4. Check if the response indicates a product match (JSON format)

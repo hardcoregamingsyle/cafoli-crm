@@ -1,77 +1,164 @@
-// src/convex/schema.ts
-
-import { action, internalAction } from "./_generated/server";
+// src/convex/whatsappAi.ts
+"use node";
+import { action } from "./_generated/server";
 import { v } from "convex/values";
-import { internal, api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 
-export const createProduct = mutation({
+export const generateAndSendAiReply = action({
   args: {
-    name: v.string(),
-    brandName: v.string(),
-    molecule: v.optional(v.string()),
-    mrp: v.string(),
-    rate: v.string(),
-    images: v.array(v.id("_storage")),
-    description: v.optional(v.string()),
+    leadId: v.id("leads"),
+    phoneNumber: v.string(),
+    userId: v.optional(v.id("users")),
+    replyingToMessageId: v.optional(v.id("messages")),
+    replyingToExternalId: v.optional(v.string()),
+    context: v.any(),
+    prompt: v.optional(v.string()),
+    isAutoReply: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
-    const productId = await ctx.db.insert("products", {
-      name: args.name,
-      brandName: args.brandName,
-      molecule: args.molecule,
-      mrp: args.mrp,
-      rate: args.rate,
-      images: args.images,
-      description: args.description,
-    });
-    return productId;
-  },
-});
+  handler: async (ctx, args): Promise<string> => {
+    const systemUser = args.userId ? null : await ctx.runQuery(api.users.getSystemUser);
+    const userId = args.userId || systemUser?._id;
+    
+    if (!userId) {
+      throw new Error("No user ID available for AI generation");
+    }
 
-products: defineTable({
-  name: v.string(),
-  brandName: v.string(),
-  molecule: v.optional(v.string()),
-  mrp: v.string(),
-  rate: v.string(),
-  images: v.array(v.id("_storage")),
-  description: v.optional(v.string()),
-}).index("by_name", ["name"]),
+    // 1. FIRST: Check if customer wants to speak with salesperson using AI
+    let isContactRequest = false;
+    
+    try {
+      const detectionResponse = await ctx.runAction(api.ai.generateContent, {
+        prompt: args.prompt || "",
+        type: "contact_request_detection",
+        context: {
+          conversationHistory: args.context?.conversationHistory || [],
+        },
+        userId: userId,
+        leadId: args.leadId,
+      }) as string;
 
-const productId = await ctx.db.insert("products", {
-  name: args.name,
-  brandName: args.brandName,
-  mrp: args.mrp,
-  rate: args.rate,
-  images: args.images,
-  description: args.description,
-});
+      const detection = JSON.parse(detectionResponse.trim());
+      // Relax the condition: If AI thinks it wants contact at all, treat it as such.
+      isContactRequest = detection.wantsContact === true; 
+    } catch (e) {
+      console.warn("Failed to detect contact request with AI, skipping:", e);
+    }
 
-// 3. Check if the response indicates a product match (JSON format)
-// We'll try to parse it as JSON if it looks like it
-let messageToSend = aiResponse;
-let mediaToSend = null;
+    // 2. If contact request detected, handle it immediately.
+    // Always send the autoMessage first, then create the internal request conditionally.
+    if (isContactRequest) {
+      const autoMessage = "Thank you for your request! A member of our team will contact you shortly. 🙏";
+      
+      await ctx.runAction(api.whatsapp.sendWhatsAppMessage, {
+        phoneNumber: args.phoneNumber,
+        message: autoMessage,
+        leadId: args.leadId,
+        quotedMessageId: args.replyingToMessageId,
+        quotedMessageExternalId: args.replyingToExternalId,
+      });
 
-try {
-    // Simple check if response is JSON
-    if (aiResponse.trim().startsWith("{") && aiResponse.trim().endsWith("}")) {
-        const parsed = JSON.parse(aiResponse);
-        if (parsed.productName) {
-            // Find the product
-            const product = products.find(p => p.name.toLowerCase() === parsed.productName.toLowerCase());
-            if (product) {
-                messageToSend = `Here are the details for ${product.name}:\nBrand: ${product.brandName}\nMolecule: ${product.molecule || "N/A"}\nMRP: ${product.mrp}\nRate: ${product.rate}\n${product.description || ""}`;
-                
-                if (product.images && product.images.length > 0) {
-                    mediaToSend = {
-                        type: "text",
-                        text: `Here are the details for ${product.name}:\nBrand: ${product.brandName}\nMolecule: ${product.molecule || "N/A"}\nMRP: ${product.mrp}\nRate: ${product.rate}\n${product.description || ""}`,
-                    };
+      // Attempt to create contact request internally only if lead and assignedTo exist
+      const lead = await ctx.runQuery(api.leads.queries.getLead, { id: args.leadId });
+      if (lead && lead.assignedTo) {
+        await ctx.runMutation(api.contactRequests.createContactRequest, {
+          leadId: args.leadId,
+          assignedTo: lead.assignedTo,
+          customerMessage: args.prompt || "",
+        });
+      } else {
+        console.warn(`Contact request detected for lead ${args.leadId} but lead or assignedTo not found. Internal request not created.`);
+      }
+
+      return autoMessage; // Crucially, return immediately after handling the contact request
+    }
+
+    // 3. If NOT a contact request, proceed with normal AI reply generation
+    const products = await ctx.runQuery(api.products.listProducts);
+    const productNames = products.map(p => p.name).join(", ");
+
+    const aiResponse = (await ctx.runAction(api.ai.generateContent, {
+      prompt: args.prompt || "Draft a reply to this conversation",
+      type: "chat_reply",
+      context: {
+        ...args.context,
+        availableProducts: productNames,
+        isAutoReply: args.isAutoReply
+      },
+      userId: userId,
+      leadId: args.leadId,
+    })) as string;
+
+    if (!aiResponse) {
+      throw new Error("AI failed to generate a response");
+    }
+
+    // 4. Check if the response indicates a product match (JSON format)
+    let messageToSend = aiResponse;
+    let mediaToSend = null;
+    let productNotFound = false;
+    let requestedProductName = "";
+
+    try {
+        const trimmedResponse = aiResponse.trim();
+        if (trimmedResponse.startsWith("{") && trimmedResponse.endsWith("}")) {
+            const parsed = JSON.parse(trimmedResponse);
+            if (parsed.productName) {
+                const product = products.find(p => p.name.toLowerCase() === parsed.productName.toLowerCase());
+                if (product) {
+                    messageToSend = `Here are the details for *${product.name}*:\\n\\n` +\n                                  `🏷️ Brand: ${product.brandName}\\n` +\n                                  `🧪 Molecule: ${product.molecule || "N/A"}\\n` +\n                                  `💰 MRP: ₹${product.mrp}\\n` +\n                                  `📦 Packaging: ${product.packaging || "N/A"}\\n\\n` +\n                                  `${product.description || ""}`;\n                    
+                    if (product.images && product.images.length > 0) {
+                        mediaToSend = {
+                            storageId: product.images[0],
+                            fileName: `${product.name}.jpg`,
+                            mimeType: "image/jpeg"
+                        };
+                    }
+                } else {
+                    productNotFound = true;
+                    requestedProductName = parsed.productName;
+                    messageToSend = "This product image and details will be shared shortly. 📦";
                 }
+            } else if (parsed.message) {
+                messageToSend = parsed.message;
             }
         }
+    } catch (e) {
+        // Not valid JSON, treat as plain text response
     }
-} catch (error) {
-    // If parsing fails, use the original response
-    messageToSend = aiResponse;
-}
+
+    // 5. Send message immediately via WhatsApp
+    if (mediaToSend) {
+        await ctx.runAction(api.whatsapp.sendWhatsAppMedia, {
+            phoneNumber: args.phoneNumber,
+            message: messageToSend,
+            leadId: args.leadId,
+            storageId: mediaToSend.storageId,
+            fileName: mediaToSend.fileName,
+            mimeType: mediaToSend.mimeType,
+        });
+    } else {
+        await ctx.runAction(api.whatsapp.sendWhatsAppMessage, {
+            phoneNumber: args.phoneNumber,
+            message: messageToSend,
+            leadId: args.leadId,
+            quotedMessageId: args.replyingToMessageId,
+            quotedMessageExternalId: args.replyingToExternalId,
+        });
+    }
+
+    // 6. If product not found, create intervention request
+    if (productNotFound && requestedProductName) {
+        const lead = await ctx.runQuery(api.leads.queries.getLead, { id: args.leadId });
+        if (lead && lead.assignedTo) {
+            await ctx.runMutation(api.interventionRequests.createInterventionRequest, {
+                leadId: args.leadId,
+                assignedTo: lead.assignedTo,
+                requestedProduct: requestedProductName,
+                customerMessage: args.prompt || "",
+            });
+        }
+    }
+
+    return messageToSend;
+  },
+});
