@@ -8,6 +8,8 @@ import { useMutation } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import { useSearchParams } from "react-router";
+import LeadDetails from "@/components/LeadDetails";
+import { Eye } from "lucide-react";
 
 interface ColdCallerPopupProps {
   leads: Doc<"leads">[];
@@ -18,6 +20,7 @@ interface ColdCallerPopupProps {
 
 export function ColdCallerPopup({ leads, isOpen, onClose, userId }: ColdCallerPopupProps) {
   const [followUpDates, setFollowUpDates] = useState<Record<string, string>>({});
+  const [selectedLeadId, setSelectedLeadId] = useState<Id<"leads"> | null>(null);
   const updateLead = useMutation(api.leads.standard.updateLead);
   const [searchParams] = useSearchParams();
   const isTestMode = searchParams.get("test-mode") === "true";
@@ -75,6 +78,16 @@ export function ColdCallerPopup({ leads, isOpen, onClose, userId }: ColdCallerPo
     }
   };
 
+  // If a lead is selected, show LeadDetails
+  if (selectedLeadId) {
+    return (
+      <LeadDetails 
+        leadId={selectedLeadId} 
+        onClose={() => setSelectedLeadId(null)} 
+      />
+    );
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => isTestMode && !open && onClose()}>
       <DialogContent 
@@ -96,10 +109,21 @@ export function ColdCallerPopup({ leads, isOpen, onClose, userId }: ColdCallerPo
           {leads.map((lead, index) => (
             <div key={lead._id} className="p-4 border rounded-lg bg-blue-50">
               <div className="flex justify-between items-start mb-3">
-                <div>
-                  <h4 className="font-semibold text-blue-900">
-                    {index + 1}. {lead.name}
-                  </h4>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-semibold text-blue-900">
+                      {index + 1}. {lead.name}
+                    </h4>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedLeadId(lead._id)}
+                      className="h-6 px-2 text-blue-600 hover:text-blue-800 hover:bg-blue-100"
+                    >
+                      <Eye className="h-3 w-3 mr-1" />
+                      View
+                    </Button>
+                  </div>
                   <p className="text-sm text-blue-700">{lead.subject}</p>
                   <p className="text-xs text-muted-foreground mt-1">
                     Mobile: {lead.mobile}
