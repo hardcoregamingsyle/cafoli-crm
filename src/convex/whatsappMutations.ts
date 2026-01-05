@@ -173,9 +173,11 @@ export const updateMessageStatus = internalMutation({
     status: v.string(),
   },
   handler: async (ctx, args) => {
-    // Find message by external ID
-    const messages = await ctx.db.query("messages").collect();
-    const message = messages.find(m => m.externalId === args.externalId);
+    // Find message by external ID using the index for efficiency and to avoid OCC conflicts
+    const message = await ctx.db
+      .query("messages")
+      .withIndex("by_external_id", (q) => q.eq("externalId", args.externalId))
+      .first();
     
     if (message) {
       await ctx.db.patch(message._id, {

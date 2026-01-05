@@ -40,7 +40,14 @@ export const generateAndSendAiReply = action({
 
       console.log("Contact request detection response:", detectionResponse);
       
-      const detection = JSON.parse(detectionResponse.trim());
+      // Clean up response if it contains markdown code blocks
+      let cleanResponse = detectionResponse.trim();
+      const jsonMatch = cleanResponse.match(/(\{[\s\S]*\})/);
+      if (jsonMatch) {
+        cleanResponse = jsonMatch[1];
+      }
+      
+      const detection = JSON.parse(cleanResponse);
       console.log("Parsed detection:", detection);
       
       contactConfidence = detection.confidence || "low";
