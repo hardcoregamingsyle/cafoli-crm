@@ -1,2 +1,15 @@
-      const isImage = args.mimeType.startsWith("image/");
-      const mediaType = isImage ? "image" : "document";
+export async function generateWithGemini(
+  ctx: ActionCtx,
+  systemPrompt: string,
+  userPrompt: string,
+  config: {
+    jsonMode?: boolean;
+    model?: string;
+  } = {}
+) {
+  // ...
+  // Try models sequentially
+  const models = config.model ? [config.model] : modelsToTry;
+  for (const modelName of models) {
+
+}
