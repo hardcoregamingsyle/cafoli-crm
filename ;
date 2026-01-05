@@ -1,7 +1,8 @@
-  const jsonMatch = text.match(jsonBlockRegex);
-  if (jsonMatch) {
-    return jsonMatch[1];
+  const match = text.match(jsonBlockRegex);
+  if (match && match[1]) {
+    return match[1].trim();
   }
+  // fallback: return entire text if no code block found
   return text;
 }
 
@@ -17,61 +18,118 @@ export const generateAndSendAiReply = action({
     isAutoReply: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-    if (!apiKey) {
-      console.error("Gemini API key not configured");
+    // Fetch keys from DB
+    // @ts-ignore
+    const keys = await ctx.runMutation(internal.geminiMutations.getActiveKeys) as Doc<"geminiApiKeys">[];
+    
+    // Combine DB keys with env var key if available
+    const allKeys: Array<{ apiKey: string; keyId?: Id<"geminiApiKeys">; label?: string }> = [...keys];
+    
+    if (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY) {
+      allKeys.push({ 
+        apiKey: (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY)!, 
+        label: "Env Key" 
+      });
+    }
+
+    if (allKeys.length === 0) {
+      console.error("No Gemini API keys configured for WhatsApp AI.");
       return;
     }
 
-    try {
-      // Fetch available resources for context
-      const products = await ctx.runQuery(api.products.listProducts);
-      const rangePdfs = await ctx.runQuery(api.rangePdfs.listRangePdfs);
+    // Fetch available resources for context
+    const products = await ctx.runQuery(api.products.listProducts);
+    const rangePdfs = await ctx.runQuery(api.rangePdfs.listRangePdfs);
 
-      const productNames = products.map((p: any) => p.name).join(", ");
-      const pdfNames = rangePdfs.map((p: any) => p.name).join(", ");
+    const productNames = products.map((p: any) => p.name).join(", ");
+    const pdfNames = rangePdfs.map((p: any) => p.name).join(", ");
 
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const modelsToTry = [
+      "gemini-3-flash", 
+      "gemini-2.5-flash-lite",
+      "gemini-2.5-flash",
+      "gemini-2.0-flash",
+      "gemini-1.5-flash"
+    ];
 
-      const systemPrompt = `You are a helpful CRM assistant for a pharmaceutical company.
-      You are chatting with a lead on WhatsApp.
-      
-      Available Products: ${productNames}
-      Available Range PDFs: ${pdfNames}
-      
-      Your goal is to assist the lead, answer questions, and provide product information.
-      
-      You can perform the following actions by returning a JSON object:
-      1. Reply with text: { "action": "reply", "text": "your message" }
-      2. Send a product image: { "action": "send_image", "text": "optional caption", "resource_name": "exact product name" }
-      3. Send a PDF: { "action": "send_pdf", "text": "optional caption", "resource_name": "exact pdf name" }
-      4. Request human intervention (if you can't help): { "action": "intervention_request", "text": "I will connect you with an agent.", "reason": "reason" }
-      5. Request contact (if they want a meeting/call): { "action": "contact_request", "text": "I've noted your request.", "reason": "reason" }
-      
-      Always return ONLY the JSON object. Do not include other text.
-      `;
+    let success = false;
+    let generatedText = "";
 
-      const chatContext = JSON.stringify(args.context);
-      const userPrompt = `Context: ${chatContext}\n\nUser Message: ${args.prompt}`;
+    // Try models sequentially
+    for (const modelName of modelsToTry) {
+      // For each model, try all available keys
+      for (const key of allKeys) {
+        try {
+          const genAI = new GoogleGenerativeAI(key.apiKey);
+          const model = genAI.getGenerativeModel({ model: modelName });
 
-      const result = await model.generateContent([systemPrompt, userPrompt]);
-      const response = result.response;
-      const text = response.text();
-      
-      const jsonStr = extractJsonFromMarkdown(text);
-      let aiAction;
-      try {
-        aiAction = JSON.parse(jsonStr);
-      } catch (e) {
-        console.error("Failed to parse AI response as JSON", text);
-        // Fallback to text reply
-        aiAction = { action: "reply", text: text };
+          const systemPrompt = `You are a helpful CRM assistant for a pharmaceutical company.
+          You are chatting with a lead on WhatsApp.
+          
+          Available Products: ${productNames}
+          Available Range PDFs: ${pdfNames}
+          
+          Your goal is to assist the lead, answer questions, and provide product information.
+          
+          You can perform the following actions by returning a JSON object:
+          1. Reply with text: { "action": "reply", "text": "your message" }
+          2. Send a product image: { "action": "send_image", "text": "optional caption", "resource_name": "exact product name" }
+          3. Send a PDF: { "action": "send_pdf", "text": "optional caption", "resource_name": "exact pdf name" }
+          4. Request human intervention (if you can't help): { "action": "intervention_request", "text": "I will connect you with an agent.", "reason": "reason" }
+          5. Request contact (if they want a meeting/call): { "action": "contact_request", "text": "I've noted your request.", "reason": "reason" }
+          
+          Always return ONLY the JSON object. Do not include other text.
+          `;
+
+          const chatContext = JSON.stringify(args.context);
+          const userPrompt = `Context: ${chatContext}\n\nUser Message: ${args.prompt}`;
+
+          console.log(`Attempting to generate WhatsApp reply with model: ${modelName} using key: ${key.label || "..."}`);
+          const result = await model.generateContent([systemPrompt, userPrompt]);
+          const response = result.response;
+          generatedText = response.text();
+
+          // Increment usage if we used a DB key
+          if (key.keyId) {
+            // @ts-ignore
+            await ctx.runMutation(internal.geminiMutations.incrementUsage, { keyId: key.keyId });
+          }
+
+          success = true;
+          console.log(`Successfully generated WhatsApp reply with model: ${modelName}`);
+          break; // Exit key loop
+        } catch (error) {
+          console.warn(`Model ${modelName} failed with key ${key.label || "..."}:`, error);
+          // Continue to next key
+        }
       }
+      if (success) break; // Exit model loop
+    }
 
-      console.log("AI Action:", aiAction);
+    if (!success) {
+      console.error("All Gemini API keys and models failed for WhatsApp AI.");
+      await ctx.runAction(api.whatsapp.sendWhatsAppMessage, {
+          leadId: args.leadId,
+          phoneNumber: args.phoneNumber,
+          message: "I'm having trouble processing your request right now. Please try again later.",
+      });
+      return;
+    }
+      
+    const jsonStr = extractJsonFromMarkdown(generatedText);
+    let aiAction;
+    try {
+      aiAction = JSON.parse(jsonStr);
+    } catch (e) {
+      console.error("Failed to parse AI response as JSON", generatedText);
+      // Fallback to text reply
+      aiAction = { action: "reply", text: generatedText };
+    }
 
-      // Execute Action
+    console.log("AI Action:", aiAction);
+
+    // Execute Action
+    try {
       if (aiAction.action === "reply") {
         await ctx.runAction(api.whatsapp.sendWhatsAppMessage, {
           leadId: args.leadId,
@@ -164,15 +222,13 @@ export const generateAndSendAiReply = action({
               console.error("Failed to create contact request", e);
           }
       }
-
     } catch (error) {
-      console.error("AI Generation Error", error);
+      console.error("Error executing AI action:", error);
       await ctx.runAction(api.whatsapp.sendWhatsAppMessage, {
           leadId: args.leadId,
           phoneNumber: args.phoneNumber,
-          message: "I'm having trouble processing your request right now. Please try again later.",
+          message: "I encountered an error while trying to perform that action.",
       });
     }
   }
 });
->>>>>>> REPLACE

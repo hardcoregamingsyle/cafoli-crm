@@ -3,6 +3,7 @@ import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { Doc, Id } from "./_generated/dataModel";
 
 // Helper to strip markdown code blocks from JSON
 function extractJsonFromMarkdown(text: string): string {

@@ -38,6 +38,7 @@ export const generateContent = action({
       "gemini-3-flash", 
       "gemini-2.5-flash-lite",
       "gemini-2.5-flash",
+      "gemini-2.0-flash",
       // Fallbacks in case the above don't exist or are limited
       "gemini-2.0-flash-exp", 
       "gemini-1.5-flash", 
