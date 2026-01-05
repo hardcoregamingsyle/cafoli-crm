@@ -162,3 +162,49 @@ export const sendMedia = action({
     }
   },
 });
+
+export const markMessagesAsRead = action({
+  args: {
+    messageIds: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const accessToken = process.env.CLOUD_API_ACCESS_TOKEN;
+    const phoneNumberId = process.env.WA_PHONE_NUMBER_ID;
+    
+    if (!accessToken || !phoneNumberId) {
+      console.warn("WhatsApp API not configured for marking messages as read");
+      return { success: false };
+    }
+
+    try {
+      // Mark messages as read via WhatsApp Cloud API
+      for (const messageId of args.messageIds) {
+        const response = await fetch(
+          `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
+          {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              messaging_product: "whatsapp",
+              status: "read",
+              message_id: messageId,
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          const data = await response.json();
+          console.error(`Failed to mark message ${messageId} as read:`, data);
+        }
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error("Error marking messages as read:", error);
+      return { success: false };
+    }
+  },
+});
