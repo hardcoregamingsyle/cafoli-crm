@@ -1,12 +1,12 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import { Doc } from "@/convex/_generated/dataModel";
 import { X, Filter } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { FilterSection } from "./FilterSection";
+import { FilterCheckboxItem } from "./FilterCheckboxItem";
 
 interface LeadsFilterSidebarProps {
   open: boolean;
@@ -86,151 +86,87 @@ export function LeadsFilterSidebar({
         <ScrollArea className="h-[calc(100vh-140px)] mt-6 pr-4">
           <div className="space-y-6">
             {/* Status Filter */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <Label className="text-base font-semibold">Status</Label>
-                {selectedStatuses.length > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSelectedStatuses([])}
-                    className="h-auto p-1 text-xs"
-                  >
-                    Clear
-                  </Button>
-                )}
-              </div>
-              <div className="space-y-2">
-                {availableStatuses.map((status) => (
-                  <div key={status} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`status-${status}`}
-                      checked={selectedStatuses.includes(status)}
-                      onCheckedChange={() => toggleFilter(status, selectedStatuses, setSelectedStatuses)}
-                    />
-                    <Label
-                      htmlFor={`status-${status}`}
-                      className="text-sm font-normal cursor-pointer flex-1"
-                    >
-                      {status}
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <FilterSection
+              title="Status"
+              hasActiveFilters={selectedStatuses.length > 0}
+              onClear={() => setSelectedStatuses([])}
+            >
+              {availableStatuses.map((status) => (
+                <FilterCheckboxItem
+                  key={status}
+                  id={`status-${status}`}
+                  checked={selectedStatuses.includes(status)}
+                  onCheckedChange={() => toggleFilter(status, selectedStatuses, setSelectedStatuses)}
+                  label={status}
+                />
+              ))}
+            </FilterSection>
 
             <Separator />
 
             {/* Source Filter */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <Label className="text-base font-semibold">Source</Label>
-                {selectedSources.length > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSelectedSources([])}
-                    className="h-auto p-1 text-xs"
-                  >
-                    Clear
-                  </Button>
-                )}
-              </div>
-              <div className="space-y-2">
-                {uniqueSources.map((source) => (
-                  <div key={source} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`source-${source}`}
-                      checked={selectedSources.includes(source)}
-                      onCheckedChange={() => toggleFilter(source, selectedSources, setSelectedSources)}
-                    />
-                    <Label
-                      htmlFor={`source-${source}`}
-                      className="text-sm font-normal cursor-pointer flex-1"
-                    >
-                      {source}
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <FilterSection
+              title="Source"
+              hasActiveFilters={selectedSources.length > 0}
+              onClear={() => setSelectedSources([])}
+            >
+              {uniqueSources.map((source) => (
+                <FilterCheckboxItem
+                  key={source}
+                  id={`source-${source}`}
+                  checked={selectedSources.includes(source)}
+                  onCheckedChange={() => toggleFilter(source, selectedSources, setSelectedSources)}
+                  label={source}
+                />
+              ))}
+            </FilterSection>
 
             <Separator />
 
             {/* Tags Filter */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <Label className="text-base font-semibold">Tags</Label>
-                {selectedTags.length > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSelectedTags([])}
-                    className="h-auto p-1 text-xs"
-                  >
-                    Clear
-                  </Button>
-                )}
-              </div>
-              <div className="space-y-2">
-                {allTags.map((tag) => (
-                  <div key={tag._id} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`tag-${tag._id}`}
-                      checked={selectedTags.includes(tag._id)}
-                      onCheckedChange={() => toggleFilter(tag._id, selectedTags, setSelectedTags)}
-                    />
-                    <Label
-                      htmlFor={`tag-${tag._id}`}
-                      className="text-sm font-normal cursor-pointer flex-1 flex items-center gap-2"
-                    >
+            <FilterSection
+              title="Tags"
+              hasActiveFilters={selectedTags.length > 0}
+              onClear={() => setSelectedTags([])}
+            >
+              {allTags.map((tag) => (
+                <FilterCheckboxItem
+                  key={tag._id}
+                  id={`tag-${tag._id}`}
+                  checked={selectedTags.includes(tag._id)}
+                  onCheckedChange={() => toggleFilter(tag._id, selectedTags, setSelectedTags)}
+                  label={
+                    <span className="flex items-center gap-2">
                       <div 
                         className="w-3 h-3 rounded-full" 
                         style={{ backgroundColor: tag.color }}
                       />
                       {tag.name}
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            </div>
+                    </span>
+                  }
+                />
+              ))}
+            </FilterSection>
 
             {/* Assigned To Filter (Admin Only) */}
             {isAdmin && (
               <>
                 <Separator />
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <Label className="text-base font-semibold">Assigned To</Label>
-                    {selectedAssignedTo.length > 0 && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setSelectedAssignedTo([])}
-                        className="h-auto p-1 text-xs"
-                      >
-                        Clear
-                      </Button>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    {allUsers.map((user) => (
-                      <div key={user._id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`user-${user._id}`}
-                          checked={selectedAssignedTo.includes(user._id)}
-                          onCheckedChange={() => toggleFilter(user._id, selectedAssignedTo, setSelectedAssignedTo)}
-                        />
-                        <Label
-                          htmlFor={`user-${user._id}`}
-                          className="text-sm font-normal cursor-pointer flex-1"
-                        >
-                          {user.name || user.email}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <FilterSection
+                  title="Assigned To"
+                  hasActiveFilters={selectedAssignedTo.length > 0}
+                  onClear={() => setSelectedAssignedTo([])}
+                >
+                  {allUsers.map((user) => (
+                    <FilterCheckboxItem
+                      key={user._id}
+                      id={`user-${user._id}`}
+                      checked={selectedAssignedTo.includes(user._id)}
+                      onCheckedChange={() => toggleFilter(user._id, selectedAssignedTo, setSelectedAssignedTo)}
+                      label={user.name || user.email}
+                    />
+                  ))}
+                </FilterSection>
               </>
             )}
           </div>
