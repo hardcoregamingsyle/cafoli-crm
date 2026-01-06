@@ -46,8 +46,8 @@ export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
   const [searchParams] = useSearchParams();
   const isTestMode = searchParams.get("test-mode") === "true";
   
-  const lead = useQuery(api.leadQueries.getLead, { id: leadId, userId: user?._id });
-  const comments = useQuery(api.leadQueries.getComments, { leadId });
+  const lead = useQuery(api.leads.queries.getLead, { id: leadId, userId: user?._id });
+  const comments = useQuery(api.leads.queries.getComments, { leadId });
   const deleteLead = useMutation(api.leads.admin.deleteLead);
   const generateAi = useAction(api.ai.generate);
   const generateAiJson = useAction(api.ai.generateJson);

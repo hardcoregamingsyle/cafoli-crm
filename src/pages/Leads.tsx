@@ -50,7 +50,7 @@ export default function Leads() {
   const [targetUserId, setTargetUserId] = useState<Id<"users"> | null>(null);
 
   const allTags = useQuery(api.tags.getAllTags) || [];
-  const uniqueSources = useQuery(api.leadQueries.getUniqueSources) || [];
+  const uniqueSources = useQuery(api.leads.queries.getUniqueSources) || [];
   const allUsers = useQuery(api.users.getAllUsers) || [];
 
   const assignLead = useMutation(api.leads.standard.assignLead);
@@ -117,7 +117,7 @@ export default function Leads() {
   const [paginationOpts, setPaginationOpts] = useState({ numItems: ITEMS_PER_PAGE, cursor: null as string | null });
   
   const paginatedResult = useQuery(
-    api.leadQueries.getPaginatedLeads,
+    api.leads.queries.getPaginatedLeads,
     user ? {
       userId: user._id,
       filter: viewIrrelevantLeads ? "irrelevant" : viewColdCallerLeads ? "cold_caller" : filter,

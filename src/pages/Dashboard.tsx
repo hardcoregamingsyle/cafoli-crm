@@ -11,7 +11,7 @@ export default function Dashboard() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
-  const leads = useQuery(api.leadQueries.getLeads, user ? { filter: "all", userId: user._id } : "skip") || [];
+  const leads = useQuery(api.leads.queries.getLeads, user ? { filter: "all", userId: user._id } : "skip") || [];
   const campaigns = useQuery(api.campaignQueries.getCampaigns, user ? { userId: user._id } : "skip") || [];
 
   useEffect(() => {
