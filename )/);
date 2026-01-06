@@ -1,2 +1,0 @@
-  if (jsonMatch) {
-    return jsonMatch[1].replace(/(\s*
