@@ -21,8 +21,8 @@ export const generateAndSendAiReply: any = action({
     replyingToMessageId: v.optional(v.id("messages")),
     replyingToExternalId: v.optional(v.string()),
   },
-  handler: async (ctx, args): Promise<void> => {
-    return await ctx.runAction(internal.whatsappAi.generateAndSendAiReplyInternal, args);
+  handler: async (ctx, args) => {
+    await ctx.runAction(internal.whatsappAi.generateAndSendAiReplyInternal, args);
   },
 });
 

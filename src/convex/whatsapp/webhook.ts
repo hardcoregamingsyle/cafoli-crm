@@ -135,7 +135,7 @@ export const handleIncomingMessage = internalAction({
                 if (!isChatActive) {
                     console.log(`🤖 Triggering auto-reply for lead ${leadId} (chat not active)`);
                     
-                    const recentMessages = await ctx.runQuery(internal.whatsappQueries.getChatMessages, { leadId });
+                    const recentMessages = await ctx.runQuery(internal.whatsappQueries.getChatMessagesInternal, { leadId });
                     const contextMessages = recentMessages.slice(-5).map((m: any) => ({
                         role: m.direction === "outbound" ? "assistant" : "user",
                         content: m.content
@@ -144,7 +144,7 @@ export const handleIncomingMessage = internalAction({
                     // Get configurable contact request message
                     const contactRequestMessage = await ctx.runQuery(internal.whatsappConfig.getContactRequestMessage);
 
-                    await ctx.runAction(internal.whatsappAi.generateAndSendAiReply, {
+                    await ctx.runAction(internal.whatsappAi.generateAndSendAiReplyInternal, {
                             leadId,
                             phoneNumber: args.from,
                             context: { 
