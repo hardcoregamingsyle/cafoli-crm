@@ -1,1 +1,5 @@
-export const blockTypes: BlockType[] = [ ... ];
+const result = await fetch(postUrl, {
+  method: "POST",
+  headers: { "Content-Type": contentType },
+  body: file,
+});
