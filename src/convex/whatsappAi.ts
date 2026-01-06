@@ -172,8 +172,16 @@ export const generateAndSendAiReplyInternal = internalAction({
               console.log(`[PRODUCT_SEND] [${i + 1}/${filesToSend.length}] ${file.label} metadata retrieved:`, metadata);
               
               if (!metadata) {
-                console.error(`[PRODUCT_SEND] [${i + 1}/${filesToSend.length}] Metadata is null for storageId: ${file.storageId}. File might be missing.`);
+                console.error(`[PRODUCT_SEND] [${i + 1}/${filesToSend.length}] Metadata is null for storageId: ${file.storageId}. File might be missing or corrupted.`);
                 continue;
+              }
+
+              // Determine correct mime type - fix for old uploads with wrong content type
+              let correctMimeType = metadata?.contentType;
+              if (!correctMimeType || correctMimeType === "application/octet-stream" || correctMimeType === "text/html") {
+                // Fallback based on file type
+                correctMimeType = file.type === "pdf" ? "application/pdf" : "image/jpeg";
+                console.log(`[PRODUCT_SEND] [${i + 1}/${filesToSend.length}] Correcting mime type from ${metadata?.contentType} to ${correctMimeType}`);
               }
 
               await ctx.runAction(internal.whatsapp.messages.sendMedia, {
@@ -181,7 +189,7 @@ export const generateAndSendAiReplyInternal = internalAction({
                 phoneNumber: args.phoneNumber,
                 storageId: file.storageId,
                 fileName: file.fileName,
-                mimeType: metadata?.contentType || (file.type === "pdf" ? "application/pdf" : "image/jpeg"),
+                mimeType: correctMimeType,
                 message: undefined
               });
               

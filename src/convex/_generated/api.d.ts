@@ -52,6 +52,7 @@ import type * as leads_standard from "../leads/standard.js";
 import type * as lib_gemini from "../lib/gemini.js";
 import type * as lib_passwordUtils from "../lib/passwordUtils.js";
 import type * as migrations from "../migrations.js";
+import type * as migrations_fixProductStorageMetadata from "../migrations/fixProductStorageMetadata.js";
 import type * as migrations_updateProductsSchema from "../migrations/updateProductsSchema.js";
 import type * as pharmavends from "../pharmavends.js";
 import type * as pharmavendsMutations from "../pharmavendsMutations.js";
@@ -131,6 +132,7 @@ declare const fullApi: ApiFromModules<{
   "lib/gemini": typeof lib_gemini;
   "lib/passwordUtils": typeof lib_passwordUtils;
   migrations: typeof migrations;
+  "migrations/fixProductStorageMetadata": typeof migrations_fixProductStorageMetadata;
   "migrations/updateProductsSchema": typeof migrations_updateProductsSchema;
   pharmavends: typeof pharmavends;
   pharmavendsMutations: typeof pharmavendsMutations;

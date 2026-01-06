@@ -116,7 +116,21 @@ export const listProducts = query({
 export const listProductsInternal = internalQuery({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db.query("products").order("desc").collect();
+    const products = await ctx.db.query("products").collect();
+    return products.map(p => ({
+      _id: p._id,
+      name: p.name,
+      brandName: p.brandName,
+      molecule: p.molecule,
+      mrp: p.mrp,
+      packaging: p.packaging,
+      description: p.description,
+      pageLink: p.pageLink,
+      mainImage: p.mainImage,
+      flyer: p.flyer,
+      bridgeCard: p.bridgeCard,
+      visuelet: p.visuelet,
+    }));
   },
 });
 
