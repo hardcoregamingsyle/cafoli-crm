@@ -45,9 +45,11 @@ export function ProductListManager() {
   };
 
   const handlePreview = (storageId: string, type: string, name: string) => {
-    // Construct proper Convex storage URL
+    // Construct proper Convex storage URL with correct content type handling
     const convexUrl = import.meta.env.VITE_CONVEX_URL;
-    const url = `${convexUrl}/api/storage/${storageId}`;
+    // Remove any trailing slash from convexUrl
+    const baseUrl = convexUrl.endsWith('/') ? convexUrl.slice(0, -1) : convexUrl;
+    const url = `${baseUrl}/api/storage/${storageId}`;
     setPreviewFile({ url, type, name });
   };
 

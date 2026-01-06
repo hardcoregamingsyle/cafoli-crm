@@ -90,14 +90,21 @@ export function ProductUploadDialog({ disabled, product, trigger }: ProductUploa
   ) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      // Basic validation
-      if (accept === "application/pdf" && file.type !== "application/pdf") {
-        toast.error("Please upload a PDF file");
-        return;
+      const ext = file.name.split('.').pop()?.toLowerCase();
+      
+      // Validate based on file extension as fallback
+      if (accept === "application/pdf") {
+        if (ext !== "pdf" && file.type !== "application/pdf") {
+          toast.error("Please upload a PDF file");
+          return;
+        }
       }
-      if (accept.startsWith("image/") && !file.type.startsWith("image/")) {
-        toast.error("Please upload an image file");
-        return;
+      if (accept.startsWith("image/")) {
+        const validImageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+        if (!validImageExts.includes(ext || '') && !file.type.startsWith("image/")) {
+          toast.error("Please upload an image file (JPG, PNG, GIF, or WebP)");
+          return;
+        }
       }
       setter(file);
     }
@@ -105,9 +112,22 @@ export function ProductUploadDialog({ disabled, product, trigger }: ProductUploa
 
   const uploadFile = async (file: File) => {
     const postUrl = await generateUploadUrl();
+    
+    // Ensure correct Content-Type header
+    let contentType = file.type;
+    if (!contentType || contentType === 'application/octet-stream') {
+      // Fallback based on file extension
+      const ext = file.name.split('.').pop()?.toLowerCase();
+      if (ext === 'pdf') contentType = 'application/pdf';
+      else if (['jpg', 'jpeg'].includes(ext || '')) contentType = 'image/jpeg';
+      else if (ext === 'png') contentType = 'image/png';
+      else if (ext === 'gif') contentType = 'image/gif';
+      else if (ext === 'webp') contentType = 'image/webp';
+    }
+    
     const result = await fetch(postUrl, {
       method: "POST",
-      headers: { "Content-Type": file.type },
+      headers: { "Content-Type": contentType },
       body: file,
     });
     const { storageId } = await result.json();
