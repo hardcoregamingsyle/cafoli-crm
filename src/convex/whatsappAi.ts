@@ -111,10 +111,14 @@ export const generateAndSendAiReplyInternal = internalAction({
           }
           
           // Send all product images and files
+          console.log(`[PRODUCT_SEND] Starting to send files for product: ${product.name}`);
+          console.log(`[PRODUCT_SEND] Product has - mainImage: ${!!product.mainImage}, flyer: ${!!product.flyer}, bridgeCard: ${!!product.bridgeCard}, visuelet: ${!!product.visuelet}`);
+          
           const filesToSend = [];
           
           // Main Image
           if (product.mainImage) {
+            console.log(`[PRODUCT_SEND] Adding mainImage to queue: ${product.mainImage}`);
             filesToSend.push({
               storageId: product.mainImage,
               fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}_main.jpg`,
@@ -125,6 +129,7 @@ export const generateAndSendAiReplyInternal = internalAction({
           
           // Flyer
           if (product.flyer) {
+            console.log(`[PRODUCT_SEND] Adding flyer to queue: ${product.flyer}`);
             filesToSend.push({
               storageId: product.flyer,
               fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}_flyer.jpg`,
@@ -135,6 +140,7 @@ export const generateAndSendAiReplyInternal = internalAction({
           
           // Bridge Card
           if (product.bridgeCard) {
+            console.log(`[PRODUCT_SEND] Adding bridgeCard to queue: ${product.bridgeCard}`);
             filesToSend.push({
               storageId: product.bridgeCard,
               fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}_bridge_card.jpg`,
@@ -145,6 +151,7 @@ export const generateAndSendAiReplyInternal = internalAction({
           
           // Visuelet (PDF)
           if (product.visuelet) {
+            console.log(`[PRODUCT_SEND] Adding visuelet to queue: ${product.visuelet}`);
             filesToSend.push({
               storageId: product.visuelet,
               fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}_visuelet.pdf`,
@@ -153,20 +160,23 @@ export const generateAndSendAiReplyInternal = internalAction({
             });
           }
           
+          console.log(`[PRODUCT_SEND] Total files to send: ${filesToSend.length}`);
+          
           // Send all files
-          for (const file of filesToSend) {
+          for (let i = 0; i < filesToSend.length; i++) {
+            const file = filesToSend[i];
             try {
-              console.log(`[PRODUCT_SEND] Sending ${file.label} for ${product.name}. StorageId: ${file.storageId}`);
+              console.log(`[PRODUCT_SEND] [${i + 1}/${filesToSend.length}] Sending ${file.label} for ${product.name}. StorageId: ${file.storageId}`);
               
               const metadata = await ctx.runQuery(internal.products.getStorageMetadata, { storageId: file.storageId });
-              console.log(`[PRODUCT_SEND] ${file.label} metadata retrieved:`, metadata);
+              console.log(`[PRODUCT_SEND] [${i + 1}/${filesToSend.length}] ${file.label} metadata retrieved:`, metadata);
               
               if (!metadata) {
-                console.error(`[PRODUCT_SEND] Metadata is null for storageId: ${file.storageId}. File might be missing.`);
+                console.error(`[PRODUCT_SEND] [${i + 1}/${filesToSend.length}] Metadata is null for storageId: ${file.storageId}. File might be missing.`);
                 continue;
               }
 
-              await ctx.runAction(internal.whatsapp.internal.sendMedia, {
+              await ctx.runAction(internal.whatsapp.messages.sendMedia, {
                 leadId: args.leadId,
                 phoneNumber: args.phoneNumber,
                 storageId: file.storageId,
@@ -175,12 +185,14 @@ export const generateAndSendAiReplyInternal = internalAction({
                 message: file.label
               });
               
-              console.log(`[PRODUCT_SEND] ${file.label} sent successfully for ${product.name}`);
-              await new Promise(resolve => setTimeout(resolve, 500));
+              console.log(`[PRODUCT_SEND] [${i + 1}/${filesToSend.length}] ${file.label} sent successfully for ${product.name}`);
+              await new Promise(resolve => setTimeout(resolve, 1000));
             } catch (error) {
-              console.error(`[PRODUCT_SEND] Failed to send ${file.label} for ${product.name}:`, error);
+              console.error(`[PRODUCT_SEND] [${i + 1}/${filesToSend.length}] Failed to send ${file.label} for ${product.name}:`, error);
             }
           }
+          
+          console.log(`[PRODUCT_SEND] Finished sending all files for ${product.name}`);
           
           // Format and send product details
           let detailsMessage = `📦 *${product.name}*\n\n`;

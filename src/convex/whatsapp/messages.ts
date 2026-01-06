@@ -83,7 +83,7 @@ export const send = action({
   },
 });
 
-export const sendMedia = action({
+export const sendMedia = internalAction({
   args: {
     phoneNumber: v.string(),
     message: v.optional(v.string()),
