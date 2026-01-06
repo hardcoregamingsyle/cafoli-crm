@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Sparkles, BrainCircuit, Calendar } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface LeadDetailsAiDialogProps {
   isOpen: boolean;
@@ -27,7 +28,7 @@ export function LeadDetailsAiDialog({
 }: LeadDetailsAiDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-purple-600" />
@@ -38,7 +39,7 @@ export function LeadDetailsAiDialog({
           </DialogDescription>
         </DialogHeader>
         
-        <div className="grid gap-4 py-4">
+        <div className="flex flex-col gap-4 flex-1 min-h-0">
           <div className="grid grid-cols-2 gap-4">
             <Button 
               variant="outline" 
@@ -63,14 +64,16 @@ export function LeadDetailsAiDialog({
           {isAnalyzing && (
             <div className="flex items-center justify-center py-8 text-muted-foreground">
               <Sparkles className="h-4 w-4 mr-2 animate-spin" />
-              Thinking...
+              Analyzing lead data...
             </div>
           )}
 
           {aiAnalysis && !isAnalyzing && (
-            <div className="bg-muted/50 p-4 rounded-lg text-sm whitespace-pre-wrap border mt-2">
-              {aiAnalysis}
-            </div>
+            <ScrollArea className="flex-1 min-h-0 pr-4">
+              <div className="bg-muted/50 p-4 rounded-lg text-sm whitespace-pre-wrap border">
+                {aiAnalysis}
+              </div>
+            </ScrollArea>
           )}
         </div>
       </DialogContent>

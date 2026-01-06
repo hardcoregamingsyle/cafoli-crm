@@ -1,123 +1,3 @@
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Doc, Id } from "@/convex/_generated/dataModel";
-import { useMutation, useQuery, useAction } from "convex/react";
-import { Calendar, X, ThumbsUp, Sparkles, Trash2, Save, BrainCircuit } from "lucide-react";
-import { useState } from "react";
-import { toast } from "sonner";
-import { useAuth } from "@/hooks/use-auth";
-import { LeadInfo } from "@/components/leads/LeadInfo";
-import { LeadActivity } from "@/components/leads/LeadActivity";
-import { LeadDetailsHeader } from "@/components/leads/LeadDetailsHeader";
-import { LeadDetailsAiDialog } from "@/components/leads/LeadDetailsAiDialog";
-import { LeadDetailsFollowUpDialogs } from "@/components/leads/LeadDetailsFollowUpDialogs";
-import { useLeadEditor } from "@/hooks/useLeadEditor";
-import { getConvexApi } from "@/lib/convex-api";
-
-const api = getConvexApi() as any;
-import { useSearchParams } from "react-router";
-import { TagManager } from "@/components/TagManager";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-
-interface LeadDetailsProps {
-  leadId: Id<"leads">;
-  onClose: () => void;
-}
-
-export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
-  const { user } = useAuth();
-  const [searchParams] = useSearchParams();
-  const isTestMode = searchParams.get("test-mode") === "true";
-  
-  const lead = useQuery(api.leads.queries.getLead, { id: leadId, userId: user?._id });
-  const comments = useQuery(api.leads.queries.getComments, { leadId });
-  const deleteLead = useMutation(api.leads.admin.deleteLead);
-  const generateAi = useAction(api.ai.generate);
-  const generateAiJson = useAction(api.ai.generateJson);
-  const analyzeLeadComprehensive = useAction(api.ai.analyzeLeadComprehensive);
-  
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
-  const [showAiDialog, setShowAiDialog] = useState(false);
-  const [tempFollowUpDate, setTempFollowUpDate] = useState<string>("");
-
-  const {
-    isEditing,
-    editedLead,
-    setEditedLead,
-    newComment,
-    setNewComment,
-    handleStatusChange,
-    handleTypeChange,
-    handleAddComment,
-    handleTagsChange,
-    startEditing,
-    cancelEditing,
-    saveEdits,
-    showFollowUpCheck,
-    showNewFollowUpDialog,
-    setShowNewFollowUpDialog,
-    handleFollowUpDone,
-    handleFollowUpNotDone,
-    handleNewFollowUpDate,
-  } = useLeadEditor({ lead, user });
-
-  const handleAiAnalysis = async () => {
-    if (!user || !lead) return;
-    setIsAnalyzing(true);
-    setAiAnalysis(null);
-    try {
-      const result = await analyzeLeadComprehensive({
-        leadData: lead,
-        comments: comments || [],
-      });
-      setAiAnalysis(result);
-    } catch (error) {
-      toast.error("Failed to generate analysis");
-      console.error(error);
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  const handleAiFollowUpSuggestion = async () => {
-    if (!user || !lead) return;
-    setIsAnalyzing(true);
-    setAiAnalysis(null);
-    try {
-      const result = await generateAiJson({
-        prompt: `Suggest a follow-up date and strategy for this lead. Context:\n${JSON.stringify({ ...lead, comments }, null, 2)}`,
-        systemPrompt: "You are an expert CRM assistant. Suggest a follow-up. Return a JSON object with a 'suggestion' field containing a 'date' (ISO string) and 'reason'.",
-      });
-      
-      try {
-        const cleanResult = result.replace(/```json/g, '').replace(/```/g, '');
         const parsedResult = JSON.parse(cleanResult);
         if (parsedResult.suggestion) {
           const followUpDate = parsedResult.suggestion.date;
@@ -135,6 +15,8 @@ export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
       setIsAnalyzing(false);
     }
   };
+
+  // ... keep existing code for handleDelete, loading states, etc.
 
   const handleDelete = async () => {
     if (!user || !lead) return;
@@ -175,6 +57,7 @@ export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-card border rounded-lg shadow-sm h-full">
+      {/* ... keep existing header and content sections ... */}
       <div className="p-6 border-b flex justify-between items-start bg-muted/10">
         <div className="flex-1 mr-4">
           <div className="flex items-center gap-3 mb-2">
@@ -418,55 +301,14 @@ export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
       </Dialog>
 
       {/* AI Assist Dialog */}
-      <Dialog open={showAiDialog} onOpenChange={setShowAiDialog}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-purple-600" />
-              AI Lead Assistant
-            </DialogTitle>
-            <DialogDescription>
-              Get AI-powered insights and suggestions for this lead.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <Button 
-                variant="outline" 
-                className="h-24 flex flex-col gap-2 hover:border-purple-400 hover:bg-purple-50"
-                onClick={handleAiAnalysis}
-                disabled={isAnalyzing}
-              >
-                <BrainCircuit className="h-6 w-6 text-purple-600" />
-                <span>Analyze Lead</span>
-              </Button>
-              <Button 
-                variant="outline" 
-                className="h-24 flex flex-col gap-2 hover:border-purple-400 hover:bg-purple-50"
-                onClick={handleAiFollowUpSuggestion}
-                disabled={isAnalyzing}
-              >
-                <Calendar className="h-6 w-6 text-purple-600" />
-                <span>Suggest Follow-up</span>
-              </Button>
-            </div>
-
-            {isAnalyzing && (
-              <div className="flex items-center justify-center py-8 text-muted-foreground">
-                <Sparkles className="h-4 w-4 mr-2 animate-spin" />
-                Thinking...
-              </div>
-            )}
-
-            {aiAnalysis && !isAnalyzing && (
-              <div className="bg-muted/50 p-4 rounded-lg text-sm whitespace-pre-wrap border mt-2">
-                {aiAnalysis}
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <LeadDetailsAiDialog
+        isOpen={showAiDialog}
+        onClose={() => setShowAiDialog(false)}
+        isAnalyzing={isAnalyzing}
+        aiAnalysis={aiAnalysis}
+        onAnalyzeLead={handleAiAnalysis}
+        onSuggestFollowUp={handleAiFollowUpSuggestion}
+      />
     </div>
   );
 }
