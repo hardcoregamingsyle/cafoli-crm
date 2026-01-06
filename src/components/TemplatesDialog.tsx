@@ -16,7 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useAuth } from "@/hooks/use-auth";
-import { ROLES } from "@/convex/schema";
+import { ROLES } from "@/lib/constants";
 
 interface TemplatesDialogProps {
   selectedLeadId?: Id<"leads"> | null;

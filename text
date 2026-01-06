@@ -1,0 +1,2 @@
+1. Run type check to verify the fix.
+2. If errors persist, investigate other potential server-side imports in client code.

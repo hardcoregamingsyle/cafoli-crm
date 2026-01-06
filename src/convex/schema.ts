@@ -1,10 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
-export const ROLES = {
-  ADMIN: "admin" as const,
-  STAFF: "staff" as const,
-};
+export { ROLES } from "../lib/constants";
 
 export default defineSchema({
   products: defineTable({

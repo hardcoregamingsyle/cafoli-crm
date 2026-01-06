@@ -7,7 +7,7 @@ import { getConvexApi } from "@/lib/convex-api";
 
 const api = getConvexApi() as any;
 import { Id } from "@/convex/_generated/dataModel";
-import { ROLES } from "@/convex/schema";
+import { ROLES } from "@/lib/constants";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useAction } from "convex/react";
 import { MessageSquare, Settings, Send } from "lucide-react";
