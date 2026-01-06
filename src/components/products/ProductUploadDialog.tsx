@@ -165,18 +165,34 @@ export function ProductUploadDialog({ disabled, product, trigger }: ProductUploa
 
     setLoading(true);
     try {
-      // Upload files
+      // Upload files (only if new files are selected)
       let mainImageId = undefined;
-      if (mainImage) mainImageId = await uploadFile(mainImage);
+      if (mainImage) {
+        mainImageId = await uploadFile(mainImage);
+      } else if (product && hasExistingMainImage) {
+        mainImageId = product.mainImage; // Preserve existing
+      }
       
       let flyerId = undefined;
-      if (flyer) flyerId = await uploadFile(flyer);
+      if (flyer) {
+        flyerId = await uploadFile(flyer);
+      } else if (product && hasExistingFlyer) {
+        flyerId = product.flyer; // Preserve existing
+      }
       
       let bridgeCardId = undefined;
-      if (bridgeCard) bridgeCardId = await uploadFile(bridgeCard);
+      if (bridgeCard) {
+        bridgeCardId = await uploadFile(bridgeCard);
+      } else if (product && hasExistingBridgeCard) {
+        bridgeCardId = product.bridgeCard; // Preserve existing
+      }
       
       let visualaidId = undefined;
-      if (visualaid) visualaidId = await uploadFile(visualaid);
+      if (visualaid) {
+        visualaidId = await uploadFile(visualaid);
+      } else if (product && hasExistingVisualaid) {
+        visualaidId = product.visualaid; // Preserve existing
+      }
 
       if (product) {
         await updateProduct({
