@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { Trash2, ExternalLink, Package } from "lucide-react";
+import { Trash2, ExternalLink, Package, FileText, Image as ImageIcon } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,7 +43,7 @@ export function ProductListManager() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <ScrollArea className="h-[500px] pr-4">
+        <ScrollArea className="h-[600px] pr-4">
           <div className="space-y-3">
             {products.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
@@ -56,44 +56,67 @@ export function ProductListManager() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 space-y-2">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-semibold">{product.name}</h3>
+                        <h3 className="font-semibold text-lg">{product.name}</h3>
                         {product.brandName && product.brandName !== product.name && (
                           <Badge variant="secondary">{product.brandName}</Badge>
                         )}
                       </div>
-                      {product.molecule && (
-                        <p className="text-sm text-muted-foreground">
-                          🧪 {product.molecule}
-                        </p>
-                      )}
-                      <div className="flex gap-4 text-sm">
-                        <span>💰 MRP: ₹{product.mrp}</span>
-                        {product.packaging && (
-                          <span>📦 {product.packaging}</span>
+                      
+                      <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm">
+                        {product.molecule && (
+                          <div className="text-muted-foreground">
+                            <span className="font-medium text-foreground">Molecule:</span> {product.molecule}
+                          </div>
                         )}
+                        <div>
+                          <span className="font-medium">MRP:</span> ₹{product.mrp}
+                        </div>
+                        <div>
+                          <span className="font-medium">Packaging:</span> {product.packaging}
+                        </div>
                       </div>
+
                       {product.description && (
-                        <p className="text-sm text-muted-foreground line-clamp-2">
+                        <p className="text-sm text-muted-foreground line-clamp-2 mt-2">
                           {product.description}
                         </p>
                       )}
-                      {product.pageLink && (
-                        <a
-                          href={product.pageLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-primary hover:underline flex items-center gap-1"
-                        >
-                          <ExternalLink className="h-3 w-3" />
-                          View Product Page
-                        </a>
-                      )}
-                      <div className="flex gap-1">
-                        <Badge variant="outline">
-                          {product.images.length} image{product.images.length !== 1 ? 's' : ''}
-                        </Badge>
+
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {product.mainImage && (
+                          <Badge variant="outline" className="gap-1">
+                            <ImageIcon className="h-3 w-3" /> Main Image
+                          </Badge>
+                        )}
+                        {product.flyer && (
+                          <Badge variant="outline" className="gap-1">
+                            <ImageIcon className="h-3 w-3" /> Flyer
+                          </Badge>
+                        )}
+                        {product.bridgeCard && (
+                          <Badge variant="outline" className="gap-1">
+                            <ImageIcon className="h-3 w-3" /> Bridge Card
+                          </Badge>
+                        )}
+                        {product.visuelet && (
+                          <Badge variant="outline" className="gap-1">
+                            <FileText className="h-3 w-3" /> Visuelet
+                          </Badge>
+                        )}
+                        {product.pageLink && (
+                          <a
+                            href={product.pageLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-primary hover:underline flex items-center gap-1 ml-2"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            View Page
+                          </a>
+                        )}
                       </div>
                     </div>
+                    
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button
@@ -108,7 +131,7 @@ export function ProductListManager() {
                         <AlertDialogHeader>
                           <AlertDialogTitle>Delete Product</AlertDialogTitle>
                           <AlertDialogDescription>
-                            Are you sure you want to delete "{product.name}"? This will also remove all associated images. This action cannot be undone.
+                            Are you sure you want to delete "{product.name}"? This will also remove all associated files. This action cannot be undone.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>

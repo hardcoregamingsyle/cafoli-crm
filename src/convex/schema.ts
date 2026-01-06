@@ -11,7 +11,14 @@ export default defineSchema({
     mrp: v.string(),
     packaging: v.optional(v.string()),
     rate: v.optional(v.string()), // Temporary: will be removed after migration
-    images: v.array(v.id("_storage")),
+    images: v.array(v.id("_storage")), // Keep for backward compatibility
+    
+    // New fields
+    mainImage: v.optional(v.id("_storage")), // Compulsory for new, optional for migration
+    flyer: v.optional(v.id("_storage")),
+    bridgeCard: v.optional(v.id("_storage")),
+    visuelet: v.optional(v.id("_storage")), // PDF
+
     description: v.optional(v.string()),
     pageLink: v.optional(v.string()),
   }).index("by_name", ["name"]),
