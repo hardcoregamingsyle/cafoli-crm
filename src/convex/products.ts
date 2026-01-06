@@ -34,6 +34,14 @@ export const listProducts = query({
   },
 });
 
+// Internal version for use in actions
+export const listProductsInternal = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query("products").order("desc").collect();
+  },
+});
+
 export const getProductByName = query({
   args: { name: v.string() },
   handler: async (ctx, args) => {

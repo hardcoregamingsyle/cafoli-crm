@@ -2,7 +2,7 @@
 
 import { internalAction } from "../_generated/server";
 import { v } from "convex/values";
-import { api, internal } from "../_generated/api";
+import { internal } from "../_generated/api";
 
 // Handle incoming WhatsApp messages
 export const handleIncomingMessage = internalAction({
@@ -130,24 +130,21 @@ export const handleIncomingMessage = internalAction({
             // TRIGGER AUTO REPLY FOR EXISTING LEADS - BUT ONLY IF CHAT IS NOT ACTIVE
             if (args.type === "text") {
                 // Check if someone is actively viewing this chat
-                const isChatActive = await ctx.runQuery(api.activeChatSessions.isLeadChatActive, { leadId });
+                const isChatActive = await ctx.runQuery(internal.activeChatSessions.isLeadChatActive, { leadId });
                 
                 if (!isChatActive) {
                     console.log(`🤖 Triggering auto-reply for lead ${leadId} (chat not active)`);
                     
-                    const recentMessages = await ctx.runQuery(api.whatsappQueries.getChatMessages, { leadId });
+                    const recentMessages = await ctx.runQuery(internal.whatsappQueries.getChatMessages, { leadId });
                     const contextMessages = recentMessages.slice(-5).map((m: any) => ({
                         role: m.direction === "outbound" ? "assistant" : "user",
                         content: m.content
                     }));
 
                     // Get configurable contact request message
-                    const contactRequestMessage = await ctx.runQuery(api.whatsappConfig.getContactRequestMessage);
+                    const contactRequestMessage = await ctx.runQuery(internal.whatsappConfig.getContactRequestMessage);
 
-                    // Cast to any to avoid circular dependency type issues during generation
-                    const whatsappAi = (api as any).whatsappAi;
-                    if (whatsappAi?.generateAndSendAiReply) {
-                        await ctx.runAction(whatsappAi.generateAndSendAiReply, {
+                    await ctx.runAction(internal.whatsappAi.generateAndSendAiReply, {
                             leadId,
                             phoneNumber: args.from,
                             context: { 
@@ -156,11 +153,8 @@ export const handleIncomingMessage = internalAction({
                             },
                             prompt: args.text,
                             isAutoReply: true
-                        });
-                        console.log("✅ Auto-reply sent");
-                    } else {
-                        console.error("❌ Could not find whatsappAi.generateAndSendAiReply action");
-                    }
+                    });
+                    console.log("✅ Auto-reply sent");
                 } else {
                     console.log(`⏭️ Skipping auto-reply for lead ${leadId} (chat is actively being viewed)`);
                 }

@@ -1,10 +1,33 @@
 "use node";
-import { action } from "./_generated/server";
+import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
-import { api, internal } from "./_generated/api";
+import { internal } from "./_generated/api";
 import { generateWithGemini, extractJsonFromMarkdown } from "./lib/gemini";
 
-export const generateAndSendAiReply = action({
+// Public wrapper for frontend to call
+export const generateAndSendAiReply: any = action({
+  args: {
+    prompt: v.string(),
+    context: v.object({
+      leadName: v.string(),
+      recentMessages: v.array(v.object({
+        role: v.string(),
+        content: v.string(),
+      })),
+    }),
+    userId: v.id("users"),
+    leadId: v.id("leads"),
+    phoneNumber: v.string(),
+    replyingToMessageId: v.optional(v.id("messages")),
+    replyingToExternalId: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<void> => {
+    return await ctx.runAction(internal.whatsappAi.generateAndSendAiReplyInternal, args);
+  },
+});
+
+// Internal action that does the actual work
+export const generateAndSendAiReplyInternal = internalAction({
   args: {
     leadId: v.id("leads"),
     phoneNumber: v.string(),
@@ -18,8 +41,8 @@ export const generateAndSendAiReply = action({
   handler: async (ctx, args) => {
     try {
       // Fetch available resources for context
-      const products = await ctx.runQuery(api.products.listProducts);
-      const rangePdfs = await ctx.runQuery(api.rangePdfs.listRangePdfs);
+      const products = await ctx.runQuery(internal.products.listProductsInternal);
+      const rangePdfs = await ctx.runQuery(internal.rangePdfs.listRangePdfsInternal);
 
       const productNames = products.map((p: any) => p.name).join(", ");
       const pdfNames = rangePdfs.map((p: any) => p.name).join(", ");
@@ -65,7 +88,7 @@ export const generateAndSendAiReply = action({
 
       // Execute Action
       if (aiAction.action === "reply") {
-        await ctx.runAction(api.whatsapp.messages.send, {
+        await ctx.runAction(internal.whatsapp.internal.sendMessage, {
           leadId: args.leadId,
           phoneNumber: args.phoneNumber,
           message: aiAction.text,
@@ -79,7 +102,7 @@ export const generateAndSendAiReply = action({
           
           // Send intro message if provided
           if (aiAction.text) {
-            await ctx.runAction(api.whatsapp.messages.send, {
+            await ctx.runAction(internal.whatsapp.internal.sendMessage, {
               leadId: args.leadId,
               phoneNumber: args.phoneNumber,
               message: aiAction.text,
@@ -100,15 +123,11 @@ export const generateAndSendAiReply = action({
                  console.error(`[PRODUCT_SEND] Metadata is null for storageId: ${storageId}. Image might be missing.`);
               }
 
-              // Verify we can get a URL before attempting to send
-              // Note: We can't get the URL here in the action directly easily without passing it to the next action
-              // But sendMedia handles it.
-              
-              await ctx.runAction(api.whatsapp.messages.sendMedia, {
+              await ctx.runAction(internal.whatsapp.internal.sendMedia, {
                 leadId: args.leadId,
                 phoneNumber: args.phoneNumber,
                 storageId: storageId,
-                fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}.jpg`, // Sanitize filename
+                fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}.jpg`,
                 mimeType: metadata?.contentType || "image/jpeg",
                 message: product.name
               });
@@ -117,7 +136,6 @@ export const generateAndSendAiReply = action({
               await new Promise(resolve => setTimeout(resolve, 500));
             } catch (error) {
               console.error(`[PRODUCT_SEND] Failed to send product image for ${product.name}:`, error);
-              // We continue to send details even if image fails
             }
           } else {
              console.log(`[PRODUCT_SEND] No images found for product: ${product.name}`);
@@ -132,13 +150,13 @@ export const generateAndSendAiReply = action({
           if (product.description) detailsMessage += `\n${product.description}\n`;
           if (product.pageLink) detailsMessage += `\nMore info: ${product.pageLink}`;
           
-          await ctx.runAction(api.whatsapp.messages.send, {
+          await ctx.runAction(internal.whatsapp.internal.sendMessage, {
             leadId: args.leadId,
             phoneNumber: args.phoneNumber,
             message: detailsMessage,
           });
         } else {
-          await ctx.runAction(api.whatsapp.messages.send, {
+          await ctx.runAction(internal.whatsapp.internal.sendMessage, {
             leadId: args.leadId,
             phoneNumber: args.phoneNumber,
             message: `I couldn't find the product "${aiAction.resource_name}". Please check the product name and try again.`,
@@ -149,7 +167,7 @@ export const generateAndSendAiReply = action({
          if (pdf) {
            const metadata = await ctx.runQuery(internal.products.getStorageMetadata, { storageId: pdf.storageId });
            
-           await ctx.runAction(api.whatsapp.messages.sendMedia, {
+           await ctx.runAction(internal.whatsapp.internal.sendMedia, {
              leadId: args.leadId,
              phoneNumber: args.phoneNumber,
              storageId: pdf.storageId,
@@ -158,27 +176,25 @@ export const generateAndSendAiReply = action({
              message: aiAction.text
            });
          } else {
-            await ctx.runAction(api.whatsapp.messages.send, {
+            await ctx.runAction(internal.whatsapp.internal.sendMessage, {
              leadId: args.leadId,
              phoneNumber: args.phoneNumber,
              message: `I couldn't find the PDF for ${aiAction.resource_name}. ${aiAction.text}`,
            });
          }
       } else if (aiAction.action === "send_full_catalogue") {
-          // Send the catalogue link first
           const catalogueMessage = aiAction.text || "Here is our complete product catalogue:";
-          await ctx.runAction(api.whatsapp.messages.send, {
+          await ctx.runAction(internal.whatsapp.internal.sendMessage, {
             leadId: args.leadId,
             phoneNumber: args.phoneNumber,
             message: `${catalogueMessage}\n\nhttps://cafoli.in/allproducts.aspx`,
           });
 
-          // Send all PDFs
           for (const pdf of rangePdfs) {
             try {
               const metadata = await ctx.runQuery(internal.products.getStorageMetadata, { storageId: pdf.storageId });
               
-              await ctx.runAction(api.whatsapp.messages.sendMedia, {
+              await ctx.runAction(internal.whatsapp.internal.sendMedia, {
                 leadId: args.leadId,
                 phoneNumber: args.phoneNumber,
                 storageId: pdf.storageId,
@@ -187,24 +203,22 @@ export const generateAndSendAiReply = action({
                 message: pdf.name
               });
               
-              // Small delay to avoid rate limiting
               await new Promise(resolve => setTimeout(resolve, 500));
             } catch (error) {
               console.error(`Failed to send PDF ${pdf.name}:`, error);
             }
           }
       } else if (aiAction.action === "intervention_request") {
-          await ctx.runAction(api.whatsapp.messages.send, {
+          await ctx.runAction(internal.whatsapp.internal.sendMessage, {
             leadId: args.leadId,
             phoneNumber: args.phoneNumber,
             message: aiAction.text,
           });
-          // Try to create intervention request if module exists
           try {
             // @ts-ignore
-            if (api.interventionRequests && api.interventionRequests.create) {
+            if (internal.interventionRequests && internal.interventionRequests.create) {
                 // @ts-ignore
-                await ctx.runMutation(api.interventionRequests.create, { 
+                await ctx.runMutation(internal.interventionRequests.create, { 
                     leadId: args.leadId, 
                     reason: aiAction.reason || "AI Request",
                     status: "pending"
@@ -214,17 +228,16 @@ export const generateAndSendAiReply = action({
               console.error("Failed to create intervention request", e);
           }
       } else if (aiAction.action === "contact_request") {
-          await ctx.runAction(api.whatsapp.messages.send, {
+          await ctx.runAction(internal.whatsapp.internal.sendMessage, {
             leadId: args.leadId,
             phoneNumber: args.phoneNumber,
             message: aiAction.text,
           });
-          // Try to create contact request if module exists
           try {
             // @ts-ignore
-            if (api.contactRequests && api.contactRequests.create) {
+            if (internal.contactRequests && internal.contactRequests.create) {
                 // @ts-ignore
-                await ctx.runMutation(api.contactRequests.create, { 
+                await ctx.runMutation(internal.contactRequests.create, { 
                     leadId: args.leadId, 
                     type: "general",
                     status: "pending",
@@ -238,7 +251,7 @@ export const generateAndSendAiReply = action({
 
     } catch (error) {
       console.error("AI Generation Error", error);
-      await ctx.runAction(api.whatsapp.messages.send, {
+      await ctx.runAction(internal.whatsapp.internal.sendMessage, {
           leadId: args.leadId,
           phoneNumber: args.phoneNumber,
           message: "I'm having trouble processing your request right now. Please try again later.",

@@ -9,13 +9,16 @@ export function useAuth() {
     return stored as Id<"users"> | null;
   });
 
+  // Cast api to any to avoid deep type instantiation
+  const apiAny = api as any;
+
   const user = useQuery(
-    api.users.getUser,
+    apiAny.users.getUser,
     userId ? { id: userId } : "skip"
   );
 
-  const login = useMutation(api.users.login);
-  const createLog = useMutation(api.activityLogs.createLog);
+  const login = useMutation(apiAny.users.login);
+  const createLog = useMutation(apiAny.activityLogs.createLog);
 
   const signIn = async (email: string, password: string) => {
     const result = await login({ email, password });

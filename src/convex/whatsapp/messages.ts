@@ -1,6 +1,6 @@
 "use node";
 
-import { action } from "../_generated/server";
+import { action, internalAction } from "../_generated/server";
 import { v } from "convex/values";
 
 export const send = action({
@@ -191,7 +191,7 @@ export const sendMedia = action({
   },
 });
 
-export const markMessagesAsRead = action({
+export const markMessagesAsRead = internalAction({
   args: {
     messageIds: v.array(v.string()),
   },

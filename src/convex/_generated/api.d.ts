@@ -61,8 +61,6 @@ import type * as rangePdfs from "../rangePdfs.js";
 import type * as reportPdfGenerator from "../reportPdfGenerator.js";
 import type * as reports from "../reports.js";
 import type * as tags from "../tags.js";
-import type * as test_ai from "../test_ai.js";
-import type * as test_ai_comprehensive from "../test_ai_comprehensive.js";
 import type * as test_utils from "../test_utils.js";
 import type * as users from "../users.js";
 import type * as whatsapp from "../whatsapp.js";
@@ -142,8 +140,6 @@ declare const fullApi: ApiFromModules<{
   reportPdfGenerator: typeof reportPdfGenerator;
   reports: typeof reports;
   tags: typeof tags;
-  test_ai: typeof test_ai;
-  test_ai_comprehensive: typeof test_ai_comprehensive;
   test_utils: typeof test_utils;
   users: typeof users;
   whatsapp: typeof whatsapp;

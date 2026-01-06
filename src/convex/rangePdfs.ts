@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 
 export const createRangePdf = mutation({
@@ -20,6 +20,14 @@ export const createRangePdf = mutation({
 });
 
 export const listRangePdfs = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query("rangePdfs").order("desc").collect();
+  },
+});
+
+// Internal version for use in actions
+export const listRangePdfsInternal = internalQuery({
   args: {},
   handler: async (ctx) => {
     return await ctx.db.query("rangePdfs").order("desc").collect();

@@ -31,6 +31,7 @@ export const testContactRequestDetection = action({
       try {
         detection = JSON.parse(cleaned);
       } catch (e) {
+        // If still not valid JSON, return default
         detection = { wantsContact: false, confidence: 0, reason: "Invalid JSON response" };
       }
 
@@ -60,28 +61,35 @@ export const testProductQuery = action({
     testMessage: v.string(),
     expectedProductName: v.optional(v.string()),
   },
-  handler: async (ctx, args): Promise<TestResult> => {
+  handler: async (ctx, args): Promise<any> => {
     try {
-      const products = await ctx.runQuery(api.products.listProducts) as Array<{ name: string }>;
-      const productNames = products.map((p) => p.name).join(", ");
+      const products: any = await ctx.runQuery(api.products.listProducts);
+      const productNames = products.map((p: any) => p.name).join(", ");
 
       const systemPrompt = `You are a helpful assistant. Available Products: ${productNames}.
       Identify if any of the available products are mentioned in the message.
       Return a JSON object with:
       - productName: string (the exact name of the product found, or null if none found)`;
 
-      const response = await ctx.runAction(api.ai.generateJson, {
+      // Use 'any' to break the deep type instantiation chain
+      const rawResponse = await ctx.runAction(api.ai.generateJson as any, {
         prompt: args.testMessage,
         systemPrompt: systemPrompt,
-      }) as string;
+      });
+      const response = String(rawResponse);
 
-      let detectedProduct: string | null = null;
+      let detectedProduct = null;
       try {
-        const trimmed = responseStr.trim();
-        const cleaned = trimmed.replace(/[\n\r]+/g, " ");
-        const parsed = JSON.parse(cleaned) as { productName: string | null };
-        detectedProduct = parsed.productName;
+        const cleaned = response.replace(/[\n\r]+/g, " ");
+        try {
+          const parsed = JSON.parse(cleaned);
+          detectedProduct = parsed.productName;
+        } catch (e) {
+          // If still not valid JSON, return default
+          detectedProduct = null;
+        }
       } catch (e) {
+        // If parsing fails, return default
         detectedProduct = null;
       }
 
@@ -95,7 +103,7 @@ export const testProductQuery = action({
         testMessage: args.testMessage,
         expectedProduct: args.expectedProductName,
         detectedProduct,
-        response: response.substring(0, 200),
+        response: response.substring(0, 200), // First 200 chars
       };
     } catch (error) {
       return {
@@ -118,9 +126,10 @@ interface TestSummary {
 
 export const runAllTests = action({
   args: {},
-  handler: async (ctx): Promise<TestSummary> => {
-    const results: Array<TestResult & { type: string }> = [];
+  handler: async (ctx): Promise<any> => {
+    const results: any[] = [];
 
+    // Contact Request Detection Tests
     const contactTests = [
       { message: "I want to talk to your representative", expected: true },
       { message: "Can I speak with someone from your team?", expected: true },
@@ -132,13 +141,14 @@ export const runAllTests = action({
     ];
 
     for (const test of contactTests) {
-      const result = await ctx.runAction(api.test_ai.testContactRequestDetection, {
+      const result: any = await ctx.runAction(api.test_ai.testContactRequestDetection, {
         testMessage: test.message,
         expectedResult: test.expected,
       });
       results.push({ type: "contact_detection", ...result });
     }
 
+    // Product Query Tests
     const productTests = [
       { message: "What is the price of VAONOPULSE?", expectedProduct: "VAONOPULSE" },
       { message: "Show me details of VAONOPULSE", expectedProduct: "VAONOPULSE" },
@@ -147,15 +157,15 @@ export const runAllTests = action({
     ];
 
     for (const test of productTests) {
-      const result = await ctx.runAction(api.test_ai.testProductQuery, {
+      const result: any = await ctx.runAction(api.test_ai.testProductQuery, {
         testMessage: test.message,
         expectedProductName: test.expectedProduct,
       });
       results.push({ type: "product_query", ...result });
     }
 
-    const totalTests = results.length;
-    const passedTests = results.filter((r) => r.passed).length;
+    const totalTests: number = results.length;
+    const passedTests: number = results.filter((r: any) => r.passed).length;
     const failedTests = totalTests - passedTests;
 
     return {

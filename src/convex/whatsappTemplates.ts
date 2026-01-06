@@ -237,11 +237,14 @@ export const syncTemplates = action({
         throw new Error(`Meta API error: ${JSON.stringify(data)}`);
       }
 
+      // Cast internal to any to avoid type complexity
+      const internalAny = internal as any;
+
       // Store templates in database
       const templates = data.data || [];
       
       for (const template of templates) {
-        await ctx.runMutation("whatsappTemplatesMutations:upsertTemplate" as any, {
+        await ctx.runMutation(internalAny.whatsappTemplatesMutations.upsertTemplate, {
           name: template.name,
           language: template.language,
           category: template.category,

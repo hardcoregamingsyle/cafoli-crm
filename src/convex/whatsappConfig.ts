@@ -1,11 +1,12 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 
 /**
  * Configuration for WhatsApp automated responses
  */
 
-export const getContactRequestMessage = query({
+// Changed to internalQuery so it can be called from webhook without api type issues
+export const getContactRequestMessage = internalQuery({
   args: {},
   handler: async (ctx) => {
     const config = await ctx.db

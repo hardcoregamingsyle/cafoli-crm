@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 
 // Update active chat session (called when user opens/interacts with chat)
@@ -48,7 +48,8 @@ export const removeActiveSession = mutation({
 });
 
 // Check if chat is actively being viewed (within last 30 seconds)
-export const isLeadChatActive = query({
+// Changed to internalQuery so it can be called from webhook without api type issues
+export const isLeadChatActive = internalQuery({
   args: {
     leadId: v.id("leads"),
   },

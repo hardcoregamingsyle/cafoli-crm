@@ -1,5 +1,6 @@
 import { query, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 
 export const getChatsByLeadId = internalQuery({
   args: {
@@ -36,40 +37,10 @@ export const getAllChats = query({
   },
 });
 
-export const getChatMessages = query({
+export const getChatMessages: any = query({
   args: { leadId: v.id("leads") },
-  handler: async (ctx, args) => {
-    // Find the chat for this lead
-    const chat = await ctx.db
-      .query("chats")
-      .withIndex("by_lead", (q) => q.eq("leadId", args.leadId))
-      .first();
-    
-    if (!chat) {
-      return [];
-    }
-    
-    // Get all messages for this chat
-    const messages = await ctx.db
-      .query("messages")
-      .withIndex("by_chat", (q) => q.eq("chatId", chat._id))
-      .collect();
-    
-    // Enrich messages with quoted message data if they exist
-    const enrichedMessages = await Promise.all(
-      messages.map(async (message) => {
-        if (message.quotedMessageId) {
-          const quotedMessage = await ctx.db.get(message.quotedMessageId);
-          return {
-            ...message,
-            quotedMessage,
-          };
-        }
-        return message;
-      })
-    );
-    
-    return enrichedMessages;
+  handler: async (ctx, args): Promise<any> => {
+    return await ctx.runQuery(internal.whatsappQueries.getChatMessagesInternal, args);
   },
 });
 
