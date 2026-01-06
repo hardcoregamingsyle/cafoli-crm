@@ -182,7 +182,7 @@ export const generateAndSendAiReplyInternal = internalAction({
                 storageId: file.storageId,
                 fileName: file.fileName,
                 mimeType: metadata?.contentType || (file.type === "pdf" ? "application/pdf" : "image/jpeg"),
-                message: file.label
+                message: undefined
               });
               
               console.log(`[PRODUCT_SEND] [${i + 1}/${filesToSend.length}] ${file.label} sent successfully for ${product.name}`);
