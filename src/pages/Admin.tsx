@@ -63,119 +63,121 @@ export default function Admin() {
   };
 
   return (
-    <div className="container mx-auto py-8 space-y-8">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-      </div>
+    <AppLayout>
+      <div className="container mx-auto py-8 space-y-8">
+        <div className="flex justify-between items-center">
+          <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+        </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList>
-          {currentUser.role === "admin" && <TabsTrigger value="users">User Management</TabsTrigger>}
-          <TabsTrigger value="products">Products</TabsTrigger>
-          <TabsTrigger value="ranges">Range PDFs</TabsTrigger>
-          {currentUser.role === "admin" && <TabsTrigger value="logs">System Logs</TabsTrigger>}
-        </TabsList>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList>
+            {currentUser.role === "admin" && <TabsTrigger value="users">User Management</TabsTrigger>}
+            <TabsTrigger value="products">Products</TabsTrigger>
+            <TabsTrigger value="ranges">Range PDFs</TabsTrigger>
+            {currentUser.role === "admin" && <TabsTrigger value="logs">System Logs</TabsTrigger>}
+          </TabsList>
 
-        {currentUser.role === "admin" && (
-          <TabsContent value="users" className="space-y-4">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold">Users</h2>
-              <CreateUserDialog onCreateUser={handleCreateUser} />
-            </div>
-            
-            <div className="border rounded-md">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Joined</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {users?.map((user: any) => (
-                    <TableRow key={user._id}>
-                      <TableCell className="font-medium">{user.name || "Unknown"}</TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell>
-                        <Select
-                          defaultValue={user.role}
-                          onValueChange={(value: string) => 
-                            updateUserRole({ userId: user._id, role: value })
-                          }
-                          disabled={user.email === "owner"}
-                        >
-                          <SelectTrigger className="w-[130px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="staff">Staff</SelectItem>
-                            <SelectItem value="uploader">Uploader</SelectItem>
-                            <SelectItem value="admin">Admin</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>
-                        {new Date(user._creationTime).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-destructive hover:text-destructive/90"
-                          onClick={() => {
-                            if (confirm("Are you sure you want to delete this user?")) {
-                              deleteUser({ userId: user._id, adminId: currentUser._id });
-                            }
-                          }}
-                          disabled={user.email === "owner" || user._id === currentUser._id}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
+          {currentUser.role === "admin" && (
+            <TabsContent value="users" className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold">Users</h2>
+                <CreateUserDialog onCreateUser={handleCreateUser} />
+              </div>
+              
+              <div className="border rounded-md">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Joined</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {users?.map((user: any) => (
+                      <TableRow key={user._id}>
+                        <TableCell className="font-medium">{user.name || "Unknown"}</TableCell>
+                        <TableCell>{user.email}</TableCell>
+                        <TableCell>
+                          <Select
+                            defaultValue={user.role}
+                            onValueChange={(value: string) => 
+                              updateUserRole({ userId: user._id, role: value })
+                            }
+                            disabled={user.email === "owner"}
+                          >
+                            <SelectTrigger className="w-[130px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="staff">Staff</SelectItem>
+                              <SelectItem value="uploader">Uploader</SelectItem>
+                              <SelectItem value="admin">Admin</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          {new Date(user._creationTime).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive hover:text-destructive/90"
+                            onClick={() => {
+                              if (confirm("Are you sure you want to delete this user?")) {
+                                deleteUser({ userId: user._id, adminId: currentUser._id });
+                              }
+                            }}
+                            disabled={user.email === "owner" || user._id === currentUser._id}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </TabsContent>
+          )}
+
+          <TabsContent value="products">
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold">Product Management</h2>
+                <ProductUploadDialog />
+              </div>
+              <ProductListManager />
             </div>
           </TabsContent>
-        )}
 
-        <TabsContent value="products">
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold">Product Management</h2>
-              <ProductUploadDialog />
+          <TabsContent value="ranges">
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold">Range PDFs</h2>
+                <RangePdfUploadDialog />
+              </div>
+              <RangePdfListManager />
             </div>
-            <ProductListManager />
-          </div>
-        </TabsContent>
-
-        <TabsContent value="ranges">
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold">Range PDFs</h2>
-              <RangePdfUploadDialog />
-            </div>
-            <RangePdfListManager />
-          </div>
-        </TabsContent>
-        
-        {currentUser.role === "admin" && (
-          <TabsContent value="logs">
-             <div className="p-4 border rounded bg-muted/20">
-                <p className="text-muted-foreground">System logs are available in the Convex dashboard.</p>
-                <Button variant="outline" className="mt-4" asChild>
-                  <a href="https://dashboard.convex.dev" target="_blank" rel="noopener noreferrer">
-                    Open Convex Dashboard
-                  </a>
-                </Button>
-             </div>
           </TabsContent>
-        )}
-      </Tabs>
-    </div>
+          
+          {currentUser.role === "admin" && (
+            <TabsContent value="logs">
+               <div className="p-4 border rounded bg-muted/20">
+                  <p className="text-muted-foreground">System logs are available in the Convex dashboard.</p>
+                  <Button variant="outline" className="mt-4" asChild>
+                    <a href="https://dashboard.convex.dev" target="_blank" rel="noopener noreferrer">
+                      Open Convex Dashboard
+                    </a>
+                  </Button>
+               </div>
+            </TabsContent>
+          )}
+        </Tabs>
+      </div>
+    </AppLayout>
   );
 }
