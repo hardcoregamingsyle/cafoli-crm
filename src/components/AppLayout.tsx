@@ -13,7 +13,8 @@ import {
   PieChart,
   Download,
   Mail,
-  FileText
+  FileText,
+  Package
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
@@ -75,6 +76,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const isAdmin = user?.role === "admin";
+  const isUploader = user?.role === "uploader";
 
   const adminNavItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -84,6 +86,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
     { name: "WhatsApp", href: "/whatsapp", icon: MessageSquare },
     { name: "Emailing", href: "/emailing", icon: Mail },
     { name: "Campaigns", href: "/campaigns", icon: BarChart3 },
+    { name: "Catalog", href: "/catalog", icon: Package },
     { name: "Reports", href: "/reports", icon: PieChart },
     { name: "Activity Logs", href: "/logs", icon: FileText },
     { name: "Admin", href: "/admin", icon: Settings },
@@ -96,10 +99,17 @@ export default function AppLayout({ children }: AppLayoutProps) {
     { name: "WhatsApp", href: "/whatsapp", icon: MessageSquare },
     { name: "Emailing", href: "/emailing", icon: Mail },
     { name: "Campaigns", href: "/campaigns", icon: BarChart3 },
+    { name: "Catalog", href: "/catalog", icon: Package },
     { name: "Reports", href: "/reports", icon: PieChart },
   ];
 
-  const navigation = isAdmin ? adminNavItems : staffNavItems;
+  const uploaderNavItems = [
+    { name: "Catalog", href: "/catalog", icon: Package },
+  ];
+
+  let navigation = staffNavItems;
+  if (isAdmin) navigation = adminNavItems;
+  if (isUploader) navigation = uploaderNavItems;
 
   // Export Logic
   const [isExporting, setIsExporting] = useState(false);

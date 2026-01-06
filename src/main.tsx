@@ -24,6 +24,7 @@ const Emailing = lazy(() => import("./pages/Emailing.tsx"));
 const Admin = lazy(() => import("./pages/Admin.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 const Logs = lazy(() => import("./pages/Logs.tsx"));
+const Catalog = lazy(() => import("./pages/Catalog.tsx"));
 
 // Simple loading fallback for route transitions
 function RouteLoading() {
@@ -120,6 +121,10 @@ const router = createBrowserRouter([
       {
         path: "/logs",
         element: <Logs />,
+      },
+      {
+        path: "/catalog",
+        element: <Catalog />,
       },
       {
         path: "*",
