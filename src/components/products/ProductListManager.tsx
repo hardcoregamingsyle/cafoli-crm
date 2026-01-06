@@ -44,18 +44,10 @@ export function ProductListManager() {
     }
   };
 
-  const getFileUrl = async (storageId: string) => {
-    try {
-      const url = await fetch(`${import.meta.env.VITE_CONVEX_URL}/api/storage/${storageId}`).then(r => r.url);
-      return url;
-    } catch (error) {
-      console.error("Failed to get file URL:", error);
-      return null;
-    }
-  };
-
-  const handlePreview = async (storageId: string, type: string, name: string) => {
-    const url = `${import.meta.env.VITE_CONVEX_URL}/api/storage/${storageId}`;
+  const handlePreview = (storageId: string, type: string, name: string) => {
+    // Construct proper Convex storage URL
+    const convexUrl = import.meta.env.VITE_CONVEX_URL;
+    const url = `${convexUrl}/api/storage/${storageId}`;
     setPreviewFile({ url, type, name });
   };
 

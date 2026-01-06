@@ -220,7 +220,7 @@ export const generateAndSendAiReplyInternal = internalAction({
          if (pdf) {
            const metadata = await ctx.runQuery(internal.products.getStorageMetadata, { storageId: pdf.storageId });
            
-           await ctx.runAction(internal.whatsapp.internal.sendMedia, {
+           await ctx.runAction(internal.whatsapp.messages.sendMedia, {
              leadId: args.leadId,
              phoneNumber: args.phoneNumber,
              storageId: pdf.storageId,
@@ -247,7 +247,7 @@ export const generateAndSendAiReplyInternal = internalAction({
             try {
               const metadata = await ctx.runQuery(internal.products.getStorageMetadata, { storageId: pdf.storageId });
               
-              await ctx.runAction(internal.whatsapp.internal.sendMedia, {
+              await ctx.runAction(internal.whatsapp.messages.sendMedia, {
                 leadId: args.leadId,
                 phoneNumber: args.phoneNumber,
                 storageId: pdf.storageId,
