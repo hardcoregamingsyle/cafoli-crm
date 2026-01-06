@@ -17,7 +17,7 @@ export default defineSchema({
     mainImage: v.optional(v.id("_storage")), // Compulsory for new, optional for migration
     flyer: v.optional(v.id("_storage")),
     bridgeCard: v.optional(v.id("_storage")),
-    visuelet: v.optional(v.id("_storage")), // PDF
+    visualaid: v.optional(v.id("_storage")), // PDF
 
     description: v.optional(v.string()),
     pageLink: v.optional(v.string()),

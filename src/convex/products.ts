@@ -12,7 +12,7 @@ export const createProduct = mutation({
     mainImage: v.id("_storage"),
     flyer: v.optional(v.id("_storage")),
     bridgeCard: v.optional(v.id("_storage")),
-    visuelet: v.optional(v.id("_storage")),
+    visualaid: v.optional(v.id("_storage")),
     
     description: v.optional(v.string()),
     pageLink: v.optional(v.string()),
@@ -28,7 +28,7 @@ export const createProduct = mutation({
       mainImage: args.mainImage,
       flyer: args.flyer,
       bridgeCard: args.bridgeCard,
-      visuelet: args.visuelet,
+      visualaid: args.visualaid,
       description: args.description,
       pageLink: args.pageLink,
     });
@@ -47,14 +47,14 @@ export const updateProduct = mutation({
     mainImage: v.optional(v.id("_storage")),
     flyer: v.optional(v.id("_storage")),
     bridgeCard: v.optional(v.id("_storage")),
-    visuelet: v.optional(v.id("_storage")),
+    visualaid: v.optional(v.id("_storage")),
     description: v.optional(v.string()),
     pageLink: v.optional(v.string()),
     
     // Flags to remove optional files
     removeFlyer: v.optional(v.boolean()),
     removeBridgeCard: v.optional(v.boolean()),
-    removeVisuelet: v.optional(v.boolean()),
+    removeVisualaid: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const product = await ctx.db.get(args.id);
@@ -85,7 +85,7 @@ export const updateProduct = mutation({
 
     if (args.flyer) updates.flyer = args.flyer;
     if (args.bridgeCard) updates.bridgeCard = args.bridgeCard;
-    if (args.visuelet) updates.visuelet = args.visuelet;
+    if (args.visualaid) updates.visualaid = args.visualaid;
 
     // Handle removals
     if (args.removeFlyer && product.flyer) {
@@ -96,9 +96,9 @@ export const updateProduct = mutation({
       // await ctx.storage.delete(product.bridgeCard);
       updates.bridgeCard = undefined;
     }
-    if (args.removeVisuelet && product.visuelet) {
-      // await ctx.storage.delete(product.visuelet);
-      updates.visuelet = undefined;
+    if (args.removeVisualaid && product.visualaid) {
+      // await ctx.storage.delete(product.visualaid);
+      updates.visualaid = undefined;
     }
 
     await ctx.db.patch(args.id, updates);
@@ -129,7 +129,7 @@ export const listProductsInternal = internalQuery({
       mainImage: p.mainImage,
       flyer: p.flyer,
       bridgeCard: p.bridgeCard,
-      visuelet: p.visuelet,
+      visualaid: p.visualaid,
     }));
   },
 });
@@ -168,8 +168,8 @@ export const getProductWithUrls = query({
     if (product.bridgeCard) {
       urls.bridgeCardUrl = await ctx.storage.getUrl(product.bridgeCard);
     }
-    if (product.visuelet) {
-      urls.visueletUrl = await ctx.storage.getUrl(product.visuelet);
+    if (product.visualaid) {
+      urls.visualaidUrl = await ctx.storage.getUrl(product.visualaid);
     }
 
     return { ...product, ...urls };
@@ -208,7 +208,7 @@ export const deleteProduct = mutation({
     if (product.mainImage) storageIds.add(product.mainImage);
     if (product.flyer) storageIds.add(product.flyer);
     if (product.bridgeCard) storageIds.add(product.bridgeCard);
-    if (product.visuelet) storageIds.add(product.visuelet);
+    if (product.visualaid) storageIds.add(product.visualaid);
 
     for (const storageId of storageIds) {
       try {

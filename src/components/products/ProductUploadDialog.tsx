@@ -39,13 +39,13 @@ export function ProductUploadDialog({ disabled, product, trigger }: ProductUploa
   const [mainImage, setMainImage] = useState<File | null>(null);
   const [flyer, setFlyer] = useState<File | null>(null);
   const [bridgeCard, setBridgeCard] = useState<File | null>(null);
-  const [visuelet, setVisuelet] = useState<File | null>(null);
+  const [visualaid, setVisualaid] = useState<File | null>(null);
 
   // Existing file flags (for UI only, to show something is there)
   const [hasExistingMainImage, setHasExistingMainImage] = useState(false);
   const [hasExistingFlyer, setHasExistingFlyer] = useState(false);
   const [hasExistingBridgeCard, setHasExistingBridgeCard] = useState(false);
-  const [hasExistingVisuelet, setHasExistingVisuelet] = useState(false);
+  const [hasExistingVisualaid, setHasExistingVisualaid] = useState(false);
   
   const generateUploadUrl = useMutation(api.products.generateUploadUrl);
   const createProduct = useMutation(api.products.createProduct);
@@ -63,7 +63,7 @@ export function ProductUploadDialog({ disabled, product, trigger }: ProductUploa
       setHasExistingMainImage(!!product.mainImage);
       setHasExistingFlyer(!!product.flyer);
       setHasExistingBridgeCard(!!product.bridgeCard);
-      setHasExistingVisuelet(!!product.visuelet);
+      setHasExistingVisualaid(!!product.visualaid);
     } else if (!product && open) {
       // Reset for create mode
       setBrandName("");
@@ -75,11 +75,11 @@ export function ProductUploadDialog({ disabled, product, trigger }: ProductUploa
       setMainImage(null);
       setFlyer(null);
       setBridgeCard(null);
-      setVisuelet(null);
+      setVisualaid(null);
       setHasExistingMainImage(false);
       setHasExistingFlyer(false);
       setHasExistingBridgeCard(false);
-      setHasExistingVisuelet(false);
+      setHasExistingVisualaid(false);
     }
   }, [product, open]);
 
@@ -158,8 +158,8 @@ export function ProductUploadDialog({ disabled, product, trigger }: ProductUploa
       let bridgeCardId = undefined;
       if (bridgeCard) bridgeCardId = await uploadFile(bridgeCard);
       
-      let visueletId = undefined;
-      if (visuelet) visueletId = await uploadFile(visuelet);
+      let visualaidId = undefined;
+      if (visualaid) visualaidId = await uploadFile(visualaid);
 
       if (product) {
         await updateProduct({
@@ -171,7 +171,7 @@ export function ProductUploadDialog({ disabled, product, trigger }: ProductUploa
           mainImage: mainImageId,
           flyer: flyerId,
           bridgeCard: bridgeCardId,
-          visuelet: visueletId,
+          visualaid: visualaidId,
           description,
           pageLink,
           // If user removed existing file (we need UI for this, but for now let's assume replacing or keeping)
@@ -183,7 +183,7 @@ export function ProductUploadDialog({ disabled, product, trigger }: ProductUploa
           // Let's add simple removal logic if we have time, but for now replacing is key.
           removeFlyer: hasExistingFlyer === false && !!product.flyer, // If it was there but now UI says no (we need to implement the UI removal)
           removeBridgeCard: hasExistingBridgeCard === false && !!product.bridgeCard,
-          removeVisuelet: hasExistingVisuelet === false && !!product.visuelet,
+          removeVisualaid: hasExistingVisualaid === false && !!product.visualaid,
         });
         toast.success("Product updated successfully");
       } else {
@@ -195,7 +195,7 @@ export function ProductUploadDialog({ disabled, product, trigger }: ProductUploa
           mainImage: mainImageId!,
           flyer: flyerId,
           bridgeCard: bridgeCardId,
-          visuelet: visueletId,
+          visualaid: visualaidId,
           description,
           pageLink,
         });
@@ -371,12 +371,12 @@ export function ProductUploadDialog({ disabled, product, trigger }: ProductUploa
               onRemoveExisting={() => setHasExistingBridgeCard(false)}
             />
             <FileInput 
-              label="Visuelet (PDF)" 
-              file={visuelet} 
-              setFile={setVisuelet} 
+              label="Visual Aid (PDF)" 
+              file={visualaid} 
+              setFile={setVisualaid} 
               accept="application/pdf" 
-              existing={hasExistingVisuelet}
-              onRemoveExisting={() => setHasExistingVisuelet(false)}
+              existing={hasExistingVisualaid}
+              onRemoveExisting={() => setHasExistingVisualaid(false)}
             />
           </div>
 

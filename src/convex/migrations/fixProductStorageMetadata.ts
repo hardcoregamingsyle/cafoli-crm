@@ -34,10 +34,10 @@ export const findProblematicProducts = internalQuery({
         }
       }
       
-      if (product.visuelet) {
-        const metadata = await ctx.db.system.get(product.visuelet);
+      if (product.visualaid) {
+        const metadata = await ctx.db.system.get(product.visualaid);
         if (!metadata || !metadata.contentType || metadata.contentType === "application/octet-stream") {
-          issues.push("visuelet");
+          issues.push("visualaid");
         }
       }
 

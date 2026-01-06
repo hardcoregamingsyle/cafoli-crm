@@ -112,7 +112,7 @@ export const generateAndSendAiReplyInternal = internalAction({
           
           // Send all product images and files
           console.log(`[PRODUCT_SEND] Starting to send files for product: ${product.name}`);
-          console.log(`[PRODUCT_SEND] Product has - mainImage: ${!!product.mainImage}, flyer: ${!!product.flyer}, bridgeCard: ${!!product.bridgeCard}, visuelet: ${!!product.visuelet}`);
+          console.log(`[PRODUCT_SEND] Product has - mainImage: ${!!product.mainImage}, flyer: ${!!product.flyer}, bridgeCard: ${!!product.bridgeCard}, visualaid: ${!!product.visualaid}`);
           
           const filesToSend = [];
           
@@ -149,14 +149,14 @@ export const generateAndSendAiReplyInternal = internalAction({
             });
           }
           
-          // Visuelet (PDF)
-          if (product.visuelet) {
-            console.log(`[PRODUCT_SEND] Adding visuelet to queue: ${product.visuelet}`);
+          // Visual Aid (PDF)
+          if (product.visualaid) {
+            console.log(`[PRODUCT_SEND] Adding visualaid to queue: ${product.visualaid}`);
             filesToSend.push({
-              storageId: product.visuelet,
-              fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}_visuelet.pdf`,
+              storageId: product.visualaid,
+              fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}_visualaid.pdf`,
               type: "pdf",
-              label: "Visuelet"
+              label: "Visual Aid"
             });
           }
           
