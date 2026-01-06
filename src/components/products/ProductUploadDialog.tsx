@@ -158,6 +158,11 @@ export function ProductUploadDialog({ disabled, product, trigger }: ProductUploa
       return;
     }
 
+    if (selectedCategories.length < 2) {
+      toast.error("Please select at least 2 categories");
+      return;
+    }
+
     setLoading(true);
     try {
       // Upload files
@@ -433,7 +438,7 @@ export function ProductUploadDialog({ disabled, product, trigger }: ProductUploa
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>Categories (Select up to 7)</Label>
+              <Label>Categories (Select at least 2, up to 7) *</Label>
               <Button
                 type="button"
                 variant="ghost"
