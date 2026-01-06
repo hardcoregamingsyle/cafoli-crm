@@ -90,25 +90,37 @@ export const generateAndSendAiReply = action({
           // Send product image if available
           if (product.images && product.images.length > 0) {
             const storageId = product.images[0];
-            console.log(`Sending product image with storageId: ${storageId}`);
+            console.log(`[PRODUCT_SEND] Processing image for ${product.name}. StorageId: ${storageId}`);
             
             try {
               const metadata = await ctx.runQuery(internal.products.getStorageMetadata, { storageId });
-              console.log(`Image metadata:`, metadata);
+              console.log(`[PRODUCT_SEND] Image metadata retrieved:`, metadata);
+              
+              if (!metadata) {
+                 console.error(`[PRODUCT_SEND] Metadata is null for storageId: ${storageId}. Image might be missing.`);
+              }
+
+              // Verify we can get a URL before attempting to send
+              // Note: We can't get the URL here in the action directly easily without passing it to the next action
+              // But sendMedia handles it.
               
               await ctx.runAction(api.whatsapp.messages.sendMedia, {
                 leadId: args.leadId,
                 phoneNumber: args.phoneNumber,
                 storageId: storageId,
-                fileName: `${product.name}.jpg`,
+                fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}.jpg`, // Sanitize filename
                 mimeType: metadata?.contentType || "image/jpeg",
                 message: product.name
               });
               
+              console.log(`[PRODUCT_SEND] Image sent successfully for ${product.name}`);
               await new Promise(resolve => setTimeout(resolve, 500));
             } catch (error) {
-              console.error(`Failed to send product image for ${product.name}:`, error);
+              console.error(`[PRODUCT_SEND] Failed to send product image for ${product.name}:`, error);
+              // We continue to send details even if image fails
             }
+          } else {
+             console.log(`[PRODUCT_SEND] No images found for product: ${product.name}`);
           }
           
           // Format and send product details

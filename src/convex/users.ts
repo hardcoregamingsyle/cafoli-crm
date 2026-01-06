@@ -9,8 +9,9 @@ import { ROLES } from "./schema";
 export const currentUser = query({
   args: { userId: v.optional(v.id("users")) },
   handler: async (ctx, args) => {
-    if (!args.userId) return null;
-    return await ctx.db.get(args.userId);
+    const userId = args.userId ?? await getAuthUserId(ctx);
+    if (!userId) return null;
+    return await ctx.db.get(userId);
   },
 });
 
@@ -128,20 +129,28 @@ export const createUserWithRole = internalMutation({
     return await ctx.db.insert("users", {
       email: args.email,
       name: args.name,
-      role: args.role as "admin" | "staff",
+      role: args.role as "admin" | "staff" | "uploader",
       passwordHash: args.passwordHash,
     });
   },
 });
 
-export const updateUserRole = internalMutation({
+export const updateUserRole = mutation({
   args: {
     userId: v.id("users"),
     role: v.string(),
   },
   handler: async (ctx, args) => {
+    const currentUserId = await getAuthUserId(ctx);
+    if (!currentUserId) throw new Error("Unauthorized");
+    
+    const currentUser = await ctx.db.get(currentUserId);
+    if (currentUser?.role !== ROLES.ADMIN) {
+      throw new Error("Only admins can update roles");
+    }
+
     await ctx.db.patch(args.userId, {
-      role: args.role as "admin" | "staff",
+      role: args.role as "admin" | "staff" | "uploader",
     });
   },
 });
@@ -200,7 +209,7 @@ export const createUser = mutation({
     const newUserId = await ctx.db.insert("users", {
       email: args.email.toLowerCase(),
       name: args.name,
-      role: args.role as "admin" | "staff",
+      role: args.role as "admin" | "staff" | "uploader",
       passwordHash: args.password,
     });
 

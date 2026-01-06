@@ -32,7 +32,7 @@ export default defineSchema({
     name: v.optional(v.string()),
     image: v.optional(v.string()),
     email: v.optional(v.string()),
-    role: v.optional(v.union(v.literal("admin"), v.literal("staff"))),
+    role: v.optional(v.union(v.literal("admin"), v.literal("staff"), v.literal("uploader"))),
     passwordHash: v.optional(v.string()),
     
     preferences: v.optional(v.object({

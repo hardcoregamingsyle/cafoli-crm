@@ -108,11 +108,11 @@ export const sendMedia = action({
       // Get the file URL from Convex storage
       console.log(`[SEND_MEDIA] Getting file URL from storage...`);
       const fileUrl = await ctx.storage.getUrl(args.storageId);
-      console.log(`[SEND_MEDIA] File URL: ${fileUrl}`);
+      console.log(`[SEND_MEDIA] File URL generated: ${fileUrl ? "YES" : "NO"}`);
       
       if (!fileUrl) {
-        console.error(`[SEND_MEDIA] Failed to get file URL for storageId: ${args.storageId}`);
-        throw new Error("Failed to get file URL");
+        console.error(`[SEND_MEDIA] Failed to get file URL for storageId: ${args.storageId}. The file may have been deleted.`);
+        throw new Error("Failed to get file URL - File not found in storage");
       }
 
       // Determine media type

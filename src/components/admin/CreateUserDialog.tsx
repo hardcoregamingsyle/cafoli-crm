@@ -12,7 +12,7 @@ interface CreateUserDialogProps {
     email: string;
     name: string;
     password: string;
-    role: "admin" | "staff";
+    role: "admin" | "staff" | "uploader";
   }) => Promise<void>;
 }
 
@@ -22,7 +22,7 @@ export default function CreateUserDialog({ onCreateUser }: CreateUserDialogProps
     email: "",
     name: "",
     password: "",
-    role: "staff" as "admin" | "staff",
+    role: "staff" as "admin" | "staff" | "uploader",
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -93,13 +93,14 @@ export default function CreateUserDialog({ onCreateUser }: CreateUserDialogProps
             <Label htmlFor="role">Role</Label>
             <Select
               value={userData.role}
-              onValueChange={(value: "admin" | "staff") => setUserData({ ...userData, role: value })}
+              onValueChange={(value: "admin" | "staff" | "uploader") => setUserData({ ...userData, role: value })}
             >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="staff">Staff</SelectItem>
+                <SelectItem value="uploader">Image & Range Uploader</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
               </SelectContent>
             </Select>
