@@ -35,11 +35,11 @@ interface User {
 }
 
 export default function Admin() {
+  const { user: currentUser } = useAuth();
   const users = useQuery(api.users.getAllUsers);
   const createUser = useMutation(api.users.createUser);
   const deleteUser = useMutation(api.users.deleteUser);
   const updateUserRole = useMutation(api.users.updateUserRole);
-  const currentUser = useQuery(api.users.currentUser);
   
   const [activeTab, setActiveTab] = useState("users");
 
