@@ -10,6 +10,7 @@ import AppLayout from "@/components/AppLayout";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import "./index.css";
 import "./types/global.d.ts";
+import { setConvexApi } from "@/lib/convex-api";
 
 // Lazy load route components for better code splitting
 const Landing = lazy(() => import("./pages/Landing.tsx"));
@@ -60,6 +61,15 @@ if (!convexUrl || convexUrl === 'undefined' || convexUrl === '') {
 }
 
 const convex = new ConvexReactClient(convexUrl);
+
+// Initialize the runtime API dynamically to avoid type instantiation issues
+// Using string-based import to prevent TypeScript from analyzing at compile time
+const apiPath = "@/convex/_generated/api";
+import(/* @vite-ignore */ apiPath).then((module) => {
+  setConvexApi(module.api);
+}).catch((error) => {
+  console.error("Failed to load Convex API:", error);
+});
 
 const router = createBrowserRouter([
   {
