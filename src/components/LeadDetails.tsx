@@ -1,19 +1,28 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Doc, Id } from "@/convex/_generated/dataModel";
-import { useMutation, useQuery } from "convex/react";
-import { Calendar, Save, User, X, ThumbsUp, Trash2, Sparkles, MessageSquarePlus, BrainCircuit } from "lucide-react";
+import { useMutation, useQuery, useAction } from "convex/react";
+import { Calendar, X, ThumbsUp, Sparkles, Trash2, Save, BrainCircuit } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
-import { TagManager } from "@/components/TagManager";
 import { LeadInfo } from "@/components/leads/LeadInfo";
 import { LeadActivity } from "@/components/leads/LeadActivity";
+import { LeadDetailsHeader } from "@/components/leads/LeadDetailsHeader";
+import { LeadDetailsAiDialog } from "@/components/leads/LeadDetailsAiDialog";
+import { LeadDetailsFollowUpDialogs } from "@/components/leads/LeadDetailsFollowUpDialogs";
 import { useLeadEditor } from "@/hooks/useLeadEditor";
 import { api } from "@/convex/_generated/api";
 import { useSearchParams } from "react-router";
+import { TagManager } from "@/components/TagManager";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,9 +41,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import { useAction } from "convex/react";
 
 interface LeadDetailsProps {
   leadId: Id<"leads">;
@@ -55,6 +62,7 @@ export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [showAiDialog, setShowAiDialog] = useState(false);
+  const [tempFollowUpDate, setTempFollowUpDate] = useState<string>("");
 
   const {
     isEditing,
@@ -76,8 +84,6 @@ export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
     handleFollowUpNotDone,
     handleNewFollowUpDate,
   } = useLeadEditor({ lead, user });
-
-  const [tempFollowUpDate, setTempFollowUpDate] = useState<string>("");
 
   const handleAiAnalysis = async () => {
     if (!user || !lead) return;
@@ -105,21 +111,16 @@ export default function LeadDetails({ leadId, onClose }: LeadDetailsProps) {
         systemPrompt: "You are an expert CRM assistant. Suggest a follow-up. Return a JSON object with a 'suggestion' field containing a 'date' (ISO string) and 'reason'.",
       });
       
-      // Try to parse JSON if the AI returns it as requested
       try {
-        // Clean up markdown code blocks if present
         const cleanResult = result.replace(/```json/g, '').replace(/```/g, '');
         const parsedResult = JSON.parse(cleanResult);
-        // Assuming the AI returns a JSON object with a "suggestion" field
         if (parsedResult.suggestion) {
-          // Extract the follow-up date from the suggestion
           const followUpDate = parsedResult.suggestion.date;
           if (followUpDate) {
             handleNewFollowUpDate(new Date(followUpDate).getTime());
           }
         }
       } catch (error) {
-        // If parsing fails, just use the raw result
         console.log("Failed to parse AI response:", error);
       }
     } catch (error) {

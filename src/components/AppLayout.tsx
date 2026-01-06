@@ -289,8 +289,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
       <ContactRequestPopup />
       
       {/* Follow-up Notifications */}
-      <FollowUpNotifications />
-      
       {user && <FollowUpNotifications />}
       
       {leadsWithoutFollowUp && leadsWithoutFollowUp.length > 0 ? (
