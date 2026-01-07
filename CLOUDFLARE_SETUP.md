@@ -52,3 +52,9 @@ If the logs say "Sent successfully" but you don't receive the message:
 2. **Do NOT Send to Yourself**: WhatsApp Business API does **not** allow sending messages to the same number as the business account. You must test with a different phone number.
 
 3. **Check Phone Number Format**: Ensure the number includes the country code but NO `+` sign or leading zeros (e.g., `919876543210` for India).
+
+4. **REDEPLOY THE WORKER**:
+   - We have updated the worker code to improve file handling.
+   - Copy the code from `cloudflare/worker.js` again.
+   - Paste it into your Cloudflare Worker editor.
+   - Click **Deploy**.
