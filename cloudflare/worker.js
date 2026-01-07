@@ -1,6 +1,6 @@
 export default {
   async fetch(request, env, ctx) {
-    // Handle CORS preflight requests
+    // Handle CORS
     if (request.method === "OPTIONS") {
       return new Response(null, {
         headers: {
@@ -11,23 +11,27 @@ export default {
       });
     }
 
+    // Health check endpoint
+    if (request.method === "GET") {
+      return new Response("Cloudflare Worker is running! Method must be POST to send files.", { status: 200 });
+    }
+
     if (request.method !== "POST") {
-      return new Response("Method Not Allowed", { status: 405 });
+      return new Response("Method not allowed", { status: 405 });
     }
 
-    // Verify Authentication
-    const authHeader = request.headers.get("Authorization");
-    const expectedToken = env.WORKER_AUTH_TOKEN;
-    
+    // AUTHENTICATION CHECK
+    const authHeader = request.headers.get("Authorization") || "";
+    const providedToken = authHeader.replace("Bearer ", "").trim();
+    const expectedToken = (env.WORKER_AUTH_TOKEN || "").trim();
+
     if (!expectedToken) {
-      return new Response("Worker configuration error: WORKER_AUTH_TOKEN not set", { status: 500 });
+      return new Response("Server Error: WORKER_AUTH_TOKEN not set in Cloudflare variables", { status: 500 });
     }
 
-    // Allow "Bearer TOKEN" or just "TOKEN" to be flexible
-    const providedToken = authHeader?.replace("Bearer ", "").trim();
-    
-    if (!providedToken || providedToken !== expectedToken) {
-      return new Response("Unauthorized", { status: 401 });
+    if (providedToken !== expectedToken) {
+      console.log(`Auth Failed. Provided: '${providedToken.substring(0,3)}...', Expected: '${expectedToken.substring(0,3)}...'`);
+      return new Response(`Unauthorized. Token mismatch. Provided length: ${providedToken.length}, Expected length: ${expectedToken.length}`, { status: 401 });
     }
 
     try {
@@ -40,31 +44,28 @@ export default {
       const results = [];
       const errors = [];
 
+      // Process files
       for (const file of files) {
         try {
           // 1. Fetch file from Convex (or wherever the URL points)
           const fileResponse = await fetch(file.url);
           if (!fileResponse.ok) {
-            throw new Error(`Failed to fetch file: ${fileResponse.statusText}`);
+            throw new Error(`Failed to download file: ${fileResponse.statusText}`);
           }
           const blob = await fileResponse.blob();
 
           // 2. Upload to WhatsApp
           const formData = new FormData();
-          formData.append("file", blob, file.fileName);
           formData.append("messaging_product", "whatsapp");
+          formData.append("file", blob, file.fileName);
           
-          // Determine correct MIME type for upload
-          let mimeType = file.mimeType;
-          if (!mimeType) {
-             if (file.fileName.endsWith(".pdf")) mimeType = "application/pdf";
-             else if (file.fileName.endsWith(".jpg") || file.fileName.endsWith(".jpeg")) mimeType = "image/jpeg";
-             else if (file.fileName.endsWith(".png")) mimeType = "image/png";
-             else if (file.fileName.endsWith(".mp4")) mimeType = "video/mp4";
-          }
-          formData.append("type", mimeType);
+          // Determine type based on mime
+          const type = file.mimeType.startsWith("image") ? "image" : 
+                       file.mimeType.startsWith("video") ? "video" : 
+                       file.mimeType.startsWith("audio") ? "audio" : "document";
 
           const uploadUrl = `https://graph.facebook.com/v20.0/${env.WA_PHONE_NUMBER_ID}/media`;
+          
           const uploadResponse = await fetch(uploadUrl, {
             method: "POST",
             headers: {
@@ -74,6 +75,7 @@ export default {
           });
 
           const uploadData = await uploadResponse.json();
+          
           if (!uploadResponse.ok) {
             throw new Error(`WhatsApp Upload Failed: ${JSON.stringify(uploadData)}`);
           }
@@ -84,17 +86,9 @@ export default {
           const messagePayload = {
             messaging_product: "whatsapp",
             to: phoneNumber,
-            type: "image", // Default, will be overwritten
+            type: type,
+            [type]: { id: mediaId }
           };
-
-          // Determine message type
-          let type = "document";
-          if (mimeType.startsWith("image/")) type = "image";
-          else if (mimeType.startsWith("video/")) type = "video";
-          else if (mimeType.startsWith("audio/")) type = "audio";
-
-          messagePayload.type = type;
-          messagePayload[type] = { id: mediaId };
           
           if (type === "document") {
             messagePayload[type].filename = file.fileName;
@@ -111,6 +105,7 @@ export default {
           });
 
           const sendData = await sendResponse.json();
+          
           if (!sendResponse.ok) {
             throw new Error(`WhatsApp Send Failed: ${JSON.stringify(sendData)}`);
           }
@@ -130,5 +125,5 @@ export default {
     } catch (err) {
       return new Response(`Worker Error: ${err.message}`, { status: 500 });
     }
-  }
+  },
 };
