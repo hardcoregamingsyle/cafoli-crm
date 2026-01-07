@@ -54,7 +54,7 @@ If the logs say "Sent successfully" but you don't receive the message:
 3. **Check Phone Number Format**: Ensure the number includes the country code but NO `+` sign or leading zeros (e.g., `919876543210` for India).
 
 4. **REDEPLOY THE WORKER (CRITICAL)**:
-   - We have updated the worker code to use a safer method for handling binary image data (`response.arrayBuffer()` + `new Blob()`).
+   - We have updated the worker code to use a safer method for handling binary image data (`response.blob()` with explicit slicing).
    - Copy the code from `cloudflare/worker.js` again.
    - Paste it into your Cloudflare Worker editor.
    - Click **Deploy**.
@@ -63,4 +63,5 @@ If the logs say "Sent successfully" but you don't receive the message:
 5. **Check Worker Logs**:
    - Go to Cloudflare Dashboard > Workers > [Your Worker] > Logs > Begin Log Stream.
    - Trigger the action again.
-   - Look for "WhatsApp Upload Failed" or "Message Send Error".
+   - Look for "Media Uploaded" followed by "Message Sent!".
+   - If you see "Upload failed" or "Send message failed", the error details will be printed there.

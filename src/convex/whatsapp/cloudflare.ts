@@ -32,6 +32,7 @@ export const sendFilesViaWorker = internalAction({
     args.files.forEach(f => console.log(` - File: ${f.fileName}, Type: ${f.mimeType}, URL Length: ${f.url.length}`));
 
     try {
+      console.log(`[CLOUDFLARE_RELAY] Sending request to worker...`);
       const response = await fetch(workerUrl, {
         method: "POST",
         headers: {
