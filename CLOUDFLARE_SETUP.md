@@ -41,3 +41,14 @@ In your Convex Dashboard (Settings > Environment Variables), add:
 3. If you still get "Unauthorized" in logs:
    - Check that `WORKER_AUTH_TOKEN` in Cloudflare and `CLOUDFLARE_WORKER_TOKEN` in Convex are identical.
    - The system now automatically trims spaces, but double-check for typos.
+
+## 5. Troubleshooting "Sent but not received"
+If the logs say "Sent successfully" but you don't receive the message:
+
+1. **Check the Debug Text**: The updated worker sends a text message "[System] Sending X file(s)..." before the image.
+   - If you receive the text but NOT the image: The image file is likely corrupted or too large.
+   - If you receive NOTHING: The phone number is likely incorrect or you are sending to yourself.
+
+2. **Do NOT Send to Yourself**: WhatsApp Business API does **not** allow sending messages to the same number as the business account. You must test with a different phone number.
+
+3. **Check Phone Number Format**: Ensure the number includes the country code but NO `+` sign or leading zeros (e.g., `919876543210` for India).

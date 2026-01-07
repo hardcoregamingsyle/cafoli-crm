@@ -20,9 +20,13 @@ export const sendFilesViaWorker = internalAction({
       throw new Error("Cloudflare Worker not configured (Missing CLOUDFLARE_WORKER_URL or CLOUDFLARE_WORKER_TOKEN)");
     }
 
+    // Clean phone number (remove spaces, dashes, plus signs)
+    // WhatsApp API requires just the digits (e.g., 919876543210)
+    const cleanedPhone = args.phoneNumber.replace(/[\s\-\+]/g, "");
+
     // Log configuration (masked) for debugging
     console.log(`[CLOUDFLARE_RELAY] Config Check: URL=${workerUrl}, Token=${workerToken.substring(0, 3)}...${workerToken.slice(-3)} (Length: ${workerToken.length})`);
-    console.log(`[CLOUDFLARE_RELAY] Sending ${args.files.length} files to worker...`);
+    console.log(`[CLOUDFLARE_RELAY] Sending ${args.files.length} files to worker for ${cleanedPhone}...`);
     
     // Log file details (without full URLs to keep logs clean)
     args.files.forEach(f => console.log(` - File: ${f.fileName}, Type: ${f.mimeType}, URL Length: ${f.url.length}`));
@@ -35,7 +39,7 @@ export const sendFilesViaWorker = internalAction({
           "Authorization": `Bearer ${workerToken}`,
         },
         body: JSON.stringify({
-          phoneNumber: args.phoneNumber,
+          phoneNumber: cleanedPhone,
           files: args.files,
         }),
       });
