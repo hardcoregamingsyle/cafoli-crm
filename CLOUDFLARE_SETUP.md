@@ -6,6 +6,8 @@ This setup offloads heavy file transfers to a Cloudflare Worker.
 1. Go to your Cloudflare Dashboard > Workers & Pages.
 2. Create a new Worker.
 3. **IMPORTANT**: Copy the *updated* code from `cloudflare/worker.js` into the Worker editor.
+   - This file is located in your project folder at `cloudflare/worker.js`.
+   - It includes **Magic Byte Detection** to fix "sent but not received" image issues.
 4. Save and Deploy.
 
 ## 2. Configure Worker Environment Variables
