@@ -162,6 +162,7 @@ export const sendMedia = internalAction({
       console.log(`[SEND_MEDIA] Getting file URL from storage...`);
       const fileUrl = await ctx.storage.getUrl(args.storageId);
       console.log(`[SEND_MEDIA] File URL generated: ${fileUrl ? "YES" : "NO"}`);
+      console.log(`[SEND_MEDIA] File URL value: ${fileUrl}`);
       
       if (!fileUrl) {
         console.error(`[SEND_MEDIA] Failed to get file URL for storageId: ${args.storageId}. The file may have been deleted.`);
