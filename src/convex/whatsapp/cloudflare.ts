@@ -23,6 +23,9 @@ export const sendFilesViaWorker = internalAction({
     // Log configuration (masked) for debugging
     console.log(`[CLOUDFLARE_RELAY] Config Check: URL=${workerUrl}, Token=${workerToken.substring(0, 3)}...${workerToken.slice(-3)} (Length: ${workerToken.length})`);
     console.log(`[CLOUDFLARE_RELAY] Sending ${args.files.length} files to worker...`);
+    
+    // Log file details (without full URLs to keep logs clean)
+    args.files.forEach(f => console.log(` - File: ${f.fileName}, Type: ${f.mimeType}, URL Length: ${f.url.length}`));
 
     try {
       const response = await fetch(workerUrl, {
@@ -53,7 +56,13 @@ export const sendFilesViaWorker = internalAction({
       }
 
       const result = await response.json();
-      console.log(`[CLOUDFLARE_RELAY] Success:`, result);
+      console.log(`[CLOUDFLARE_RELAY] Worker Response:`, JSON.stringify(result));
+      
+      if (result.errors && result.errors.length > 0) {
+        console.error(`[CLOUDFLARE_RELAY] Some files failed to send:`, result.errors);
+        // We don't throw here if some succeeded, but you might want to depending on requirements
+      }
+      
       return result;
     } catch (error) {
       console.error(`[CLOUDFLARE_RELAY] Request failed:`, error);

@@ -173,11 +173,14 @@ export const generateAndSendAiReplyInternal = internalAction({
                 }
 
                 if (url) {
+                  console.log(`[PRODUCT_SEND] Generated URL for ${file.fileName}: ${url.substring(0, 50)}...`);
                   filesWithUrls.push({
                     url,
                     fileName: file.fileName,
                     mimeType: correctMimeType || "application/octet-stream"
                   });
+                } else {
+                  console.error(`[PRODUCT_SEND] Failed to generate URL for ${file.fileName} (Storage ID: ${file.storageId})`);
                 }
              }
 
