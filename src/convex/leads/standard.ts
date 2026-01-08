@@ -22,6 +22,16 @@ export const createLead = mutation({
 
     const mobile = standardizePhoneNumber(args.mobile);
 
+    // Check for duplicate by mobile number
+    const existingLead = await ctx.db
+      .query("leads")
+      .withIndex("by_mobile", (q) => q.eq("mobile", mobile))
+      .first();
+
+    if (existingLead) {
+      throw new Error(`A lead with phone number ${mobile} already exists. Lead name: ${existingLead.name}`);
+    }
+
     const searchText = generateSearchText({
       name: args.name,
       subject: args.subject,

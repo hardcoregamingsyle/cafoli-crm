@@ -37,8 +37,9 @@ export function CreateLeadDialog({ open, onOpenChange, userId }: CreateLeadDialo
       });
       onOpenChange(false);
       toast.success("Lead created successfully");
-    } catch (error) {
-      toast.error("Failed to create lead");
+    } catch (error: any) {
+      const errorMessage = error?.message || "Failed to create lead";
+      toast.error(errorMessage);
     }
   };
 

@@ -112,6 +112,7 @@ export const bulkImportLeads = mutation({
     }
 
     let importedCount = 0;
+    let skippedCount = 0;
 
     for (const leadData of args.leads) {
       let assignedTo = undefined;
@@ -127,6 +128,18 @@ export const bulkImportLeads = mutation({
         : "Manual Import";
 
       const mobile = standardizePhoneNumber(leadData.mobile);
+
+      // Check for duplicate by mobile number
+      const existingLead = await ctx.db
+        .query("leads")
+        .withIndex("by_mobile", (q) => q.eq("mobile", mobile))
+        .first();
+
+      if (existingLead) {
+        skippedCount++;
+        console.log(`Skipped duplicate lead with mobile: ${mobile} (existing: ${existingLead.name})`);
+        continue;
+      }
 
       const searchText = [
         leadData.name,
@@ -202,7 +215,7 @@ export const bulkImportLeads = mutation({
       importedCount++;
     }
 
-    return { importedCount };
+    return { importedCount, skippedCount };
   },
 });
 
