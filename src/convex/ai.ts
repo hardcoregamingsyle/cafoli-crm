@@ -119,6 +119,57 @@ export const generateLeadSummary = action({
   },
 });
 
+export const generateLeadSummaryWithChat = action({
+  args: {
+    leadId: v.id("leads"),
+    leadData: v.object({
+      name: v.string(),
+      subject: v.string(),
+      source: v.string(),
+      status: v.optional(v.string()),
+      type: v.optional(v.string()),
+      message: v.optional(v.string()),
+      lastActivity: v.number(),
+    }),
+    recentComments: v.optional(v.array(v.string())),
+    whatsappMessages: v.optional(v.array(v.object({
+      direction: v.string(),
+      content: v.string(),
+      timestamp: v.number(),
+    }))),
+  },
+  handler: async (ctx, args) => {
+    const systemPrompt = `You are a CRM assistant. Generate a concise 1-2 sentence summary of this lead for quick prioritization. Focus on: lead quality, urgency, key action needed, and recent engagement. Be brief and actionable.`;
+
+    const leadInfo = {
+      name: args.leadData.name,
+      subject: args.leadData.subject,
+      source: args.leadData.source,
+      status: args.leadData.status,
+      type: args.leadData.type,
+      message: args.leadData.message,
+      recentComments: args.recentComments?.slice(0, 3) || [],
+      whatsappActivity: args.whatsappMessages ? {
+        messageCount: args.whatsappMessages.length,
+        recentMessages: args.whatsappMessages.slice(0, 5).map(m => `${m.direction}: ${m.content.substring(0, 100)}`),
+      } : null,
+    };
+
+    const prompt = `Summarize this lead in 1-2 sentences:\n\n${JSON.stringify(leadInfo, null, 2)}`;
+
+    const { text } = await generateWithGemini(ctx, systemPrompt, prompt, { useGemma: true });
+    
+    const lastActivityHash = `${args.leadData.lastActivity}`;
+    await ctx.runMutation(internal.aiMutations.storeSummary, {
+      leadId: args.leadId,
+      summary: text,
+      lastActivityHash,
+    });
+
+    return text;
+  },
+});
+
 export const scoreLead = action({
   args: {
     leadId: v.id("leads"),
@@ -174,6 +225,87 @@ export const scoreLead = action({
     }
 
     // Store score
+    await ctx.runMutation(internal.aiMutations.storeScore, {
+      leadId: args.leadId,
+      score: parsed.score,
+      tier: parsed.tier,
+      rationale: parsed.rationale,
+    });
+
+    return parsed;
+  },
+});
+
+export const scoreLeadWithContext = action({
+  args: {
+    leadId: v.id("leads"),
+    leadData: v.object({
+      name: v.string(),
+      source: v.string(),
+      status: v.optional(v.string()),
+      type: v.optional(v.string()),
+      assignedTo: v.optional(v.id("users")),
+      tags: v.optional(v.array(v.id("tags"))),
+      lastActivity: v.number(),
+      nextFollowUpDate: v.optional(v.number()),
+      createdAt: v.number(),
+    }),
+    commentCount: v.number(),
+    messageCount: v.number(),
+    summary: v.optional(v.string()),
+    whatsappMessages: v.optional(v.array(v.object({
+      direction: v.string(),
+      content: v.string(),
+      timestamp: v.number(),
+    }))),
+  },
+  handler: async (ctx, args) => {
+    const systemPrompt = `You are an AI lead scoring expert for pharmaceutical CRM. Score leads 0-100 based on:
+    - Engagement (comments, messages, follow-ups)
+    - Recency of activity
+    - Lead type and status
+    - Source quality
+    - WhatsApp conversation quality and engagement
+    - AI-generated summary insights
+    
+    Return JSON with: { "score": <number 0-100>, "tier": "<High|Medium|Low>", "rationale": "<brief explanation>" }`;
+
+    const daysSinceCreated = (Date.now() - args.leadData.createdAt) / (1000 * 60 * 60 * 24);
+    const daysSinceActivity = (Date.now() - args.leadData.lastActivity) / (1000 * 60 * 60 * 24);
+    
+    const whatsappEngagement = args.whatsappMessages ? {
+      totalMessages: args.whatsappMessages.length,
+      inboundCount: args.whatsappMessages.filter(m => m.direction === "inbound").length,
+      outboundCount: args.whatsappMessages.filter(m => m.direction === "outbound").length,
+      recentActivity: args.whatsappMessages.slice(0, 3).map(m => `${m.direction}: ${m.content.substring(0, 80)}`),
+    } : null;
+
+    const leadInfo = {
+      source: args.leadData.source,
+      status: args.leadData.status,
+      type: args.leadData.type,
+      isAssigned: !!args.leadData.assignedTo,
+      hasFollowUp: !!args.leadData.nextFollowUpDate,
+      tagCount: args.leadData.tags?.length || 0,
+      commentCount: args.commentCount,
+      messageCount: args.messageCount,
+      daysSinceCreated: Math.round(daysSinceCreated),
+      daysSinceActivity: Math.round(daysSinceActivity),
+      aiSummary: args.summary,
+      whatsappEngagement,
+    };
+
+    const prompt = `Score this lead:\n\n${JSON.stringify(leadInfo, null, 2)}`;
+
+    const { text } = await generateWithGemini(ctx, systemPrompt, prompt, { jsonMode: true, useGemma: true });
+    
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = { score: 50, tier: "Medium", rationale: "Unable to generate AI score" };
+    }
+
     await ctx.runMutation(internal.aiMutations.storeScore, {
       leadId: args.leadId,
       score: parsed.score,
@@ -273,5 +405,169 @@ export const scoreLeadsJob = action({
 
     console.log(`Successfully scored ${scored} leads`);
     return { scored, total: leads.length };
+  },
+});
+
+export const batchProcessLeads = action({
+  args: {
+    batchSize: v.optional(v.number()),
+    processType: v.union(v.literal("summaries"), v.literal("scores"), v.literal("both")),
+  },
+  handler: async (ctx, args): Promise<{ processed: number; failed: number; total: number }> => {
+    const batchSize = args.batchSize || 50;
+    let offset = 0;
+    let totalProcessed = 0;
+    let totalFailed = 0;
+    let hasMore = true;
+
+    console.log(`Starting batch processing: ${args.processType}`);
+
+    while (hasMore) {
+      const leads: Array<any> = await ctx.runQuery(internal.aiMutations.getAllLeadsForBatchProcessing, {
+        offset,
+        limit: batchSize,
+      });
+
+      if (leads.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      console.log(`Processing batch: ${offset} to ${offset + leads.length}`);
+
+      // Process leads in parallel using Promise.allSettled
+      const promises = leads.map(async (lead) => {
+        try {
+          // Get WhatsApp messages
+          const whatsappMessages = await ctx.runQuery(internal.aiMutations.getLeadWhatsAppMessages, {
+            leadId: lead._id,
+          });
+
+          // Get comments
+          const comments = await ctx.runQuery(internal.aiMutations.getLeadComments, {
+            leadId: lead._id,
+          });
+
+          let summary: string | undefined;
+
+          // Generate summary if needed
+          if (args.processType === "summaries" || args.processType === "both") {
+            const systemPrompt = `You are a CRM assistant. Generate a concise 1-2 sentence summary of this lead for quick prioritization. Focus on: lead quality, urgency, key action needed, and recent engagement. Be brief and actionable.`;
+
+            const leadInfo = {
+              name: lead.name,
+              subject: lead.subject,
+              source: lead.source,
+              status: lead.status,
+              type: lead.type,
+              message: lead.message,
+              recentComments: comments.slice(0, 3),
+              whatsappActivity: whatsappMessages.length > 0 ? {
+                messageCount: whatsappMessages.length,
+                recentMessages: whatsappMessages.slice(0, 5).map(m => `${m.direction}: ${m.content.substring(0, 100)}`),
+              } : null,
+            };
+
+            const prompt = `Summarize this lead in 1-2 sentences:\n\n${JSON.stringify(leadInfo, null, 2)}`;
+            const { text } = await generateWithGemini(ctx, systemPrompt, prompt, { useGemma: true });
+            
+            summary = text;
+            const lastActivityHash = `${lead.lastActivity}`;
+            await ctx.runMutation(internal.aiMutations.storeSummary, {
+              leadId: lead._id,
+              summary: text,
+              lastActivityHash,
+            });
+          }
+
+          // Generate score if needed
+          if (args.processType === "scores" || args.processType === "both") {
+            // If we didn't generate summary above, try to get existing one
+            if (!summary) {
+              const existingSummary = await ctx.runQuery(internal.aiMutations.getSummary, {
+                leadId: lead._id,
+                lastActivityHash: `${lead.lastActivity}`,
+              });
+              summary = existingSummary?.summary;
+            }
+
+            const systemPrompt = `You are an AI lead scoring expert for pharmaceutical CRM. Score leads 0-100 based on:
+    - Engagement (comments, messages, follow-ups)
+    - Recency of activity
+    - Lead type and status
+    - Source quality
+    - WhatsApp conversation quality and engagement
+    - AI-generated summary insights
+    
+    Return JSON with: { "score": <number 0-100>, "tier": "<High|Medium|Low>", "rationale": "<brief explanation>" }`;
+
+            const daysSinceCreated = (Date.now() - lead._creationTime) / (1000 * 60 * 60 * 24);
+            const daysSinceActivity = (Date.now() - lead.lastActivity) / (1000 * 60 * 60 * 24);
+            
+            const whatsappEngagement = whatsappMessages.length > 0 ? {
+              totalMessages: whatsappMessages.length,
+              inboundCount: whatsappMessages.filter(m => m.direction === "inbound").length,
+              outboundCount: whatsappMessages.filter(m => m.direction === "outbound").length,
+              recentActivity: whatsappMessages.slice(0, 3).map(m => `${m.direction}: ${m.content.substring(0, 80)}`),
+            } : null;
+
+            const leadInfo = {
+              source: lead.source,
+              status: lead.status,
+              type: lead.type,
+              isAssigned: !!lead.assignedTo,
+              hasFollowUp: !!lead.nextFollowUpDate,
+              tagCount: lead.tags?.length || 0,
+              commentCount: comments.length,
+              messageCount: whatsappMessages.length,
+              daysSinceCreated: Math.round(daysSinceCreated),
+              daysSinceActivity: Math.round(daysSinceActivity),
+              aiSummary: summary,
+              whatsappEngagement,
+            };
+
+            const prompt = `Score this lead:\n\n${JSON.stringify(leadInfo, null, 2)}`;
+            const { text } = await generateWithGemini(ctx, systemPrompt, prompt, { jsonMode: true, useGemma: true });
+            
+            let parsed;
+            try {
+              parsed = JSON.parse(text);
+            } catch {
+              parsed = { score: 50, tier: "Medium", rationale: "Unable to generate AI score" };
+            }
+
+            await ctx.runMutation(internal.aiMutations.storeScore, {
+              leadId: lead._id,
+              score: parsed.score,
+              tier: parsed.tier,
+              rationale: parsed.rationale,
+            });
+          }
+
+          return { success: true, leadId: lead._id };
+        } catch (error) {
+          console.error(`Failed to process lead ${lead._id}:`, error);
+          return { success: false, leadId: lead._id, error };
+        }
+      });
+
+      const results = await Promise.allSettled(promises);
+      
+      results.forEach((result) => {
+        if (result.status === "fulfilled" && result.value.success) {
+          totalProcessed++;
+        } else {
+          totalFailed++;
+        }
+      });
+
+      offset += leads.length;
+      
+      // Small delay between batches to avoid overwhelming the system
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    console.log(`Batch processing complete. Processed: ${totalProcessed}, Failed: ${totalFailed}`);
+    return { processed: totalProcessed, failed: totalFailed, total: totalProcessed + totalFailed };
   },
 });

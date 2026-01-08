@@ -45,10 +45,13 @@ export default function Admin() {
   const deleteUser = useMutation(api.users.deleteUser);
   const updateUserRole = useMutation(api.users.updateUserRole);
   const deduplicateLeads = useMutation(api.leads.deduplication.deduplicateLeads);
+  const batchProcessLeads = useAction(api.ai.batchProcessLeads);
   
   const [activeTab, setActiveTab] = useState("users");
   const [deduplicationResult, setDeduplicationResult] = useState<any>(null);
   const [isDeduplicating, setIsDeduplicating] = useState(false);
+  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
+  const [batchProcessResult, setBatchProcessResult] = useState<any>(null);
 
   if (!currentUser || (currentUser.role !== "admin" && currentUser.role !== "uploader")) {
     return <div className="p-8 text-center">You do not have permission to view this page.</div>;
@@ -91,6 +94,29 @@ export default function Admin() {
     }
   };
 
+  const handleBatchProcess = async (processType: "summaries" | "scores" | "both") => {
+    if (!currentUser) return;
+    setIsBatchProcessing(true);
+    setBatchProcessResult(null);
+    
+    const typeLabel = processType === "both" ? "summaries and scores" : processType;
+    toast.info(`Starting batch processing of ${typeLabel}...`);
+    
+    try {
+      const result = await batchProcessLeads({
+        batchSize: 50,
+        processType,
+      });
+      
+      setBatchProcessResult(result);
+      toast.success(`Batch processing complete! Processed ${result.processed} leads, ${result.failed} failed.`);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to batch process leads");
+    } finally {
+      setIsBatchProcessing(false);
+    }
+  };
+
   return (
     <AppLayout>
       <div className="container mx-auto py-8 space-y-8">
@@ -104,6 +130,7 @@ export default function Admin() {
             <TabsTrigger value="products">Products</TabsTrigger>
             <TabsTrigger value="ranges">Range PDFs</TabsTrigger>
             {currentUser.role === "admin" && <TabsTrigger value="api-keys">API Keys</TabsTrigger>}
+            {currentUser.role === "admin" && <TabsTrigger value="ai-batch">AI Batch Processing</TabsTrigger>}
             {currentUser.role === "admin" && <TabsTrigger value="deduplication">Deduplication</TabsTrigger>}
             {currentUser.role === "admin" && <TabsTrigger value="logs">System Logs</TabsTrigger>}
           </TabsList>
@@ -212,6 +239,71 @@ export default function Admin() {
                 </CardHeader>
                 <CardContent>
                   <GeminiKeyManager userId={currentUser._id} />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
+          {currentUser.role === "admin" && (
+            <TabsContent value="ai-batch" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>AI Batch Processing</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Process all leads to generate AI summaries and priority scores. This uses all available API keys in parallel for faster processing.
+                    WhatsApp chat history is included in the analysis.
+                  </p>
+                  
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      onClick={() => handleBatchProcess("summaries")}
+                      disabled={isBatchProcessing}
+                      variant="outline"
+                    >
+                      {isBatchProcessing ? "Processing..." : "Generate All Summaries"}
+                    </Button>
+                    <Button
+                      onClick={() => handleBatchProcess("scores")}
+                      disabled={isBatchProcessing}
+                      variant="outline"
+                    >
+                      {isBatchProcessing ? "Processing..." : "Generate All Scores"}
+                    </Button>
+                    <Button
+                      onClick={() => handleBatchProcess("both")}
+                      disabled={isBatchProcessing}
+                    >
+                      {isBatchProcessing ? "Processing..." : "Generate Both (Summaries + Scores)"}
+                    </Button>
+                  </div>
+
+                  {batchProcessResult && (
+                    <Alert className="border-green-500">
+                      <CheckCircle2 className="h-4 w-4" />
+                      <AlertDescription>
+                        <div className="space-y-2">
+                          <p className="font-semibold">Batch Processing Complete!</p>
+                          <p>Total leads: {batchProcessResult.total}</p>
+                          <p>Successfully processed: {batchProcessResult.processed}</p>
+                          <p>Failed: {batchProcessResult.failed}</p>
+                        </div>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="mt-4 p-4 bg-muted/20 rounded-md">
+                    <h4 className="font-semibold mb-2">How it works:</h4>
+                    <ul className="text-sm space-y-1 list-disc list-inside text-muted-foreground">
+                      <li>Processes leads in batches of 50 for efficiency</li>
+                      <li>Uses all available Gemini API keys in parallel</li>
+                      <li>Includes WhatsApp chat history in analysis</li>
+                      <li>Summaries use recent comments and messages</li>
+                      <li>Scores consider engagement, recency, and AI summary</li>
+                      <li>Results are cached to avoid redundant processing</li>
+                    </ul>
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
