@@ -559,20 +559,25 @@ export const batchProcessLeads = action({
         }
       });
 
-      const results = await Promise.allSettled(promises);
+      // Wait for all promises to complete before moving to next batch
+      const results = await Promise.all(
+        promises.map(p => p.catch(err => ({ success: false, error: err })))
+      );
       
       results.forEach((result) => {
-        if (result.status === "fulfilled" && result.value.success) {
+        if (result.success) {
           totalProcessed++;
         } else {
           totalFailed++;
+          console.error("Lead processing failed:", result.error);
         }
       });
 
+      console.log(`Batch complete: ${results.filter(r => r.success).length}/${results.length} succeeded`);
       offset += leads.length;
       
-      // Small delay between batches
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Small delay between batches to avoid rate limits
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
     console.log(`Batch processing complete. Processed: ${totalProcessed}, Failed: ${totalFailed}`);

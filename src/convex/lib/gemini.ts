@@ -10,7 +10,7 @@ export const modelsToTry = [
   "gemini-2.5-flash"
 ];
 
-export const gemmaModel = "gemma-3-27b";
+export const gemmaModel = "gemma-2-27b-it";
 
 export function extractJsonFromMarkdown(text: string): string {
   // Try to find JSON inside markdown code blocks

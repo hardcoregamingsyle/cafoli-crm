@@ -251,7 +251,8 @@ export default function Admin() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <p className="text-sm text-muted-foreground">
-                    Process all leads to generate AI summaries and priority scores. Each available API key processes one lead at a time in parallel for high-quality results.
+                    Process all leads to generate AI summaries and priority scores using Gemma 2 27B IT model. 
+                    Each available API key processes one lead at a time in parallel. Batches are processed sequentially to ensure completion.
                     WhatsApp chat history is included in the analysis.
                   </p>
                   

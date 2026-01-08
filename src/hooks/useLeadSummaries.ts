@@ -32,9 +32,10 @@ export function useLeadSummaries() {
         recentComments,
       });
       setSummaries(prev => ({ ...prev, [leadId]: summary }));
-    } catch (error) {
-      console.error("Failed to generate summary:", error);
-      setSummaries(prev => ({ ...prev, [leadId]: "Summary unavailable" }));
+    } catch (error: any) {
+      const errorMsg = error?.message || "Unknown error";
+      console.error(`Failed to generate summary for lead ${leadId}:`, errorMsg, error);
+      setSummaries(prev => ({ ...prev, [leadId]: `Summary unavailable: ${errorMsg}` }));
     } finally {
       setLoading(prev => ({ ...prev, [leadId]: false }));
     }
