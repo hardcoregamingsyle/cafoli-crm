@@ -28,7 +28,7 @@ export function LeadDetailsAiDialog({
 }: LeadDetailsAiDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[600px] max-h-[85vh] flex flex-col">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-purple-600" />
@@ -39,7 +39,7 @@ export function LeadDetailsAiDialog({
           </DialogDescription>
         </DialogHeader>
         
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4 mt-4">
           <Button 
             variant="outline" 
             className="h-24 flex flex-col gap-2 hover:border-purple-400 hover:bg-purple-50"
@@ -68,9 +68,9 @@ export function LeadDetailsAiDialog({
         )}
 
         {aiAnalysis && !isAnalyzing && (
-          <div className="flex-1 min-h-0 border rounded-md overflow-hidden">
-            <ScrollArea className="h-full max-h-[calc(85vh-280px)]">
-              <div className="p-4 bg-muted/50 rounded-lg text-sm whitespace-pre-wrap">
+          <div className="mt-4 border rounded-md overflow-hidden" style={{ height: 'calc(90vh - 320px)' }}>
+            <ScrollArea className="h-full w-full">
+              <div className="p-4 bg-muted/50 text-sm whitespace-pre-wrap">
                 {aiAnalysis}
               </div>
             </ScrollArea>
