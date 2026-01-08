@@ -1,7 +1,7 @@
-  if (jsonMatch) {
-    return jsonMatch[1];
-  }
-  return text;
+if (jsonMatch) {
+  return jsonMatch[1];
+}
+return text;
 }
 
 export const batchProcessLeadsBackground = internalAction({
@@ -11,11 +11,6 @@ export const batchProcessLeadsBackground = internalAction({
   },
   handler: async (ctx, args): Promise<{ processed: number; failed: number; total: number; stopped: boolean }> => {
     console.log(`Starting background batch processing: ${args.processType} (ID: ${args.processId})`);
-
-    await ctx.runMutation(internal.aiMutations.updateBatchStatus, {
-      processId: args.processId,
-      status: "running",
-    });
 
     const allKeys = await getGeminiKeys(ctx);
     const numKeys = allKeys.length;
@@ -28,22 +23,27 @@ export const batchProcessLeadsBackground = internalAction({
     let hasMore = true;
 
     while (hasMore) {
-      const shouldStop = await ctx.runQuery(internal.aiMutations.checkBatchProcessStop, {
-        processId: args.processId,
+      // Check stop flag - direct DB access
+      const control = await ctx.runQuery(async (ctx) => {
+        return await ctx.db
+          .query("batchProcessControl")
+          .withIndex("by_process_id", (q) => q.eq("processId", args.processId))
+          .first();
       });
 
-      if (shouldStop) {
+      if (control?.shouldStop) {
         console.log(`Batch processing stopped by user (ID: ${args.processId})`);
-        await ctx.runMutation(internal.aiMutations.updateBatchStatus, {
-          processId: args.processId,
-          status: "stopped",
-        });
         return { processed: totalProcessed, failed: totalFailed, total: totalProcessed + totalFailed, stopped: true };
       }
 
-      const leads: Array<any> = await ctx.runQuery(internal.aiMutations.getAllLeadsForBatchProcessing, {
-        offset,
-        limit: numKeys,
+      // Get leads - direct DB access
+      const leads: Array<any> = await ctx.runQuery(async (ctx) => {
+        const allLeads = await ctx.db
+          .query("leads")
+          .filter((q) => q.neq(q.field("status"), "irrelevant"))
+          .order("desc")
+          .take(numKeys + offset);
+        return allLeads.slice(offset, offset + numKeys);
       });
 
       if (leads.length === 0) {
@@ -55,12 +55,33 @@ export const batchProcessLeadsBackground = internalAction({
 
       const promises = leads.map(async (lead) => {
         try {
-          const whatsappMessages = await ctx.runQuery(internal.aiMutations.getLeadWhatsAppMessages, {
-            leadId: lead._id,
+          // Get WhatsApp messages - direct DB access
+          const whatsappMessages = await ctx.runQuery(async (ctx) => {
+            const chat = await ctx.db
+              .query("chats")
+              .withIndex("by_lead", (q) => q.eq("leadId", lead._id))
+              .first();
+            if (!chat) return [];
+            const messages = await ctx.db
+              .query("messages")
+              .withIndex("by_chat", (q) => q.eq("chatId", chat._id))
+              .order("desc")
+              .take(20);
+            return messages.map((m) => ({
+              direction: m.direction,
+              content: m.content,
+              timestamp: m._creationTime,
+            }));
           });
 
-          const comments = await ctx.runQuery(internal.aiMutations.getLeadComments, {
-            leadId: lead._id,
+          // Get comments - direct DB access
+          const comments = await ctx.runQuery(async (ctx) => {
+            const cmts = await ctx.db
+              .query("comments")
+              .withIndex("by_lead", (q) => q.eq("leadId", lead._id))
+              .order("desc")
+              .take(10);
+            return cmts.map((c) => c.content || "").filter(Boolean);
           });
 
           let summary: string | undefined;
@@ -94,18 +115,39 @@ export const batchProcessLeadsBackground = internalAction({
 
             summary = text;
             const lastActivityHash = `${lead.lastActivity}`;
-            await ctx.runMutation(internal.aiMutations.storeSummary, {
-              leadId: lead._id,
-              summary: text,
-              lastActivityHash,
+            
+            // Store summary - direct DB access
+            await ctx.runMutation(async (ctx) => {
+              const existing = await ctx.db
+                .query("leadSummaries")
+                .withIndex("by_lead", (q) => q.eq("leadId", lead._id))
+                .first();
+              if (existing) {
+                await ctx.db.patch(existing._id, {
+                  summary: text,
+                  lastActivityHash,
+                  generatedAt: Date.now(),
+                });
+              } else {
+                await ctx.db.insert("leadSummaries", {
+                  leadId: lead._id,
+                  summary: text,
+                  lastActivityHash,
+                  generatedAt: Date.now(),
+                });
+              }
             });
           }
 
           if (args.processType === "scores" || args.processType === "both") {
             if (!summary) {
-              const existingSummary = await ctx.runQuery(internal.aiMutations.getSummary, {
-                leadId: lead._id,
-                lastActivityHash: `${lead.lastActivity}`,
+              const existingSummary = await ctx.runQuery(async (ctx) => {
+                return await ctx.db
+                  .query("leadSummaries")
+                  .withIndex("by_lead_and_hash", (q) =>
+                    q.eq("leadId", lead._id).eq("lastActivityHash", `${lead.lastActivity}`)
+                  )
+                  .first();
               });
               summary = existingSummary?.summary;
             }
@@ -166,11 +208,14 @@ export const batchProcessLeadsBackground = internalAction({
               parsed = { score: 50, tier: "Medium", rationale: "Unable to generate AI score" };
             }
 
-            await ctx.runMutation(internal.aiMutations.storeScore, {
-              leadId: lead._id,
-              score: parsed.score,
-              tier: parsed.tier,
-              rationale: parsed.rationale,
+            // Store score - direct DB access
+            await ctx.runMutation(async (ctx) => {
+              await ctx.db.patch(lead._id, {
+                aiScore: parsed.score,
+                aiScoreTier: parsed.tier,
+                aiScoreRationale: parsed.rationale,
+                aiScoredAt: Date.now(),
+              });
             });
           }
 
@@ -197,22 +242,31 @@ export const batchProcessLeadsBackground = internalAction({
       console.log(`Batch complete: ${results.filter(r => r.success).length}/${results.length} succeeded`);
       offset += leads.length;
 
-      await ctx.runMutation(internal.aiMutations.updateBatchProgress, {
-        processId: args.processId,
-        processed: totalProcessed,
-        failed: totalFailed,
+      // Update progress - direct DB access
+      await ctx.runMutation(async (ctx) => {
+        const control = await ctx.db
+          .query("batchProcessControl")
+          .withIndex("by_process_id", (q) => q.eq("processId", args.processId))
+          .first();
+        if (control) {
+          await ctx.db.patch(control._id, {
+            processed: totalProcessed,
+            failed: totalFailed,
+            updatedAt: Date.now(),
+          });
+        }
       });
 
-      const shouldStopAfterBatch = await ctx.runQuery(internal.aiMutations.checkBatchProcessStop, {
-        processId: args.processId,
+      // Check stop flag again
+      const controlAfterBatch = await ctx.runQuery(async (ctx) => {
+        return await ctx.db
+          .query("batchProcessControl")
+          .withIndex("by_process_id", (q) => q.eq("processId", args.processId))
+          .first();
       });
 
-      if (shouldStopAfterBatch) {
+      if (controlAfterBatch?.shouldStop) {
         console.log(`Batch processing stopped by user after batch (ID: ${args.processId})`);
-        await ctx.runMutation(internal.aiMutations.updateBatchStatus, {
-          processId: args.processId,
-          status: "stopped",
-        });
         return { processed: totalProcessed, failed: totalFailed, total: totalProcessed + totalFailed, stopped: true };
       }
 
@@ -220,13 +274,15 @@ export const batchProcessLeadsBackground = internalAction({
       await new Promise(resolve => setTimeout(resolve, 15000));
     }
 
-    await ctx.runMutation(internal.aiMutations.clearBatchProcessStop, {
-      processId: args.processId,
-    });
-
-    await ctx.runMutation(internal.aiMutations.updateBatchStatus, {
-      processId: args.processId,
-      status: "completed",
+    // Clear the control record - direct DB access
+    await ctx.runMutation(async (ctx) => {
+      const control = await ctx.db
+        .query("batchProcessControl")
+        .withIndex("by_process_id", (q) => q.eq("processId", args.processId))
+        .first();
+      if (control) {
+        await ctx.db.delete(control._id);
+      }
     });
 
     console.log(`Batch processing complete. Processed: ${totalProcessed}, Failed: ${totalFailed}`);
