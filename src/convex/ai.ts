@@ -411,14 +411,15 @@ export const scoreLeadsJob = action({
 export const batchProcessLeads = action({
   args: {
     processType: v.union(v.literal("summaries"), v.literal("scores"), v.literal("both")),
+    processId: v.string(),
   },
-  handler: async (ctx, args): Promise<{ processed: number; failed: number; total: number }> => {
-    console.log(`Starting batch processing: ${args.processType}`);
+  handler: async (ctx, args): Promise<{ processed: number; failed: number; total: number; stopped: boolean }> => {
+    console.log(`Starting batch processing: ${args.processType} (ID: ${args.processId})`);
 
     // Get all available API keys
     const allKeys = await getGeminiKeys(ctx);
     const numKeys = allKeys.length;
-    
+
     console.log(`Using ${numKeys} API keys for parallel processing`);
 
     let offset = 0;
@@ -427,6 +428,16 @@ export const batchProcessLeads = action({
     let hasMore = true;
 
     while (hasMore) {
+      // Check if stop has been requested
+      const shouldStop = await ctx.runQuery(internal.aiMutations.checkBatchProcessStop, {
+        processId: args.processId,
+      });
+
+      if (shouldStop) {
+        console.log(`Batch processing stopped by user (ID: ${args.processId})`);
+        return { processed: totalProcessed, failed: totalFailed, total: totalProcessed + totalFailed, stopped: true };
+      }
+
       // Fetch leads in batches equal to number of API keys
       const leads: Array<any> = await ctx.runQuery(internal.aiMutations.getAllLeadsForBatchProcessing, {
         offset,
@@ -444,7 +455,7 @@ export const batchProcessLeads = action({
       const promises = leads.map(async (lead, index) => {
         // Assign a specific API key to this lead
         const assignedKey = allKeys[index % numKeys];
-        
+
         try {
           // Get WhatsApp messages
           const whatsappMessages = await ctx.runQuery(internal.aiMutations.getLeadWhatsAppMessages, {
@@ -478,7 +489,7 @@ export const batchProcessLeads = action({
 
             const prompt = `Summarize this lead in 1-2 sentences:\n\n${JSON.stringify(leadInfo, null, 2)}`;
             const { text } = await generateWithGemini(ctx, systemPrompt, prompt, { useGemma: true });
-            
+
             summary = text;
             const lastActivityHash = `${lead.lastActivity}`;
             await ctx.runMutation(internal.aiMutations.storeSummary, {
@@ -506,12 +517,12 @@ export const batchProcessLeads = action({
     - Source quality
     - WhatsApp conversation quality and engagement
     - AI-generated summary insights
-    
+
     Return JSON with: { "score": <number 0-100>, "tier": "<High|Medium|Low>", "rationale": "<brief explanation>" }`;
 
             const daysSinceCreated = (Date.now() - lead._creationTime) / (1000 * 60 * 60 * 24);
             const daysSinceActivity = (Date.now() - lead.lastActivity) / (1000 * 60 * 60 * 24);
-            
+
             const whatsappEngagement = whatsappMessages.length > 0 ? {
               totalMessages: whatsappMessages.length,
               inboundCount: whatsappMessages.filter(m => m.direction === "inbound").length,
@@ -536,7 +547,7 @@ export const batchProcessLeads = action({
 
             const prompt = `Score this lead:\n\n${JSON.stringify(leadInfo, null, 2)}`;
             const { text } = await generateWithGemini(ctx, systemPrompt, prompt, { jsonMode: true, useGemma: true });
-            
+
             let parsed;
             try {
               parsed = JSON.parse(text);
@@ -563,7 +574,7 @@ export const batchProcessLeads = action({
       const results = await Promise.all(
         promises.map(p => p.catch(err => ({ success: false, error: err })))
       );
-      
+
       results.forEach((result) => {
         if (result.success) {
           totalProcessed++;
@@ -575,12 +586,35 @@ export const batchProcessLeads = action({
 
       console.log(`Batch complete: ${results.filter(r => r.success).length}/${results.length} succeeded`);
       offset += leads.length;
-      
-      // Small delay between batches to avoid rate limits
-      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Update progress
+      await ctx.runMutation(internal.aiMutations.updateBatchProgress, {
+        processId: args.processId,
+        processed: totalProcessed,
+        failed: totalFailed,
+      });
+
+      // Check again for stop before cooldown
+      const shouldStopAfterBatch = await ctx.runQuery(internal.aiMutations.checkBatchProcessStop, {
+        processId: args.processId,
+      });
+
+      if (shouldStopAfterBatch) {
+        console.log(`Batch processing stopped by user after batch (ID: ${args.processId})`);
+        return { processed: totalProcessed, failed: totalFailed, total: totalProcessed + totalFailed, stopped: true };
+      }
+
+      // 15 second cooldown between batches
+      console.log(`Cooling down for 15 seconds before next batch...`);
+      await new Promise(resolve => setTimeout(resolve, 15000));
     }
 
+    // Clean up the stop flag
+    await ctx.runMutation(internal.aiMutations.clearBatchProcessStop, {
+      processId: args.processId,
+    });
+
     console.log(`Batch processing complete. Processed: ${totalProcessed}, Failed: ${totalFailed}`);
-    return { processed: totalProcessed, failed: totalFailed, total: totalProcessed + totalFailed };
+    return { processed: totalProcessed, failed: totalFailed, total: totalProcessed + totalFailed, stopped: false };
   },
 });

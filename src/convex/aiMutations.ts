@@ -161,7 +161,7 @@ export const clearAllScores = mutation({
       .query("leads")
       .filter((q) => q.neq(q.field("aiScore"), undefined))
       .collect();
-    
+
     for (const lead of leads) {
       await ctx.db.patch(lead._id, {
         aiScore: undefined,
@@ -171,5 +171,119 @@ export const clearAllScores = mutation({
       });
     }
     return { cleared: leads.length };
+  },
+});
+
+// Set batch process stop flag
+export const setBatchProcessStop = mutation({
+  args: {
+    processId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("batchProcessControl")
+      .withIndex("by_process_id", (q) => q.eq("processId", args.processId))
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        shouldStop: true,
+        updatedAt: Date.now(),
+      });
+    } else {
+      await ctx.db.insert("batchProcessControl", {
+        processId: args.processId,
+        shouldStop: true,
+        processed: 0,
+        failed: 0,
+        updatedAt: Date.now(),
+      });
+    }
+  },
+});
+
+// Check if batch process should stop
+export const checkBatchProcessStop = internalQuery({
+  args: {
+    processId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const control = await ctx.db
+      .query("batchProcessControl")
+      .withIndex("by_process_id", (q) => q.eq("processId", args.processId))
+      .first();
+
+    return control?.shouldStop || false;
+  },
+});
+
+// Clear batch process stop flag
+export const clearBatchProcessStop = internalMutation({
+  args: {
+    processId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const control = await ctx.db
+      .query("batchProcessControl")
+      .withIndex("by_process_id", (q) => q.eq("processId", args.processId))
+      .first();
+
+    if (control) {
+      await ctx.db.delete(control._id);
+    }
+  },
+});
+
+// Update batch process progress
+export const updateBatchProgress = internalMutation({
+  args: {
+    processId: v.string(),
+    processed: v.number(),
+    failed: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const control = await ctx.db
+      .query("batchProcessControl")
+      .withIndex("by_process_id", (q) => q.eq("processId", args.processId))
+      .first();
+
+    if (control) {
+      await ctx.db.patch(control._id, {
+        processed: args.processed,
+        failed: args.failed,
+        updatedAt: Date.now(),
+      });
+    } else {
+      await ctx.db.insert("batchProcessControl", {
+        processId: args.processId,
+        shouldStop: false,
+        processed: args.processed,
+        failed: args.failed,
+        updatedAt: Date.now(),
+      });
+    }
+  },
+});
+
+// Get batch process progress
+export const getBatchProgress = query({
+  args: {
+    processId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const control = await ctx.db
+      .query("batchProcessControl")
+      .withIndex("by_process_id", (q) => q.eq("processId", args.processId))
+      .first();
+
+    if (!control) {
+      return null;
+    }
+
+    return {
+      processed: control.processed,
+      failed: control.failed,
+      shouldStop: control.shouldStop,
+    };
   },
 });

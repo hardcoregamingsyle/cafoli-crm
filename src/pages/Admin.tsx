@@ -51,9 +51,16 @@ export default function Admin() {
   const [deduplicationResult, setDeduplicationResult] = useState<any>(null);
   const [isDeduplicating, setIsDeduplicating] = useState(false);
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
+  const [currentProcessId, setCurrentProcessId] = useState<string | null>(null);
   const [batchProcessResult, setBatchProcessResult] = useState<any>(null);
   const clearAllSummaries = useMutation(api.aiMutations.clearAllSummaries);
   const clearAllScores = useMutation(api.aiMutations.clearAllScores);
+  const setBatchProcessStop = useMutation(api.aiMutations.setBatchProcessStop);
+
+  const batchProgress = useQuery(
+    api.aiMutations.getBatchProgress,
+    currentProcessId ? { processId: currentProcessId } : "skip"
+  );
 
   if (!currentUser || (currentUser.role !== "admin" && currentUser.role !== "uploader")) {
     return <div className="p-8 text-center">You do not have permission to view this page.</div>;
@@ -100,21 +107,43 @@ export default function Admin() {
     if (!currentUser) return;
     setIsBatchProcessing(true);
     setBatchProcessResult(null);
-    
+
+    // Generate unique process ID
+    const processId = `batch_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    setCurrentProcessId(processId);
+
     const typeLabel = processType === "both" ? "summaries and scores" : processType;
     toast.info(`Starting batch processing of ${typeLabel}...`);
-    
+
     try {
       const result = await batchProcessLeads({
         processType,
+        processId,
       });
-      
+
       setBatchProcessResult(result);
-      toast.success(`Batch processing complete! Processed ${result.processed} leads, ${result.failed} failed.`);
+
+      if (result.stopped) {
+        toast.warning(`Batch processing stopped. Processed ${result.processed} leads, ${result.failed} failed.`);
+      } else {
+        toast.success(`Batch processing complete! Processed ${result.processed} leads, ${result.failed} failed.`);
+      }
     } catch (error: any) {
       toast.error(error.message || "Failed to batch process leads");
     } finally {
       setIsBatchProcessing(false);
+      setCurrentProcessId(null);
+    }
+  };
+
+  const handleForceStop = async () => {
+    if (!currentProcessId) return;
+
+    try {
+      await setBatchProcessStop({ processId: currentProcessId });
+      toast.info("Stopping batch processing after current batch completes...");
+    } catch (error: any) {
+      toast.error("Failed to stop batch processing");
     }
   };
 
@@ -253,11 +282,11 @@ export default function Admin() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <p className="text-sm text-muted-foreground">
-                    Process all leads to generate AI summaries and priority scores using Gemma 3 27B IT model. 
-                    Each available API key processes one lead at a time in parallel. Batches are processed sequentially to ensure completion.
+                    Process all leads to generate AI summaries and priority scores using Gemma 3 27B IT model.
+                    Each available API key processes one lead at a time in parallel. Batches are processed sequentially with a 15-second cooldown between batches.
                     WhatsApp chat history is included in the analysis.
                   </p>
-                  
+
                   <div className="flex flex-wrap gap-2">
                     <Button
                       onClick={() => handleBatchProcess("summaries")}
@@ -279,7 +308,27 @@ export default function Admin() {
                     >
                       {isBatchProcessing ? "Processing..." : "Generate Both (Summaries + Scores)"}
                     </Button>
+                    {isBatchProcessing && (
+                      <Button
+                        onClick={handleForceStop}
+                        variant="destructive"
+                        disabled={!currentProcessId}
+                      >
+                        Force Stop
+                      </Button>
+                    )}
                   </div>
+
+                  {isBatchProcessing && batchProgress && (
+                    <div className="p-4 bg-muted/20 rounded-md border">
+                      <h4 className="font-semibold mb-2">Processing Status:</h4>
+                      <div className="space-y-1 text-sm">
+                        <p>Processed: {batchProgress.processed}</p>
+                        <p>Failed: {batchProgress.failed}</p>
+                        <p>Total: {batchProgress.processed + batchProgress.failed}</p>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="flex flex-wrap gap-2 pt-4 border-t">
                     <Button
@@ -329,6 +378,8 @@ export default function Admin() {
                     <ul className="text-sm space-y-1 list-disc list-inside text-muted-foreground">
                       <li>Each API key processes one lead at a time in parallel</li>
                       <li>Batch size equals number of available Gemini API keys</li>
+                      <li>15-second cooldown between batches to prevent rate limiting</li>
+                      <li>Force stop available to gracefully halt processing</li>
                       <li>Includes WhatsApp chat history in analysis</li>
                       <li>Summaries use recent comments and messages</li>
                       <li>Scores consider engagement, recency, and AI summary</li>

@@ -411,4 +411,12 @@ export default defineSchema({
     fileName: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_storageId", ["storageId"]),
+
+  batchProcessControl: defineTable({
+    processId: v.string(),
+    shouldStop: v.boolean(),
+    processed: v.number(),
+    failed: v.number(),
+    updatedAt: v.number(),
+  }).index("by_process_id", ["processId"]),
 });
