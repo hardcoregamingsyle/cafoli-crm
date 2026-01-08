@@ -58,33 +58,14 @@ export const batchProcessLeadsBackground = internalAction({
 
       const promises = leads.map(async (lead) => {
         try {
-          // Get WhatsApp messages - inline query
-          const whatsappMessages = await ctx.runQuery(async (ctx) => {
-            const chat = await ctx.db
-              .query("chats")
-              .withIndex("by_lead", (q) => q.eq("leadId", lead._id))
-              .first();
-            if (!chat) return [];
-            const messages = await ctx.db
-              .query("messages")
-              .withIndex("by_chat", (q) => q.eq("chatId", chat._id))
-              .order("desc")
-              .take(20);
-            return messages.map((m: any) => ({
-              direction: m.direction,
-              content: m.content,
-              timestamp: m._creationTime,
-            }));
+          // Get WhatsApp messages
+          const whatsappMessages = await ctx.runQuery(internal.aiBackgroundHelpers.getWhatsAppMessagesInternal, {
+            leadId: lead._id,
           });
 
-          // Get comments - inline query
-          const comments = await ctx.runQuery(async (ctx) => {
-            const cmts = await ctx.db
-              .query("comments")
-              .withIndex("by_lead", (q) => q.eq("leadId", lead._id))
-              .order("desc")
-              .take(10);
-            return cmts.map((c: any) => c.content || "").filter(Boolean);
+          // Get comments
+          const comments = await ctx.runQuery(internal.aiBackgroundHelpers.getCommentsInternal, {
+            leadId: lead._id,
           });
 
           let summary: string | undefined;
