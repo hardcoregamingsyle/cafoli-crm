@@ -1,3 +1,13 @@
+"use node";
+import { internalAction } from "./_generated/server";
+import { v } from "convex/values";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getGeminiKeys, gemmaModel } from "./lib/gemini";
+import { internal } from "./_generated/api";
+
+// Helper function to extract JSON from markdown code blocks
+function extractJsonFromMarkdown(text: string): string {
+  const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
   if (jsonMatch) {
     return jsonMatch[1];
   }
@@ -23,12 +33,9 @@ export const batchProcessLeadsBackground = internalAction({
     let hasMore = true;
 
     while (hasMore) {
-      // Check stop flag - inline query
-      const control = await ctx.runQuery(async (ctx) => {
-        return await ctx.db
-          .query("batchProcessControl")
-          .withIndex("by_process_id", (q) => q.eq("processId", args.processId))
-          .first();
+      // Check stop flag
+      const control = await ctx.runQuery(internal.aiBackgroundHelpers.getBatchControlInternal, {
+        processId: args.processId,
       });
 
       if (control?.shouldStop) {
@@ -227,7 +234,7 @@ export const batchProcessLeadsBackground = internalAction({
       });
 
       const results = await Promise.all(
-        promises.map((p: any) => p.catch((err: any) => ({ success: false, error: err })))
+        promises.map(p => p.catch(err => ({ success: false, error: err })))
       );
 
       results.forEach((result: any) => {
@@ -264,9 +271,8 @@ export const batchProcessLeadsBackground = internalAction({
           .withIndex("by_process_id", (q) => q.eq("processId", args.processId))
           .first();
       });
-      const shouldStopAfterBatch = controlAfterBatch?.shouldStop;
 
-      if (shouldStopAfterBatch) {
+      if (controlAfterBatch?.shouldStop) {
         console.log(`Batch processing stopped by user after batch (ID: ${args.processId})`);
         return { processed: totalProcessed, failed: totalFailed, total: totalProcessed + totalFailed, stopped: true };
       }

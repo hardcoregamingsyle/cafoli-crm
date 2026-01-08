@@ -3,6 +3,7 @@ import { internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getGeminiKeys, gemmaModel } from "./lib/gemini";
+import { internal } from "./_generated/api";
 
 // Helper function to extract JSON from markdown code blocks
 function extractJsonFromMarkdown(text: string): string {
@@ -32,8 +33,8 @@ export const batchProcessLeadsBackground = internalAction({
     let hasMore = true;
 
     while (hasMore) {
-      // Check stop flag - use internal query
-      const control = await ctx.runQuery(internal.aiMutations.getBatchControlInternal, {
+      // Check stop flag
+      const control = await ctx.runQuery(internal.aiBackgroundHelpers.getBatchControlInternal, {
         processId: args.processId,
       });
 
@@ -42,8 +43,8 @@ export const batchProcessLeadsBackground = internalAction({
         return { processed: totalProcessed, failed: totalFailed, total: totalProcessed + totalFailed, stopped: true };
       }
 
-      // Get leads - use internal query
-      const leads: Array<any> = await ctx.runQuery(internal.aiMutations.getLeadsForBatchInternal, {
+      // Get leads
+      const leads = await ctx.runQuery(internal.aiBackgroundHelpers.getLeadsForBatchInternal, {
         offset,
         limit: numKeys,
       });
@@ -57,14 +58,33 @@ export const batchProcessLeadsBackground = internalAction({
 
       const promises = leads.map(async (lead) => {
         try {
-          // Get WhatsApp messages - use internal query
-          const whatsappMessages = await ctx.runQuery(internal.aiMutations.getWhatsAppMessagesInternal, {
-            leadId: lead._id,
+          // Get WhatsApp messages - inline query
+          const whatsappMessages = await ctx.runQuery(async (ctx) => {
+            const chat = await ctx.db
+              .query("chats")
+              .withIndex("by_lead", (q) => q.eq("leadId", lead._id))
+              .first();
+            if (!chat) return [];
+            const messages = await ctx.db
+              .query("messages")
+              .withIndex("by_chat", (q) => q.eq("chatId", chat._id))
+              .order("desc")
+              .take(20);
+            return messages.map((m: any) => ({
+              direction: m.direction,
+              content: m.content,
+              timestamp: m._creationTime,
+            }));
           });
 
-          // Get comments - use internal query
-          const comments = await ctx.runQuery(internal.aiMutations.getCommentsInternal, {
-            leadId: lead._id,
+          // Get comments - inline query
+          const comments = await ctx.runQuery(async (ctx) => {
+            const cmts = await ctx.db
+              .query("comments")
+              .withIndex("by_lead", (q) => q.eq("leadId", lead._id))
+              .order("desc")
+              .take(10);
+            return cmts.map((c: any) => c.content || "").filter(Boolean);
           });
 
           let summary: string | undefined;
@@ -99,8 +119,8 @@ export const batchProcessLeadsBackground = internalAction({
             summary = text;
             const lastActivityHash = `${lead.lastActivity}`;
             
-            // Store summary - use internal mutation
-            await ctx.runMutation(internal.aiMutations.storeSummaryInternal, {
+            // Store summary
+            await ctx.runMutation(internal.aiBackgroundHelpers.storeSummaryInternal, {
               leadId: lead._id,
               summary: text,
               lastActivityHash,
@@ -109,7 +129,7 @@ export const batchProcessLeadsBackground = internalAction({
 
           if (args.processType === "scores" || args.processType === "both") {
             if (!summary) {
-              const existingSummary = await ctx.runQuery(internal.aiMutations.getSummaryInternal, {
+              const existingSummary = await ctx.runQuery(internal.aiBackgroundHelpers.getSummaryInternal, {
                 leadId: lead._id,
                 lastActivityHash: `${lead.lastActivity}`,
               });
@@ -172,8 +192,8 @@ export const batchProcessLeadsBackground = internalAction({
               parsed = { score: 50, tier: "Medium", rationale: "Unable to generate AI score" };
             }
 
-            // Store score - use internal mutation
-            await ctx.runMutation(internal.aiMutations.storeScoreInternal, {
+            // Store score
+            await ctx.runMutation(internal.aiBackgroundHelpers.storeScoreInternal, {
               leadId: lead._id,
               score: parsed.score,
               tier: parsed.tier,
@@ -204,15 +224,15 @@ export const batchProcessLeadsBackground = internalAction({
       console.log(`Batch complete: ${results.filter(r => r.success).length}/${results.length} succeeded`);
       offset += leads.length;
 
-      // Update progress - use internal mutation
-      await ctx.runMutation(internal.aiMutations.updateBatchProgressInternal, {
+      // Update progress
+      await ctx.runMutation(internal.aiBackgroundHelpers.updateBatchProgressInternal, {
         processId: args.processId,
         processed: totalProcessed,
         failed: totalFailed,
       });
 
       // Check stop flag again
-      const controlAfterBatch = await ctx.runQuery(internal.aiMutations.getBatchControlInternal, {
+      const controlAfterBatch = await ctx.runQuery(internal.aiBackgroundHelpers.getBatchControlInternal, {
         processId: args.processId,
       });
       const shouldStopAfterBatch = controlAfterBatch?.shouldStop;
@@ -226,8 +246,8 @@ export const batchProcessLeadsBackground = internalAction({
       await new Promise(resolve => setTimeout(resolve, 15000));
     }
 
-    // Clear the control record - use internal mutation
-    await ctx.runMutation(internal.aiMutations.deleteBatchControlInternal, {
+    // Clear the control record
+    await ctx.runMutation(internal.aiBackgroundHelpers.deleteBatchControlInternal, {
       processId: args.processId,
     });
 

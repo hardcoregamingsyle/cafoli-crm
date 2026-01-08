@@ -12,6 +12,7 @@ import type * as activeChatSessions from "../activeChatSessions.js";
 import type * as activityLogs from "../activityLogs.js";
 import type * as ai from "../ai.js";
 import type * as aiBackground from "../aiBackground.js";
+import type * as aiBackgroundHelpers from "../aiBackgroundHelpers.js";
 import type * as aiMutations from "../aiMutations.js";
 import type * as auth from "../auth.js";
 import type * as authProviders from "../authProviders.js";
@@ -96,6 +97,7 @@ declare const fullApi: ApiFromModules<{
   activityLogs: typeof activityLogs;
   ai: typeof ai;
   aiBackground: typeof aiBackground;
+  aiBackgroundHelpers: typeof aiBackgroundHelpers;
   aiMutations: typeof aiMutations;
   auth: typeof auth;
   authProviders: typeof authProviders;
