@@ -13,6 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Shield } from "lucide-react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { getConvexApi } from "@/lib/convex-api";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const api = getConvexApi() as any;
 import { useState } from "react";
@@ -42,8 +44,11 @@ export default function Admin() {
   const createUser = useMutation(api.users.createUser);
   const deleteUser = useMutation(api.users.deleteUser);
   const updateUserRole = useMutation(api.users.updateUserRole);
+  const deduplicateLeads = useMutation(api.leads.deduplication.deduplicateLeads);
   
   const [activeTab, setActiveTab] = useState("users");
+  const [deduplicationResult, setDeduplicationResult] = useState<any>(null);
+  const [isDeduplicating, setIsDeduplicating] = useState(false);
 
   if (!currentUser || (currentUser.role !== "admin" && currentUser.role !== "uploader")) {
     return <div className="p-8 text-center">You do not have permission to view this page.</div>;
@@ -62,6 +67,30 @@ export default function Admin() {
     });
   };
 
+  const handleDeduplication = async (dryRun: boolean) => {
+    if (!currentUser) return;
+    setIsDeduplicating(true);
+    setDeduplicationResult(null);
+    
+    try {
+      const result = await deduplicateLeads({
+        adminId: currentUser._id,
+        dryRun,
+      });
+      setDeduplicationResult(result);
+      
+      if (!dryRun) {
+        toast.success(`Deduplication complete! Deleted ${result.leadsDeleted} duplicate leads.`);
+      } else {
+        toast.info(`Dry run complete. Found ${result.duplicatesFound} sets of duplicates.`);
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to deduplicate leads");
+    } finally {
+      setIsDeduplicating(false);
+    }
+  };
+
   return (
     <AppLayout>
       <div className="container mx-auto py-8 space-y-8">
@@ -74,6 +103,7 @@ export default function Admin() {
             {currentUser.role === "admin" && <TabsTrigger value="users">User Management</TabsTrigger>}
             <TabsTrigger value="products">Products</TabsTrigger>
             <TabsTrigger value="ranges">Range PDFs</TabsTrigger>
+            {currentUser.role === "admin" && <TabsTrigger value="deduplication">Deduplication</TabsTrigger>}
             {currentUser.role === "admin" && <TabsTrigger value="logs">System Logs</TabsTrigger>}
           </TabsList>
 
@@ -163,6 +193,81 @@ export default function Admin() {
               <RangePdfListManager />
             </div>
           </TabsContent>
+
+          {currentUser.role === "admin" && (
+            <TabsContent value="deduplication" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Lead Deduplication</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    This tool identifies and removes duplicate leads based on phone numbers. 
+                    The oldest lead will be kept, and newer duplicates will be deleted.
+                  </p>
+                  
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => handleDeduplication(true)}
+                      disabled={isDeduplicating}
+                      variant="outline"
+                    >
+                      {isDeduplicating ? "Scanning..." : "Dry Run (Preview)"}
+                    </Button>
+                    <Button
+                      onClick={() => handleDeduplication(false)}
+                      disabled={isDeduplicating || !deduplicationResult}
+                      variant="destructive"
+                    >
+                      {isDeduplicating ? "Processing..." : "Delete Duplicates"}
+                    </Button>
+                  </div>
+
+                  {deduplicationResult && (
+                    <Alert className={deduplicationResult.dryRun ? "border-blue-500" : "border-green-500"}>
+                      {deduplicationResult.dryRun ? (
+                        <AlertCircle className="h-4 w-4" />
+                      ) : (
+                        <CheckCircle2 className="h-4 w-4" />
+                      )}
+                      <AlertDescription>
+                        <div className="space-y-2">
+                          <p className="font-semibold">
+                            {deduplicationResult.dryRun ? "Preview Results:" : "Deduplication Complete!"}
+                          </p>
+                          <p>Found {deduplicationResult.duplicatesFound} sets of duplicate leads</p>
+                          {deduplicationResult.dryRun ? (
+                            <p>Would delete {deduplicationResult.totalLeadsToDelete} duplicate leads</p>
+                          ) : (
+                            <p>Deleted {deduplicationResult.leadsDeleted} duplicate leads</p>
+                          )}
+                          
+                          {deduplicationResult.duplicates && deduplicationResult.duplicates.length > 0 && (
+                            <div className="mt-4 space-y-2">
+                              <p className="font-semibold text-sm">Sample duplicates (first 50):</p>
+                              <div className="max-h-64 overflow-y-auto space-y-2">
+                                {deduplicationResult.duplicates.map((dup: any, idx: number) => (
+                                  <div key={idx} className="text-xs bg-muted p-2 rounded">
+                                    <p className="font-medium">Phone: {dup.mobile}</p>
+                                    <p className="text-muted-foreground">
+                                      Keeping: {dup.leads[0].name} (oldest)
+                                    </p>
+                                    <p className="text-muted-foreground">
+                                      {deduplicationResult.dryRun ? "Would delete" : "Deleted"}: {dup.deleteIds.length} duplicate(s)
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
           
           {currentUser.role === "admin" && (
             <TabsContent value="logs">
