@@ -244,11 +244,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         
         toast.error(result.message, {
           description: productList,
-          duration: 15000,
-          action: {
-            label: "Fix Now",
-            onClick: () => handleFixFiles(),
-          },
+          duration: 20000,
         });
         
         console.log("Problematic products:", result.products);

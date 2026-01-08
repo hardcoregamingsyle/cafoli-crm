@@ -91,8 +91,9 @@ export const runMigration = action({
       success: false,
       message: `⚠️ Found ${problematic.length} product(s) with incorrect file metadata.\n\n` +
                `These files were uploaded without proper Content-Type headers and will download as .htm files.\n\n` +
-               `Solution: Use the Edit button (✏️) on each product to re-upload the affected files.\n\n` +
-               `Affected files will be replaced with properly formatted versions.`,
+               `ACTION REQUIRED: For each product listed below, click the Edit button (✏️) and re-upload the affected files.\n\n` +
+               `The upload dialog now correctly sets Content-Type headers, so re-uploaded files will work properly.\n\n` +
+               `Note: The "Fix Now" button cannot automatically fix these files because Convex storage doesn't preserve the original file type information.`,
       count: problematic.length,
       products: productsWithDetails,
     };
