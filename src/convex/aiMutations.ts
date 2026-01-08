@@ -148,19 +148,20 @@ export const clearAllSummaries = mutation({
     let totalDeleted = 0;
     let hasMore = true;
 
-    // Process in batches to avoid loading entire table into memory
+    // Process in small batches - delete in parallel within each batch
     while (hasMore) {
-      const summaries = await ctx.db.query("leadSummaries").take(100);
+      const summaries = await ctx.db.query("leadSummaries").take(50);
 
       if (summaries.length === 0) {
         hasMore = false;
         break;
       }
 
-      for (const summary of summaries) {
-        await ctx.db.delete(summary._id);
-        totalDeleted++;
-      }
+      // Delete all summaries in this batch in parallel
+      const deletePromises = summaries.map(summary => ctx.db.delete(summary._id));
+      await Promise.all(deletePromises);
+
+      totalDeleted += summaries.length;
     }
 
     return { deleted: totalDeleted };
@@ -174,27 +175,30 @@ export const clearAllScores = mutation({
     let totalCleared = 0;
     let hasMore = true;
 
-    // Process in batches to avoid loading entire table into memory
+    // Process in small batches - clear in parallel within each batch
     while (hasMore) {
       const leads = await ctx.db
         .query("leads")
         .filter((q) => q.neq(q.field("aiScore"), undefined))
-        .take(100);
+        .take(50);
 
       if (leads.length === 0) {
         hasMore = false;
         break;
       }
 
-      for (const lead of leads) {
-        await ctx.db.patch(lead._id, {
+      // Clear all scores in this batch in parallel
+      const patchPromises = leads.map(lead =>
+        ctx.db.patch(lead._id, {
           aiScore: undefined,
           aiScoreTier: undefined,
           aiScoreRationale: undefined,
           aiScoredAt: undefined,
-        });
-        totalCleared++;
-      }
+        })
+      );
+      await Promise.all(patchPromises);
+
+      totalCleared += leads.length;
     }
 
     return { cleared: totalCleared };
