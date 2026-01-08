@@ -28,7 +28,7 @@ export function LeadDetailsAiDialog({
 }: LeadDetailsAiDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[600px] h-[80vh] flex flex-col">
+      <DialogContent className="sm:max-w-[600px] max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-purple-600" />
@@ -68,13 +68,13 @@ export function LeadDetailsAiDialog({
         )}
 
         {aiAnalysis && !isAnalyzing && (
-          <ScrollArea className="flex-1 w-full rounded-md border">
-            <div className="p-4">
-              <div className="bg-muted/50 p-4 rounded-lg text-sm whitespace-pre-wrap">
+          <div className="flex-1 min-h-0 border rounded-md overflow-hidden">
+            <ScrollArea className="h-full max-h-[calc(85vh-280px)]">
+              <div className="p-4 bg-muted/50 rounded-lg text-sm whitespace-pre-wrap">
                 {aiAnalysis}
               </div>
-            </div>
-          </ScrollArea>
+            </ScrollArea>
+          </div>
         )}
       </DialogContent>
     </Dialog>
