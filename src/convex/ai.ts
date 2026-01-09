@@ -656,6 +656,88 @@ export const batchProcessLeads = action({
   },
 });
 
+// Daily job to regenerate summaries and scores for leads that need them
+export const dailySummaryAndScoreRegeneration = internalAction({
+  args: {},
+  handler: async (ctx): Promise<{ summariesGenerated: number; scoresGenerated: number; failed: number }> => {
+    console.log("Starting daily summary and score regeneration job...");
+
+    let summariesGenerated = 0;
+    let scoresGenerated = 0;
+    let failed = 0;
+
+    // Process in batches to avoid overwhelming the system
+    const batchSize = 50;
+
+    // Step 1: Generate summaries for leads that need them
+    console.log("Fetching leads that need summaries...");
+    const leadsNeedingSummaries = await ctx.runQuery(
+      internal.aiBackgroundHelpers.getLeadsNeedingSummaries,
+      { limit: 500 } // Process up to 500 leads per day
+    );
+
+    console.log(`Found ${leadsNeedingSummaries.length} leads needing summaries`);
+
+    // Process summaries in batches
+    for (let i = 0; i < leadsNeedingSummaries.length; i += batchSize) {
+      const batch = leadsNeedingSummaries.slice(i, i + batchSize);
+
+      for (const lead of batch) {
+        try {
+          await ctx.runAction(internal.ai.generateLeadSummaryWithChatInternal, {
+            leadId: lead._id,
+          });
+          summariesGenerated++;
+          console.log(`Generated summary for lead ${lead._id} (${summariesGenerated}/${leadsNeedingSummaries.length})`);
+        } catch (error) {
+          console.error(`Failed to generate summary for lead ${lead._id}:`, error);
+          failed++;
+        }
+      }
+
+      // Small delay between batches
+      if (i + batchSize < leadsNeedingSummaries.length) {
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+    }
+
+    // Step 2: Generate scores for leads that have summaries but need scoring
+    console.log("Fetching leads that need scores...");
+    const leadsNeedingScores = await ctx.runQuery(
+      internal.aiBackgroundHelpers.getLeadsNeedingScores,
+      { limit: 500 } // Process up to 500 leads per day
+    );
+
+    console.log(`Found ${leadsNeedingScores.length} leads needing scores`);
+
+    // Process scores in batches
+    for (let i = 0; i < leadsNeedingScores.length; i += batchSize) {
+      const batch = leadsNeedingScores.slice(i, i + batchSize);
+
+      for (const lead of batch) {
+        try {
+          await ctx.runAction(internal.ai.scoreLeadWithContextInternal, {
+            leadId: lead._id,
+          });
+          scoresGenerated++;
+          console.log(`Generated score for lead ${lead._id} (${scoresGenerated}/${leadsNeedingScores.length})`);
+        } catch (error) {
+          console.error(`Failed to generate score for lead ${lead._id}:`, error);
+          failed++;
+        }
+      }
+
+      // Small delay between batches
+      if (i + batchSize < leadsNeedingScores.length) {
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+    }
+
+    console.log(`Daily regeneration complete: ${summariesGenerated} summaries, ${scoresGenerated} scores, ${failed} failed`);
+    return { summariesGenerated, scoresGenerated, failed };
+  },
+});
+
 // Helper function to extract JSON from markdown code blocks
 function extractJsonFromMarkdown(text: string): string {
   const jsonMatch = text.match(/```json([\s\S]*?)```/);

@@ -5,8 +5,9 @@ import { LeadCardTags } from "@/components/leads/LeadCardTags";
 import { LeadCardBadges } from "@/components/leads/LeadCardBadges";
 import { LeadCardActions } from "@/components/leads/LeadCardActions";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Sparkles, TrendingUp } from "lucide-react";
+import { Sparkles, TrendingUp, RefreshCw } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
 
 interface LeadCardProps {
   lead: Doc<"leads"> & { 
@@ -27,6 +28,7 @@ interface LeadCardProps {
   onOpenWhatsApp?: (leadId: Id<"leads">) => void;
   aiSummary?: string;
   aiSummaryLoading?: boolean;
+  onRegenerateSummary?: (leadId: Id<"leads">) => void;
 }
 
 export function LeadCard({
@@ -43,6 +45,7 @@ export function LeadCard({
   onOpenWhatsApp,
   aiSummary,
   aiSummaryLoading,
+  onRegenerateSummary,
 }: LeadCardProps) {
   const hasUnreadMessages = (lead.unreadCount ?? 0) > 0;
   
@@ -83,10 +86,45 @@ export function LeadCard({
             <Skeleton className="h-3 w-3/4" />
           </div>
         ) : aiSummary ? (
-          <div className="mb-2 p-2 bg-purple-50 border border-purple-200 rounded text-xs text-purple-900 line-clamp-2 flex items-start gap-1">
+          <div className="mb-2 p-2 bg-purple-50 border border-purple-200 rounded text-xs text-purple-900 flex items-start gap-1">
             <Sparkles className="h-3 w-3 mt-0.5 flex-shrink-0 text-purple-600" />
-            <span>{aiSummary}</span>
+            <span className="line-clamp-2 flex-1">{aiSummary}</span>
+            {onRegenerateSummary && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 w-5 p-0 hover:bg-purple-100"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRegenerateSummary(lead._id);
+                      }}
+                    >
+                      <RefreshCw className="h-3 w-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs">Regenerate AI Summary</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
+        ) : onRegenerateSummary ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="mb-2 h-7 text-xs"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRegenerateSummary(lead._id);
+            }}
+          >
+            <Sparkles className="h-3 w-3 mr-1" />
+            Generate AI Summary
+          </Button>
         ) : null}
 
         {/* AI Score Badge */}

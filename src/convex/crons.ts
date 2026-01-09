@@ -86,4 +86,12 @@ crons.cron(
   {}
 );
 
+// Regenerate summaries and scores daily at 12 AM IST (6:30 PM UTC previous day)
+crons.cron(
+  "regenerate_summaries_and_scores",
+  "30 18 * * *",
+  internal.ai.dailySummaryAndScoreRegeneration,
+  {}
+);
+
 export default crons;

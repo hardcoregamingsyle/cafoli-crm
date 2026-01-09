@@ -22,19 +22,28 @@ export function useLeadSummaries() {
   const [queuedLeads, setQueuedLeads] = useState<Set<string>>(new Set());
   const [checkedCache, setCheckedCache] = useState<Set<string>>(new Set());
 
-  const fetchSummary = async (leadId: Id<"leads">, leadData: LeadSummaryData, recentComments?: string[]) => {
-    // Skip if already have summary, currently loading, or already queued
-    if (summaries[leadId] || loading[leadId] || queuedLeads.has(leadId)) return;
+  const fetchSummary = async (leadId: Id<"leads">, leadData: LeadSummaryData, recentComments?: string[], forceRegenerate = false) => {
+    // Skip if already have summary, currently loading, or already queued (unless force regenerate)
+    if (!forceRegenerate && (summaries[leadId] || loading[leadId] || queuedLeads.has(leadId))) return;
+
+    // Clear existing summary if force regenerating
+    if (forceRegenerate) {
+      setSummaries(prev => {
+        const newSummaries = { ...prev };
+        delete newSummaries[leadId];
+        return newSummaries;
+      });
+    }
 
     setLoading(prev => ({ ...prev, [leadId]: true }));
     setQueuedLeads(prev => new Set(prev).add(leadId));
 
     try {
       // Queue the summary generation in background
-      const result = await queueSummary({ leadId });
+      const result = await queueSummary({ leadId, forceRegenerate });
 
       // If it was already cached, we don't need to poll for it
-      if (result?.cached) {
+      if (result?.cached && !forceRegenerate) {
         setLoading(prev => ({ ...prev, [leadId]: false }));
         setQueuedLeads(prev => {
           const newSet = new Set(prev);

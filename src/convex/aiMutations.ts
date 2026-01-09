@@ -376,20 +376,23 @@ export const startBatchProcess = mutation({
 export const queueLeadSummary = mutation({
   args: {
     leadId: v.id("leads"),
+    forceRegenerate: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    // Check if summary already exists and is recent
+    // Check if summary already exists and is recent (unless force regenerating)
     const lead = await ctx.db.get(args.leadId);
     if (!lead) return { queued: false, error: "Lead not found" };
 
-    const existingSummary = await ctx.db
-      .query("leadSummaries")
-      .withIndex("by_lead", (q) => q.eq("leadId", args.leadId))
-      .first();
+    if (!args.forceRegenerate) {
+      const existingSummary = await ctx.db
+        .query("leadSummaries")
+        .withIndex("by_lead", (q) => q.eq("leadId", args.leadId))
+        .first();
 
-    // If summary exists and matches current activity, no need to regenerate
-    if (existingSummary && existingSummary.lastActivityHash === `${lead.lastActivity}`) {
-      return { queued: false, cached: true };
+      // If summary exists and matches current activity, no need to regenerate
+      if (existingSummary && existingSummary.lastActivityHash === `${lead.lastActivity}`) {
+        return { queued: false, cached: true };
+      }
     }
 
     // Schedule the action in background - will continue even if tab closes

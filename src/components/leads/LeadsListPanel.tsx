@@ -93,6 +93,22 @@ export function LeadsListPanel({
     }
   }, [cachedSummary, firstLoadingLeadId]);
 
+  // Handle manual summary regeneration
+  const handleRegenerateSummary = (leadId: Id<"leads">) => {
+    const lead = leads.find(l => l._id === leadId);
+    if (lead) {
+      fetchSummary(leadId, {
+        name: lead.name,
+        subject: lead.subject,
+        source: lead.source,
+        status: lead.status,
+        type: lead.type,
+        message: lead.message,
+        lastActivity: lead.lastActivity,
+      }, undefined, true); // Pass true to force regeneration
+    }
+  };
+
   return (
     <div className={`${selectedLeadId ? 'hidden md:flex' : 'flex'} flex-col w-full md:w-1/3 lg:w-1/4 min-w-[300px] border rounded-lg bg-card shadow-sm overflow-hidden`}>
       <div className="p-2 border-b bg-muted/50 text-sm font-medium text-muted-foreground flex justify-between items-center">
@@ -120,6 +136,7 @@ export function LeadsListPanel({
             onOpenWhatsApp={onOpenWhatsApp}
             aiSummary={summaries[lead._id]}
             aiSummaryLoading={loading[lead._id]}
+            onRegenerateSummary={handleRegenerateSummary}
           />
         ))}
         {isLoadingMore && !isDone && (

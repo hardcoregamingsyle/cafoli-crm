@@ -156,3 +156,70 @@ export const deleteBatchControlInternal = internalMutation({
     }
   },
 });
+
+// Get leads that need summaries (no summary or outdated)
+export const getLeadsNeedingSummaries = internalQuery({
+  args: { limit: v.number() },
+  handler: async (ctx, args) => {
+    // Get all non-irrelevant leads
+    const allLeads = await ctx.db
+      .query("leads")
+      .filter((q) => q.neq(q.field("status"), "irrelevant"))
+      .order("desc")
+      .take(args.limit);
+
+    const leadsNeedingSummaries = [];
+
+    for (const lead of allLeads) {
+      // Check if summary exists
+      const summary = await ctx.db
+        .query("leadSummaries")
+        .withIndex("by_lead", (q) => q.eq("leadId", lead._id))
+        .first();
+
+      // Need summary if: no summary OR lastActivityHash doesn't match
+      if (!summary || summary.lastActivityHash !== `${lead.lastActivity}`) {
+        leadsNeedingSummaries.push(lead);
+      }
+    }
+
+    return leadsNeedingSummaries;
+  },
+});
+
+// Get leads that need scores (have summary but no score or outdated score)
+export const getLeadsNeedingScores = internalQuery({
+  args: { limit: v.number() },
+  handler: async (ctx, args) => {
+    // Get all non-irrelevant leads that have summaries
+    const allLeads = await ctx.db
+      .query("leads")
+      .filter((q) => q.neq(q.field("status"), "irrelevant"))
+      .order("desc")
+      .take(args.limit);
+
+    const leadsNeedingScores = [];
+
+    for (const lead of allLeads) {
+      // Check if summary exists
+      const summary = await ctx.db
+        .query("leadSummaries")
+        .withIndex("by_lead", (q) => q.eq("leadId", lead._id))
+        .first();
+
+      // Only score leads that have summaries
+      if (summary) {
+        // Need score if: no score OR no aiScoredAt OR score is old (older than summary)
+        const needsScore = !lead.aiScore ||
+                          !lead.aiScoredAt ||
+                          (summary.generatedAt && lead.aiScoredAt < summary.generatedAt);
+
+        if (needsScore) {
+          leadsNeedingScores.push(lead);
+        }
+      }
+    }
+
+    return leadsNeedingScores;
+  },
+});
