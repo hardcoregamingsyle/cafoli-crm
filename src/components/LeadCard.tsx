@@ -79,7 +79,7 @@ export function LeadCard({
         
         <p className="text-sm text-muted-foreground truncate mb-2">{lead.subject}</p>
         
-        {/* AI Summary */}
+        {/* AI Summary - Full Display */}
         {aiSummaryLoading ? (
           <div className="mb-2 space-y-1">
             <Skeleton className="h-3 w-full" />
@@ -88,7 +88,7 @@ export function LeadCard({
         ) : aiSummary ? (
           <div className="mb-2 p-2 bg-purple-50 border border-purple-200 rounded text-xs text-purple-900 flex items-start gap-1">
             <Sparkles className="h-3 w-3 mt-0.5 flex-shrink-0 text-purple-600" />
-            <span className="line-clamp-2 flex-1">{aiSummary}</span>
+            <span className="flex-1 whitespace-pre-wrap">{aiSummary}</span>
             {onRegenerateSummary && (
               <TooltipProvider>
                 <Tooltip>

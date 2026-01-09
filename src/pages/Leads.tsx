@@ -212,7 +212,7 @@ export default function Leads() {
           />
 
           {state.selectedLeadId ? (
-            <div className="flex-1 min-w-0 h-full">
+            <div className="flex-1 min-w-0 max-w-2xl h-full">
               <LeadDetails 
                 leadId={state.selectedLeadId} 
                 onClose={() => {
