@@ -9,7 +9,7 @@ const api = getConvexApi() as any;
 import { Id } from "@/convex/_generated/dataModel";
 import { ROLES } from "@/lib/constants";
 import { useAuth } from "@/hooks/use-auth";
-import { useQuery, useAction } from "convex/react";
+import { usePaginatedQuery, useAction } from "convex/react";
 import { MessageSquare, Settings, Send } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router";
@@ -21,12 +21,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 export default function WhatsApp() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
-  
+
   // Determine filter based on user role
   const filter = user?.role === ROLES.ADMIN ? "all" : "mine";
-  // Use new query that includes chat status and sorting
-  const leads = useQuery(api.whatsappQueries.getLeadsWithChatStatus, { filter, userId: user?._id }) || [];
-  
+
+  // Use paginated query for leads (20 items per page)
+  const { results: leadsResult, status, loadMore } = usePaginatedQuery(
+    api.whatsappQueries.getLeadsWithChatStatus,
+    { filter, userId: user?._id },
+    { initialNumItems: 20 }
+  );
+
+  const leads = (leadsResult as any)?.page || [];
+  const canLoadMore = status === "CanLoadMore";
+  const isLoading = status === "LoadingFirstPage";
+
   const [selectedLeadId, setSelectedLeadId] = useState<Id<"leads"> | null>(null);
   const selectedLead = leads.find((l: any) => l._id === selectedLeadId);
 
@@ -139,10 +148,13 @@ export default function WhatsApp() {
 
         <div className="flex-1 grid md:grid-cols-[350px_1fr] gap-4 px-6 pb-6 min-h-0 overflow-hidden">
           {/* Contacts List */}
-          <ContactList 
-            leads={leads} 
-            selectedLeadId={selectedLeadId} 
-            onSelectLead={setSelectedLeadId} 
+          <ContactList
+            leads={leads}
+            selectedLeadId={selectedLeadId}
+            onSelectLead={setSelectedLeadId}
+            onLoadMore={() => loadMore(20)}
+            canLoadMore={canLoadMore}
+            isLoading={isLoading}
           />
 
           {/* Chat Area */}

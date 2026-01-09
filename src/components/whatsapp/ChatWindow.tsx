@@ -9,8 +9,8 @@ import { getConvexApi } from "@/lib/convex-api";
 
 const api = getConvexApi() as any;
 import { Id } from "@/convex/_generated/dataModel";
-import { useAction, useMutation, useQuery } from "convex/react";
-import { Check, CheckCheck, MessageSquare, MoreVertical, Paperclip, Phone, Reply, Send, Smile, Video, X, AlertTriangle, ImageIcon, HelpCircle, FileText, Sparkles } from "lucide-react";
+import { useAction, useMutation, usePaginatedQuery } from "convex/react";
+import { Check, CheckCheck, MessageSquare, MoreVertical, Paperclip, Phone, Reply, Send, Smile, Video, X, AlertTriangle, ImageIcon, HelpCircle, FileText, Sparkles, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -22,7 +22,17 @@ interface ChatWindowProps {
 
 export function ChatWindow({ selectedLeadId, selectedLead }: ChatWindowProps) {
   const { user } = useAuth();
-  const messages = useQuery(api.whatsappQueries.getChatMessages, { leadId: selectedLeadId }) || [];
+
+  // Use paginated query for messages (50 items per page, loaded latest first)
+  const { results: messagesResult, status, loadMore } = usePaginatedQuery(
+    api.whatsappQueries.getChatMessages,
+    { leadId: selectedLeadId },
+    { initialNumItems: 50 }
+  );
+
+  const messages = (messagesResult as any)?.page || [];
+  const canLoadMore = status === "CanLoadMore";
+  const isLoadingMessages = status === "LoadingFirstPage" || status === "LoadingMore";
   
   const sendWhatsAppMessage = useAction(api.whatsapp.messages.send);
   const sendWhatsAppMedia = useAction(api.whatsapp.messages.sendMedia);
@@ -43,7 +53,10 @@ export function ChatWindow({ selectedLeadId, selectedLead }: ChatWindowProps) {
   const [showCommandMenu, setShowCommandMenu] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previousScrollHeight, setPreviousScrollHeight] = useState(0);
 
   // Update active session when chat is opened and periodically
   useEffect(() => {
@@ -79,9 +92,57 @@ export function ChatWindow({ selectedLeadId, selectedLead }: ChatWindowProps) {
   const windowDuration = (23 * 60 + 30) * 60 * 1000; // 23h 30m
   const isWithinWindow = (now - lastInboundTime) < windowDuration;
 
-  // Auto-scroll to bottom when messages change
+  // Intersection Observer for loading older messages
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0];
+        if (first.isIntersecting && canLoadMore && !isLoadingMessages) {
+          // Save current scroll height before loading more
+          if (messagesContainerRef.current) {
+            setPreviousScrollHeight(messagesContainerRef.current.scrollHeight);
+          }
+          loadMore(50); // Load 50 more messages
+        }
+      },
+      { threshold: 0.5, root: messagesContainerRef.current }
+    );
+
+    const currentRef = loadMoreRef.current;
+    if (currentRef) {
+      observer.observe(currentRef);
+    }
+
+    return () => {
+      if (currentRef) {
+        observer.unobserve(currentRef);
+      }
+    };
+  }, [canLoadMore, isLoadingMessages, loadMore]);
+
+  // Maintain scroll position after loading older messages
+  useEffect(() => {
+    if (messagesContainerRef.current && previousScrollHeight > 0) {
+      const newScrollHeight = messagesContainerRef.current.scrollHeight;
+      const scrollDiff = newScrollHeight - previousScrollHeight;
+      if (scrollDiff > 0) {
+        messagesContainerRef.current.scrollTop += scrollDiff;
+        setPreviousScrollHeight(0);
+      }
+    }
+  }, [messages.length, previousScrollHeight]);
+
+  // Auto-scroll to bottom when new messages arrive or replying
+  useEffect(() => {
+    // Only auto-scroll if we're near the bottom or it's a new message
+    if (messagesContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+
+      if (isNearBottom || replyingTo) {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }
+    }
   }, [messages, replyingTo]);
 
   // Mark as read when selecting a lead
@@ -338,16 +399,27 @@ export function ChatWindow({ selectedLeadId, selectedLead }: ChatWindowProps) {
         </div>
       </CardHeader>
 
-      <div className="flex-1 overflow-y-auto p-4 bg-[#efeae2] relative min-h-0">
-        <div 
-          className="absolute inset-0 opacity-[0.06]" 
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 bg-[#efeae2] relative min-h-0">
+        <div
+          className="absolute inset-0 opacity-[0.06]"
           style={{
             backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
             backgroundSize: '60px 60px'
           }}
         />
         <div className="space-y-4 relative z-10">
-          {messages.length === 0 ? (
+          {/* Load more trigger for older messages */}
+          {canLoadMore && (
+            <div ref={loadMoreRef} className="flex justify-center py-3">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          )}
+          {isLoadingMessages && messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
+              <p className="text-muted-foreground">Loading messages...</p>
+            </div>
+          ) : messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center py-12">
               <MessageSquare className="h-16 w-16 text-muted-foreground/30 mb-4" />
               <p className="text-muted-foreground">No messages yet</p>

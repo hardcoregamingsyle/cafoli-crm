@@ -4,18 +4,29 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Id } from "@/convex/_generated/dataModel";
-import { Search } from "lucide-react";
-import { useState } from "react";
+import { Search, Loader2 } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
 
 interface ContactListProps {
   leads: any[];
   selectedLeadId: Id<"leads"> | null;
   onSelectLead: (id: Id<"leads">) => void;
+  onLoadMore: () => void;
+  canLoadMore: boolean;
+  isLoading: boolean;
 }
 
-export function ContactList({ leads, selectedLeadId, onSelectLead }: ContactListProps) {
+export function ContactList({
+  leads,
+  selectedLeadId,
+  onSelectLead,
+  onLoadMore,
+  canLoadMore,
+  isLoading,
+}: ContactListProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [unreadFilter, setUnreadFilter] = useState<string>("all");
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const filteredLeads = leads.filter(lead => {
     const matchesSearch = lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -26,6 +37,30 @@ export function ContactList({ leads, selectedLeadId, onSelectLead }: ContactList
     }
     return matchesSearch;
   });
+
+  // Intersection Observer for infinity scrolling
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0];
+        if (first.isIntersecting && canLoadMore && !isLoading) {
+          onLoadMore();
+        }
+      },
+      { threshold: 0.5 }
+    );
+
+    const currentRef = loadMoreRef.current;
+    if (currentRef) {
+      observer.observe(currentRef);
+    }
+
+    return () => {
+      if (currentRef) {
+        observer.unobserve(currentRef);
+      }
+    };
+  }, [canLoadMore, isLoading, onLoadMore]);
 
   const getInitials = (name: string) => {
     return name
@@ -92,9 +127,20 @@ export function ContactList({ leads, selectedLeadId, onSelectLead }: ContactList
               </div>
             </div>
           ))}
-          {filteredLeads.length === 0 && (
+          {filteredLeads.length === 0 && !isLoading && (
             <div className="text-center text-muted-foreground py-8">
               No contacts found
+            </div>
+          )}
+          {/* Load more trigger */}
+          {canLoadMore && (
+            <div ref={loadMoreRef} className="flex justify-center py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          )}
+          {isLoading && filteredLeads.length === 0 && (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           )}
         </div>
