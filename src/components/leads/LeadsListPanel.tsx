@@ -41,7 +41,27 @@ export function LeadsListPanel({
 }: LeadsListPanelProps) {
   const { summaries, loading, fetchSummary, updateSummary } = useLeadSummaries();
 
-  // Fetch summaries for visible leads
+  // Get visible lead IDs
+  const visibleLeadIds = leads.slice(0, 20).map(l => l._id);
+
+  // Load cached summaries for all visible leads
+  const cachedSummaries = useQuery(
+    api.aiMutations.getCachedSummaries,
+    { leadIds: visibleLeadIds }
+  );
+
+  // Update summaries from cache
+  useEffect(() => {
+    if (cachedSummaries) {
+      cachedSummaries.forEach(({ leadId, summary }: { leadId: Id<"leads">, summary?: string }) => {
+        if (summary && !summaries[leadId]) {
+          updateSummary(leadId, summary);
+        }
+      });
+    }
+  }, [cachedSummaries]);
+
+  // Fetch summaries for visible leads that don't have cached summaries
   useEffect(() => {
     leads.slice(0, 20).forEach(lead => {
       if (!summaries[lead._id] && !loading[lead._id]) {
@@ -56,10 +76,9 @@ export function LeadsListPanel({
         });
       }
     });
-  }, [leads]);
+  }, [leads, summaries, loading]);
 
   // Poll for cached summaries for visible loading leads
-  const visibleLeadIds = leads.slice(0, 20).map(l => l._id);
   const firstLoadingLeadId = visibleLeadIds.find(id => loading[id]);
 
   // Query one at a time to check for completion

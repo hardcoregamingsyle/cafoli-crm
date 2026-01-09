@@ -20,6 +20,7 @@ export function useLeadSummaries() {
   const [summaries, setSummaries] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [queuedLeads, setQueuedLeads] = useState<Set<string>>(new Set());
+  const [checkedCache, setCheckedCache] = useState<Set<string>>(new Set());
 
   const fetchSummary = async (leadId: Id<"leads">, leadData: LeadSummaryData, recentComments?: string[]) => {
     // Skip if already have summary, currently loading, or already queued
@@ -30,7 +31,17 @@ export function useLeadSummaries() {
 
     try {
       // Queue the summary generation in background
-      await queueSummary({ leadId });
+      const result = await queueSummary({ leadId });
+
+      // If it was already cached, we don't need to poll for it
+      if (result?.cached) {
+        setLoading(prev => ({ ...prev, [leadId]: false }));
+        setQueuedLeads(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(leadId);
+          return newSet;
+        });
+      }
 
       // Note: The summary will be fetched via polling in the component
       // that uses this hook by checking getCachedSummary query

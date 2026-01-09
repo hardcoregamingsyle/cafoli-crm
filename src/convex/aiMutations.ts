@@ -438,4 +438,24 @@ export const getCachedSummary = query({
   },
 });
 
+// Get cached summaries for multiple leads
+export const getCachedSummaries = query({
+  args: {
+    leadIds: v.array(v.id("leads")),
+  },
+  handler: async (ctx, args) => {
+    const summaries = await Promise.all(
+      args.leadIds.map(async (leadId) => {
+        const summary = await ctx.db
+          .query("leadSummaries")
+          .withIndex("by_lead", (q) => q.eq("leadId", leadId))
+          .first();
+        return { leadId, summary: summary?.summary };
+      })
+    );
+
+    return summaries;
+  },
+});
+
 // Note: Internal helper functions moved to aiBackgroundHelpers.ts to avoid circular dependencies
