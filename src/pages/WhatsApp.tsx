@@ -4,8 +4,10 @@ import { ContactList } from "@/components/whatsapp/ContactList";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { getConvexApi } from "@/lib/convex-api";
-
-const api = getConvexApi() as any;
+import { CreateGroupDialog } from "@/components/whatsapp/CreateGroupDialog";
+import { GroupsList } from "@/components/whatsapp/GroupsList";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Users } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
 import { ROLES } from "@/lib/constants";
 import { useAuth } from "@/hooks/use-auth";
@@ -17,6 +19,8 @@ import { toast } from "sonner";
 import { LeadSelector } from "@/components/LeadSelector";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+
+const api = getConvexApi() as any;
 
 export default function WhatsApp() {
   const { user } = useAuth();
@@ -59,6 +63,7 @@ export default function WhatsApp() {
   const [bulkMessage, setBulkMessage] = useState("");
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [isSendingBulk, setIsSendingBulk] = useState(false);
+  const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
 
   const handleUpdateInterface = async () => {
     setIsUpdating(true);
@@ -121,11 +126,18 @@ export default function WhatsApp() {
             <h1 className="text-3xl font-bold tracking-tight">WhatsApp Messaging</h1>
             <p className="text-muted-foreground">
               {user?.role === ROLES.ADMIN 
-                ? "Send WhatsApp messages to all leads." 
-                : "Send WhatsApp messages to your assigned leads."}
+                ? "Send WhatsApp messages to all leads and manage groups." 
+                : "Send WhatsApp messages to your assigned leads and manage groups."}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button 
+              variant="default" 
+              onClick={() => setShowCreateGroupDialog(true)}
+            >
+              <Users className="mr-2 h-4 w-4" />
+              Create Group
+            </Button>
             <Button 
               variant="default" 
               onClick={() => setShowBulkDialog(true)}
@@ -146,34 +158,61 @@ export default function WhatsApp() {
           </div>
         </div>
 
-        <div className="flex-1 grid md:grid-cols-[350px_1fr] gap-4 px-6 pb-6 min-h-0 overflow-hidden">
-          {/* Contacts List */}
-          <ContactList
-            leads={leads}
-            selectedLeadId={selectedLeadId}
-            onSelectLead={setSelectedLeadId}
-            onLoadMore={() => loadMore(20)}
-            canLoadMore={canLoadMore}
-            isLoading={isLoading}
-          />
+        <div className="flex-1 px-6 pb-6 min-h-0 overflow-hidden">
+          <Tabs defaultValue="chats" className="h-full flex flex-col">
+            <TabsList className="mb-4">
+              <TabsTrigger value="chats">
+                <MessageSquare className="h-4 w-4 mr-2" />
+                Chats
+              </TabsTrigger>
+              <TabsTrigger value="groups">
+                <Users className="h-4 w-4 mr-2" />
+                Groups
+              </TabsTrigger>
+            </TabsList>
 
-          {/* Chat Area */}
-          {selectedLeadId && selectedLead ? (
-            <ChatWindow 
-              selectedLeadId={selectedLeadId} 
-              selectedLead={selectedLead} 
-            />
-          ) : (
-            <Card className="flex flex-col h-full overflow-hidden items-center justify-center">
-              <div className="text-center">
-                <MessageSquare className="h-20 w-20 mx-auto mb-4 text-muted-foreground/20" />
-                <p className="text-lg font-semibold mb-2">Select a contact</p>
-                <p className="text-muted-foreground">Choose a contact to start messaging</p>
+            <TabsContent value="chats" className="flex-1 min-h-0 overflow-hidden">
+              <div className="grid md:grid-cols-[350px_1fr] gap-4 h-full">
+                {/* Contacts List */}
+                <ContactList
+                  leads={leads}
+                  selectedLeadId={selectedLeadId}
+                  onSelectLead={setSelectedLeadId}
+                  onLoadMore={() => loadMore(20)}
+                  canLoadMore={canLoadMore}
+                  isLoading={isLoading}
+                />
+
+                {/* Chat Area */}
+                {selectedLeadId && selectedLead ? (
+                  <ChatWindow 
+                    selectedLeadId={selectedLeadId} 
+                    selectedLead={selectedLead} 
+                  />
+                ) : (
+                  <Card className="flex flex-col h-full overflow-hidden items-center justify-center">
+                    <div className="text-center">
+                      <MessageSquare className="h-20 w-20 mx-auto mb-4 text-muted-foreground/20" />
+                      <p className="text-lg font-semibold mb-2">Select a contact</p>
+                      <p className="text-muted-foreground">Choose a contact to start messaging</p>
+                    </div>
+                  </Card>
+                )}
               </div>
-            </Card>
-          )}
+            </TabsContent>
+
+            <TabsContent value="groups" className="flex-1 overflow-auto">
+              <GroupsList />
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
+
+      {/* Create Group Dialog */}
+      <CreateGroupDialog 
+        open={showCreateGroupDialog}
+        onOpenChange={setShowCreateGroupDialog}
+      />
 
       {/* Bulk Send Dialog */}
       <Dialog open={showBulkDialog} onOpenChange={setShowBulkDialog}>

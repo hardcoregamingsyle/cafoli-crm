@@ -420,4 +420,16 @@ export default defineSchema({
     status: v.optional(v.string()), // queued, running, completed, stopped
     updatedAt: v.number(),
   }).index("by_process_id", ["processId"]),
+
+  whatsappGroups: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    groupId: v.optional(v.string()), // WhatsApp group ID after creation
+    inviteLink: v.optional(v.string()),
+    participantPhoneNumbers: v.array(v.string()),
+    createdBy: v.id("users"),
+    status: v.string(), // "pending", "created", "failed"
+  })
+    .index("by_created_by", ["createdBy"])
+    .index("by_status", ["status"]),
 });
