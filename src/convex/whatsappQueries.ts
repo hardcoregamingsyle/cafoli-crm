@@ -1,6 +1,7 @@
 import { query, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import { paginationOptsValidator } from "convex/server";
 
 export const getChatsByLeadId = internalQuery({
   args: {
@@ -61,10 +62,7 @@ export const getChatMessagesInternal = internalQuery({
 export const getChatMessages = query({
   args: {
     leadId: v.id("leads"),
-    paginationOpts: v.object({
-      numItems: v.number(),
-      cursor: v.union(v.string(), v.null()),
-    }),
+    paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx, args) => {
     const chats = await ctx.db
@@ -122,10 +120,7 @@ export const getLeadsWithChatStatus = query({
   args: {
     filter: v.union(v.literal("all"), v.literal("mine")),
     userId: v.optional(v.id("users")),
-    paginationOpts: v.object({
-      numItems: v.number(),
-      cursor: v.union(v.string(), v.null()),
-    }),
+    paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx, args) => {
     // Get leads with pagination - ordered by lastActivity descending (latest first)
