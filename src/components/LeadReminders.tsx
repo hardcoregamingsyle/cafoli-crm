@@ -82,7 +82,7 @@ export function LeadReminders() {
 
   return (
     <Dialog open={true} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className={cn("sm:max-w-[600px]", config.borderColor, config.bgColor)}>
+      <DialogContent className={cn("sm:max-w-[600px] max-h-[85vh] overflow-auto", config.borderColor, config.bgColor)}>
         <DialogHeader>
           <div className={cn("flex items-center gap-2", config.iconColor)}>
             <Icon className="h-6 w-6" />
@@ -92,7 +92,7 @@ export function LeadReminders() {
             {config.description}
           </DialogDescription>
         </DialogHeader>
-        <ScrollArea className="max-h-[60vh] mt-4">
+        <div className="max-h-[60vh] mt-4 overflow-auto">
           <div className="space-y-4 pr-4">
             {leads.map((lead: any) => (
               <ReminderLeadCard
@@ -106,7 +106,7 @@ export function LeadReminders() {
               />
             ))}
           </div>
-        </ScrollArea>
+        </div>
         <DialogFooter className="flex sm:justify-between items-center mt-4 gap-4">
           <Button 
             variant="ghost" 

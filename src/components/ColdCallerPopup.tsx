@@ -131,7 +131,7 @@ export function ColdCallerPopup({ leads, isOpen, onClose, userId }: ColdCallerPo
   return (
     <Dialog open={isOpen} onOpenChange={(open) => isTestMode && !open && onClose()}>
       <DialogContent 
-        className="max-w-3xl max-h-[80vh] overflow-y-auto"
+        className="max-w-3xl max-h-[80vh] overflow-auto"
         onInteractOutside={(e) => !isTestMode && e.preventDefault()}
         onEscapeKeyDown={(e) => !isTestMode && e.preventDefault()}
         showCloseButton={isTestMode}

@@ -84,7 +84,7 @@ export function MandatoryFollowUpPopup({ leads }: MandatoryFollowUpPopupProps) {
   return (
     <Dialog open={true} onOpenChange={() => {}}>
       <DialogContent 
-        className="sm:max-w-[500px]" 
+        className="sm:max-w-[500px] max-h-[85vh] overflow-auto" 
         onInteractOutside={(e) => !isTestMode && e.preventDefault()} 
         onEscapeKeyDown={(e) => !isTestMode && e.preventDefault()}
         showCloseButton={isTestMode}
