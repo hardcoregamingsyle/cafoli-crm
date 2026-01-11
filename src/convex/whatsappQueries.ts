@@ -89,14 +89,21 @@ export const getChatMessages = query({
       allMessages.push(...messages);
     }
 
-    // Sort all messages by creation time ascending (oldest first for chat UI)
-    const sortedMessages = allMessages.sort((a, b) => a._creationTime - b._creationTime);
+    // Sort all messages by creation time descending (newest first) for pagination
+    const sortedMessages = allMessages.sort((a, b) => b._creationTime - a._creationTime);
 
-    // Return all messages at once - no pagination limits
+    // Apply pagination manually
+    const { numItems, cursor } = args.paginationOpts;
+    const startIndex = cursor ? parseInt(cursor) : 0;
+    const endIndex = startIndex + numItems;
+    
+    const paginatedMessages = sortedMessages.slice(startIndex, endIndex);
+    const hasMore = endIndex < sortedMessages.length;
+    
     return {
-      page: sortedMessages,
-      isDone: true,
-      continueCursor: null,
+      page: paginatedMessages.reverse(), // Reverse back to ascending order for display
+      isDone: !hasMore,
+      continueCursor: hasMore ? endIndex.toString() : null,
     };
   },
 });
