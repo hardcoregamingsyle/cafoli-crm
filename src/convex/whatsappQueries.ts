@@ -138,25 +138,46 @@ export const getLeadsWithChatStatus = query({
   args: {
     filter: v.union(v.literal("all"), v.literal("mine")),
     userId: v.optional(v.id("users")),
+    searchQuery: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // Fetch leads based on filter
-    // Reduced to 50 to improve loading performance
     let leads;
     
-    if (args.filter === "mine" && args.userId) {
-      leads = await ctx.db
-        .query("leads")
-        .withIndex("by_assigned_to", (q) => q.eq("assignedTo", args.userId))
-        .order("desc")
-        .take(50);
+    if (args.searchQuery) {
+      // Use search index if query is provided
+      if (args.filter === "mine" && args.userId) {
+        leads = await ctx.db
+          .query("leads")
+          .withSearchIndex("search_all", (q) => 
+            q.search("searchText", args.searchQuery!)
+             .eq("assignedTo", args.userId!)
+          )
+          .take(50);
+      } else {
+        leads = await ctx.db
+          .query("leads")
+          .withSearchIndex("search_all", (q) => 
+            q.search("searchText", args.searchQuery!)
+          )
+          .take(50);
+      }
     } else {
-      // For all leads, prioritize those with recent activity
-      leads = await ctx.db
-        .query("leads")
-        .withIndex("by_last_activity")
-        .order("desc")
-        .take(50);
+      // Standard list
+      if (args.filter === "mine" && args.userId) {
+        leads = await ctx.db
+          .query("leads")
+          .withIndex("by_assigned_to", (q) => q.eq("assignedTo", args.userId))
+          .order("desc")
+          .take(200);
+      } else {
+        // For all leads, prioritize those with recent activity
+        leads = await ctx.db
+          .query("leads")
+          .withIndex("by_last_activity")
+          .order("desc")
+          .take(200);
+      }
     }
 
     // Enrich leads with chat status

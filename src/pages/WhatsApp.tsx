@@ -25,6 +25,7 @@ const api = getConvexApi() as any;
 export default function WhatsApp() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Determine filter based on user role
   const filter = user?.role === ROLES.ADMIN ? "all" : "mine";
@@ -32,7 +33,7 @@ export default function WhatsApp() {
   // Use standard query instead of paginated query to avoid loading issues
   const leadsResult = useQuery(
     api.whatsappQueries.getLeadsWithChatStatus,
-    { filter, userId: user?._id }
+    { filter, userId: user?._id, searchQuery: searchQuery || undefined }
   );
 
   const leads = leadsResult || [];
@@ -180,6 +181,8 @@ export default function WhatsApp() {
                   onLoadMore={() => {}}
                   canLoadMore={canLoadMore}
                   isLoading={isLoading}
+                  searchQuery={searchQuery}
+                  onSearchChange={setSearchQuery}
                 />
 
                 {/* Chat Area */}

@@ -14,6 +14,8 @@ interface ContactListProps {
   onLoadMore: () => void;
   canLoadMore: boolean;
   isLoading: boolean;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
 }
 
 export function ContactList({
@@ -23,14 +25,28 @@ export function ContactList({
   onLoadMore,
   canLoadMore,
   isLoading,
+  searchQuery,
+  onSearchChange,
 }: ContactListProps) {
-  const [searchQuery, setSearchQuery] = useState("");
+  const [internalSearchQuery, setInternalSearchQuery] = useState("");
   const [unreadFilter, setUnreadFilter] = useState<string>("all");
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
+  const isControlled = onSearchChange !== undefined;
+  const currentSearchQuery = isControlled ? (searchQuery || "") : internalSearchQuery;
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (isControlled && onSearchChange) {
+      onSearchChange(val);
+    } else {
+      setInternalSearchQuery(val);
+    }
+  };
+
   const filteredLeads = leads.filter(lead => {
-    const matchesSearch = lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      lead.mobile.includes(searchQuery);
+    const matchesSearch = lead.name.toLowerCase().includes(currentSearchQuery.toLowerCase()) ||
+      lead.mobile.includes(currentSearchQuery);
     
     if (unreadFilter === "unread") {
       return matchesSearch && (lead.unreadCount > 0);
@@ -79,8 +95,8 @@ export function ContactList({
           <Input
             placeholder="Search contacts..."
             className="pl-9"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={currentSearchQuery}
+            onChange={handleSearchChange}
           />
         </div>
         <ToggleGroup type="single" value={unreadFilter} onValueChange={(val) => val && setUnreadFilter(val)} className="justify-start">

@@ -1,14 +1,4 @@
-export const sendMedia = internalAction({
-  args: {
-    phoneNumber: v.string(),
-    message: v.optional(v.string()),
-    leadId: v.id("leads"),
-    storageId: v.id("_storage"),
-    fileName: v.string(),
-    mimeType: v.string(),
-  },
-  handler: async (ctx, args) => {
-    // Delegate to the robust implementation in messages.ts
-    return await ctx.runAction(internal.whatsapp.messages.sendMedia, args);
-  },
-});
+  .searchIndex("search_all", {
+    searchField: "searchText",
+    filterFields: ["assignedTo"],
+  }),
