@@ -237,6 +237,58 @@ export const deleteProduct = mutation({
   },
 });
 
+export const deduplicateProducts = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const products = await ctx.db.query("products").collect();
+    const productsByName = new Map<string, any[]>();
+
+    // Group products by name
+    for (const product of products) {
+      const name = product.name;
+      if (!productsByName.has(name)) {
+        productsByName.set(name, []);
+      }
+      productsByName.get(name)!.push(product);
+    }
+
+    let deletedCount = 0;
+
+    for (const [name, group] of productsByName) {
+      if (group.length > 1) {
+        // Sort by creation time descending (newest first)
+        group.sort((a, b) => b._creationTime - a._creationTime);
+
+        // Keep the first one (index 0), delete the rest
+        const toDelete = group.slice(1);
+
+        for (const product of toDelete) {
+          // Delete associated images from storage
+          const storageIds = new Set<string>();
+          if (product.images) product.images.forEach((id: string) => storageIds.add(id));
+          if (product.mainImage) storageIds.add(product.mainImage);
+          if (product.flyer) storageIds.add(product.flyer);
+          if (product.bridgeCard) storageIds.add(product.bridgeCard);
+          if (product.visualaid) storageIds.add(product.visualaid);
+
+          for (const storageId of storageIds) {
+            try {
+              await ctx.storage.delete(storageId as any);
+            } catch (e) {
+              // Ignore if already deleted
+            }
+          }
+
+          await ctx.db.delete(product._id);
+          deletedCount++;
+        }
+      }
+    }
+
+    return deletedCount;
+  },
+});
+
 export const getStorageMetadata = internalQuery({
   args: { storageId: v.id("_storage") },
   handler: async (ctx, args) => {
