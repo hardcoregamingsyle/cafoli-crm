@@ -167,7 +167,7 @@ export const getLeadsWithChatStatus = query({
       if (args.filter === "mine" && args.userId) {
         leads = await ctx.db
           .query("leads")
-          .withIndex("by_assigned_to", (q) => q.eq("assignedTo", args.userId))
+          .withIndex("by_assigned_to_and_last_activity", (q) => q.eq("assignedTo", args.userId))
           .order("desc")
           .take(200);
       } else {

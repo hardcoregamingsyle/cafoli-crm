@@ -75,6 +75,11 @@ export const storeMessage = internalMutation({
       quotedMessageId: quotedMessageId,
     });
 
+    // Update lead's lastActivity to ensure it moves to the top of the list
+    await ctx.db.patch(args.leadId, {
+      lastActivity: Date.now(),
+    });
+
     // Log activity
     await ctx.scheduler.runAfter(0, internal.activityLogs.logActivity, {
       category: args.direction === "inbound" ? LOG_CATEGORIES.WHATSAPP_INCOMING : LOG_CATEGORIES.WHATSAPP_OUTGOING,

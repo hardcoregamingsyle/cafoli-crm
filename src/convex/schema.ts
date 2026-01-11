@@ -121,6 +121,7 @@ export default defineSchema({
     searchText: v.optional(v.string()),
   })
   .index("by_assigned_to", ["assignedTo"])
+  .index("by_assigned_to_and_last_activity", ["assignedTo", "lastActivity"])
   .index("by_status", ["status"])
   .index("by_source", ["source"])
   .index("by_pharmavends_uid", ["pharmavendsUid"])
