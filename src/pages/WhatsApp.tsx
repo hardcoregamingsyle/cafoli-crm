@@ -11,7 +11,7 @@ import { Users } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
 import { ROLES } from "@/lib/constants";
 import { useAuth } from "@/hooks/use-auth";
-import { usePaginatedQuery, useAction } from "convex/react";
+import { useQuery, useAction } from "convex/react";
 import { MessageSquare, Settings, Send } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router";
@@ -29,16 +29,15 @@ export default function WhatsApp() {
   // Determine filter based on user role
   const filter = user?.role === ROLES.ADMIN ? "all" : "mine";
 
-  // Use paginated query for leads (20 items per page)
-  const { results: leadsResult, status, loadMore } = usePaginatedQuery(
+  // Use standard query instead of paginated query to avoid loading issues
+  const leadsResult = useQuery(
     api.whatsappQueries.getLeadsWithChatStatus,
-    { filter, userId: user?._id },
-    { initialNumItems: 20 }
+    { filter, userId: user?._id }
   );
 
-  const leads = (leadsResult as any)?.page || [];
-  const canLoadMore = status === "CanLoadMore";
-  const isLoading = status === "LoadingFirstPage";
+  const leads = leadsResult || [];
+  const canLoadMore = false;
+  const isLoading = leadsResult === undefined;
 
   const [selectedLeadId, setSelectedLeadId] = useState<Id<"leads"> | null>(null);
   const selectedLead = leads.find((l: any) => l._id === selectedLeadId);
@@ -178,7 +177,7 @@ export default function WhatsApp() {
                   leads={leads}
                   selectedLeadId={selectedLeadId}
                   onSelectLead={setSelectedLeadId}
-                  onLoadMore={() => loadMore(20)}
+                  onLoadMore={() => {}}
                   canLoadMore={canLoadMore}
                   isLoading={isLoading}
                 />

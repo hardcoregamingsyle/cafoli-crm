@@ -24,7 +24,8 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export default function Catalog() {
-  const deduplicateProducts = useMutation((api as any).products.deduplicateProducts);
+  // @ts-ignore - Type instantiation is excessively deep
+  const deduplicateProducts = useMutation(api.products.deduplicateProducts);
   const [isDeduplicating, setIsDeduplicating] = useState(false);
 
   const handleDeduplicate = async () => {
