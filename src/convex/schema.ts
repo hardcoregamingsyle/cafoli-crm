@@ -317,8 +317,8 @@ export default defineSchema({
     quotedMessageId: v.optional(v.id("messages")),
   })
   .index("by_chat", ["chatId"])
-  .index("by_chat_status", ["chatId", "status"])
-  .index("by_external_id", ["externalId"]),
+  .index("by_external_id", ["externalId"])
+  .index("by_chat_status", ["chatId", "status"]),
 
   aiSuggestions: defineTable({
     leadId: v.optional(v.id("leads")),

@@ -74,7 +74,7 @@ export const getChatMessages = query({
       return {
         page: [],
         isDone: true,
-        continueCursor: null,
+        continueCursor: "",
       };
     }
 

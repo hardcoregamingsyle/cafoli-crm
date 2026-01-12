@@ -10,7 +10,7 @@ export const storeMessage = internalMutation({
     content: v.string(),
     direction: v.string(),
     status: v.string(),
-    externalId: v.string(),
+    externalId: v.optional(v.string()),
     messageType: v.optional(v.string()),
     mediaUrl: v.optional(v.string()),
     mediaName: v.optional(v.string()),
@@ -19,49 +19,29 @@ export const storeMessage = internalMutation({
     quotedMessageExternalId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // Find or create chat
-    let chat = await ctx.db
+    const chat = await ctx.db
       .query("chats")
       .withIndex("by_lead", (q) => q.eq("leadId", args.leadId))
       .first();
 
     if (!chat) {
-      const chatId = await ctx.db.insert("chats", {
-        leadId: args.leadId,
-        platform: "whatsapp",
-        externalId: args.phoneNumber,
-        lastMessageAt: Date.now(),
-        unreadCount: args.direction === "inbound" ? 1 : 0,
-      });
-      chat = await ctx.db.get(chatId);
-    } else {
-      const updates: any = {
-        lastMessageAt: Date.now(),
-      };
-      
-      if (args.direction === "inbound") {
-        updates.unreadCount = (chat.unreadCount || 0) + 1;
-      }
-      
-      await ctx.db.patch(chat._id, updates);
+      throw new Error("Chat not found for this lead");
     }
 
-    if (!chat) throw new Error("Failed to create chat");
-
-    // Resolve quoted message ID
     let quotedMessageId = args.quotedMessageId;
+
+    // If we have an external ID for the quoted message but no internal ID, try to find it
     if (!quotedMessageId && args.quotedMessageExternalId) {
-      const quotedMsg = await ctx.db
+      const quotedMessage = await ctx.db
         .query("messages")
-        .withIndex("by_external_id", (q) => q.eq("externalId", args.quotedMessageExternalId))
+        .withIndex("by_external_id", (q) => q.eq("externalId", args.quotedMessageExternalId!))
         .first();
       
-      if (quotedMsg) {
-        quotedMessageId = quotedMsg._id;
+      if (quotedMessage) {
+        quotedMessageId = quotedMessage._id;
       }
     }
 
-    // Store message
     const messageId = await ctx.db.insert("messages", {
       chatId: chat._id,
       direction: args.direction,
