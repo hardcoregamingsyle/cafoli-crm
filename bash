@@ -1,1 +1,1 @@
-npx convex run test_ai_comprehensive:runComprehensiveTests
+grep -r "usePaginatedQuery" src | grep "whatsappQueries"

@@ -1,4 +1,7 @@
-  .searchIndex("search_all", {
-    searchField: "searchText",
-    filterFields: ["assignedTo"],
-  }),
+src/components/whatsapp/ChatWindow.tsx
+
+// Use standard query instead of paginated query to avoid loading issues
+const leadsResult = useQuery(
+  api.whatsappQueries.getLeadsWithChatStatus,
+  { filter, userId: user?._id, searchQuery: searchQuery || undefined }
+);
