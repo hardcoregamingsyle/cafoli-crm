@@ -50,6 +50,20 @@ export default defineSchema({
     })),
   }).index("email", ["email"]),
 
+  pushSubscriptions: defineTable({
+    userId: v.id("users"),
+    endpoint: v.string(),
+    keys: v.object({
+      p256dh: v.string(),
+      auth: v.string(),
+    }),
+    deviceType: v.optional(v.string()),
+    createdAt: v.number(),
+    lastUsedAt: v.number(),
+  })
+  .index("by_user", ["userId"])
+  .index("by_endpoint", ["endpoint"]),
+
   leads: defineTable({
     name: v.string(),
     subject: v.string(),

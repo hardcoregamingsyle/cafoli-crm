@@ -690,7 +690,7 @@ export const dailySummaryAndScoreRegeneration = internalAction({
       console.log(`Processing summary batch ${Math.floor(i / parallelCount) + 1} (${batch.length} leads in parallel)`);
 
       // Process each lead in parallel, each assigned to a different API key
-      const promises = batch.map(async (lead, index) => {
+      const promises = batch.map(async (lead: any, index: number) => {
         try {
           await ctx.runAction(internal.ai.generateLeadSummaryWithChatInternal, {
             leadId: lead._id,
@@ -706,7 +706,7 @@ export const dailySummaryAndScoreRegeneration = internalAction({
       const results = await Promise.all(promises);
 
       // Count successes and failures
-      results.forEach((result) => {
+      results.forEach((result: any) => {
         if (result.success) {
           summariesGenerated++;
         } else {
@@ -714,7 +714,7 @@ export const dailySummaryAndScoreRegeneration = internalAction({
         }
       });
 
-      console.log(`Summary batch complete: ${results.filter(r => r.success).length}/${results.length} succeeded (Total: ${summariesGenerated}/${leadsNeedingSummaries.length})`);
+      console.log(`Summary batch complete: ${results.filter((r: any) => r.success).length}/${results.length} succeeded (Total: ${summariesGenerated}/${leadsNeedingSummaries.length})`);
 
       // 10 second cooldown between batches
       if (i + parallelCount < leadsNeedingSummaries.length) {
@@ -739,7 +739,7 @@ export const dailySummaryAndScoreRegeneration = internalAction({
       console.log(`Processing score batch ${Math.floor(i / parallelCount) + 1} (${batch.length} leads in parallel)`);
 
       // Process each lead in parallel, each assigned to a different API key
-      const promises = batch.map(async (lead, index) => {
+      const promises = batch.map(async (lead: any, index: number) => {
         try {
           await ctx.runAction(internal.ai.scoreLeadWithContextInternal, {
             leadId: lead._id,
@@ -755,7 +755,7 @@ export const dailySummaryAndScoreRegeneration = internalAction({
       const results = await Promise.all(promises);
 
       // Count successes and failures
-      results.forEach((result) => {
+      results.forEach((result: any) => {
         if (result.success) {
           scoresGenerated++;
         } else {
@@ -763,7 +763,7 @@ export const dailySummaryAndScoreRegeneration = internalAction({
         }
       });
 
-      console.log(`Score batch complete: ${results.filter(r => r.success).length}/${results.length} succeeded (Total: ${scoresGenerated}/${leadsNeedingScores.length})`);
+      console.log(`Score batch complete: ${results.filter((r: any) => r.success).length}/${results.length} succeeded (Total: ${scoresGenerated}/${leadsNeedingScores.length})`);
 
       // 10 second cooldown between batches
       if (i + parallelCount < leadsNeedingScores.length) {

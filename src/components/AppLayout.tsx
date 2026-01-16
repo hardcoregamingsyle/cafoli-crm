@@ -32,6 +32,8 @@ import { ProductUploadDialog } from "@/components/products/ProductUploadDialog";
 import { InterventionPopup } from "./InterventionPopup";
 import { FollowUpReminderPopup } from "./FollowUpReminderPopup";
 import { getConvexApi } from "@/lib/convex-api";
+import { PushNotificationManager } from "@/components/PushNotificationManager";
+import { Id } from "@/convex/_generated/dataModel";
 
 const api = getConvexApi() as any;
 import { FollowUpNotifications } from "./FollowUpNotifications";
@@ -41,7 +43,7 @@ interface AppLayoutProps {
   children: React.ReactNode;
 }
 
-export default function AppLayout({ children }: AppLayoutProps) {
+export function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, signOut } = useAuth();
   
   const ensureRole = useMutation(api.users.ensureRole);
@@ -289,11 +291,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const renderSidebarContent = () => (
     <div className="flex flex-col h-full bg-sidebar border-r border-sidebar-border">
       <div className="p-6">
-        <div className="flex items-center gap-2 font-bold text-xl text-sidebar-primary">
-          <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground">
-            C
+        <div className="flex items-center justify-between font-bold text-xl text-sidebar-primary">
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground">
+              C
+            </div>
+            Cafoli CRM
           </div>
-          Cafoli CRM
+          {user && <PushNotificationManager userId={user.id as Id<"users">} />}
         </div>
       </div>
       
@@ -409,16 +414,27 @@ export default function AppLayout({ children }: AppLayoutProps) {
       {/* Mobile Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 border-b bg-background z-40 flex items-center px-4 justify-between">
         <div className="font-bold text-lg">Cafoli CRM</div>
-        <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-          <SheetTrigger asChild>
-            <Button variant="ghost" size="icon">
-              <Menu className="h-6 w-6" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="p-0 w-64">
-            {renderSidebarContent()}
-          </SheetContent>
-        </Sheet>
+        <div className="flex items-center gap-2">
+          {user && <PushNotificationManager userId={user.id as Id<"users">} />}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => signOut()}
+            title="Sign out"
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
+          <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <Menu className="h-6 w-6" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="p-0 w-64">
+              {renderSidebarContent()}
+            </SheetContent>
+          </Sheet>
+        </div>
       </div>
 
       {/* Main Content */}

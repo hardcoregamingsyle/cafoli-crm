@@ -60,6 +60,8 @@ import type * as migrations_updateProductsSchema from "../migrations/updateProdu
 import type * as pharmavends from "../pharmavends.js";
 import type * as pharmavendsMutations from "../pharmavendsMutations.js";
 import type * as products from "../products.js";
+import type * as pushNotifications from "../pushNotifications.js";
+import type * as pushNotificationsActions from "../pushNotificationsActions.js";
 import type * as quickReplies from "../quickReplies.js";
 import type * as rangePdfs from "../rangePdfs.js";
 import type * as reportPdfGenerator from "../reportPdfGenerator.js";
@@ -148,6 +150,8 @@ declare const fullApi: ApiFromModules<{
   pharmavends: typeof pharmavends;
   pharmavendsMutations: typeof pharmavendsMutations;
   products: typeof products;
+  pushNotifications: typeof pushNotifications;
+  pushNotificationsActions: typeof pushNotificationsActions;
   quickReplies: typeof quickReplies;
   rangePdfs: typeof rangePdfs;
   reportPdfGenerator: typeof reportPdfGenerator;

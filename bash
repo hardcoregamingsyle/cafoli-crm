@@ -1,1 +1,1 @@
-grep -r "usePaginatedQuery" src | grep "whatsappQueries"
+pnpm add web-push @types/web-push

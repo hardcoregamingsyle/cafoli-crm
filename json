@@ -1,7 +1,1 @@
-{
-  "file_paths": [
-    "src/convex/schema.ts",
-    "src/components/whatsapp/ContactList.tsx"
-  ],
-  "replace_files_in_context": false
-}
+{"file_paths":["src/components/AppLayout.tsx","public/sw.js"],"replace_files_in_context":false}
