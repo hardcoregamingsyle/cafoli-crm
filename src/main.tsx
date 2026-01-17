@@ -6,6 +6,7 @@ import { ConvexProvider } from "convex/react";
 import { StrictMode, lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router";
+import { ThemeProvider } from "next-themes";
 import AppLayout from "@/components/AppLayout";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import "./index.css";
@@ -139,10 +140,12 @@ createRoot(document.getElementById("root")!).render(
     <VlyToolbar />
     <InstrumentationProvider>
       <ConvexProvider client={convex}>
-        <Suspense fallback={<RouteLoading />}>
-          <RouterProvider router={router} />
-        </Suspense>
-        <Toaster />
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <Suspense fallback={<RouteLoading />}>
+            <RouterProvider router={router} />
+          </Suspense>
+          <Toaster />
+        </ThemeProvider>
       </ConvexProvider>
     </InstrumentationProvider>
   </StrictMode>,
