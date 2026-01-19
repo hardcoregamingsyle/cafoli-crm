@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "preview": "vite preview"
+    "preview": "vite preview",
     "dist": "pnpm run build && electron-builder --win --publish never"
   },
   "dependencies": {
@@ -95,7 +95,7 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.48.1",
     "vite": "^7.2.6"
-  }
+  },
   "build": {
     "appId": "com.cafoli.crm",
     "productName": "Cafoli CRM",
