@@ -36,12 +36,8 @@ function RouteLoading() {
   );
 }
 
-// Ensure the URL is available
-const convexUrl = import.meta.env.VITE_CONVEX_URL || "https://polished-marmot-96.convex.cloud";
-
-if (!convexUrl || convexUrl === 'undefined' || convexUrl === '') {
-  console.error("VITE_CONVEX_URL is not set.");
-}
+// Hardcoded Convex URL for Electron build
+const convexUrl = "https://polished-marmot-96.convex.cloud";
 
 const convex = new ConvexReactClient(convexUrl);
 
