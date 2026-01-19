@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router";
+import { useNavigate } from "react-router-dom";
 import { useFollowUpNotifications } from "@/hooks/useFollowUpNotifications";
 import { FollowUpNotificationDialog } from "@/components/followup/FollowUpNotificationDialog";
 

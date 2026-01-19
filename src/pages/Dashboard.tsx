@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { getConvexApi } from "@/lib/convex-api";
 
 const api = getConvexApi() as any;
-import { useNavigate } from "react-router";
+import { useNavigate } from "react-router-dom";
 
 export default function Dashboard() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();

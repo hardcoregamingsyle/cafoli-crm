@@ -34,7 +34,7 @@ import { Label } from "@/components/ui/label";
 import { Pie, PieChart, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { useAuth } from "@/hooks/use-auth";
 import AppLayout from "@/components/AppLayout";
-import { useNavigate } from "react-router";
+import { useNavigate } from "react-router-dom";
 
 // Colors for charts
 const COLORS = [

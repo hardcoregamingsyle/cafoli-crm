@@ -8,7 +8,7 @@ import { useState } from "react";
 import { useMutation } from "convex/react";
 import { toast } from "sonner";
 import { getConvexApi } from "@/lib/convex-api";
-import { useSearchParams } from "react-router";
+import { useSearchParams } from "react-router-dom";
 import LeadDetails from "@/components/LeadDetails";
 import { Eye, ArrowLeft, X } from "lucide-react";
 

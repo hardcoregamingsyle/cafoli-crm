@@ -14,7 +14,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useAction } from "convex/react";
 import { MessageSquare, Settings, Send } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { LeadSelector } from "@/components/LeadSelector";
 import { Textarea } from "@/components/ui/textarea";

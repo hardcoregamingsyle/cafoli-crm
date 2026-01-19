@@ -16,7 +16,7 @@ import { useLeadEditor } from "@/hooks/useLeadEditor";
 import { getConvexApi } from "@/lib/convex-api";
 
 const api = getConvexApi() as any;
-import { useSearchParams } from "react-router";
+import { useSearchParams } from "react-router-dom";
 import { TagManager } from "@/components/TagManager";
 import {
   Select,

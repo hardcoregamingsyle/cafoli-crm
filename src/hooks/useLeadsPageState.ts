@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { useSearchParams, useLocation } from "react-router";
+import { useSearchParams, useLocation } from "react-router-dom";
 import { Id } from "@/convex/_generated/dataModel";
 
 export function useLeadsPageState() {

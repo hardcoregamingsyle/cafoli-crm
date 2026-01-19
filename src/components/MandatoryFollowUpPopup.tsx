@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import { getConvexApi } from "@/lib/convex-api";
 import { Doc } from "@/convex/_generated/dataModel";
 import { Calendar, Phone, Mail } from "lucide-react";
-import { useSearchParams } from "react-router";
+import { useSearchParams } from "react-router-dom";
 
 interface MandatoryFollowUpPopupProps {
   leads: Doc<"leads">[];

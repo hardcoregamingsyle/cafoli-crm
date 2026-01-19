@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { useNavigate } from "react-router";
+import { useNavigate } from "react-router-dom";
 import { getConvexApi } from "@/lib/convex-api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { Button } from "./ui/button";

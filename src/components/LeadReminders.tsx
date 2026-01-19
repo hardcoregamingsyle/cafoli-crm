@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useNavigate } from "react-router";
+import { useNavigate } from "react-router-dom";
 import { BellOff } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";

@@ -8,7 +8,7 @@ const api = getConvexApi() as any;
 import { useQuery, useMutation } from "convex/react";
 import { Plus, Play, Pause, Trash2, Edit, BarChart } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { useNavigate } from "react-router";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Id } from "@/convex/_generated/dataModel";
 
