@@ -6,28 +6,35 @@ import { defineConfig } from "vite";
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  
+  // CRITICAL FIX: This makes paths relative (./assets) instead of absolute (/assets).
+  // Without this, Electron looks for files at C:/ and fails.
+  base: "./",
+  
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  // Explicitly define environment variables for Cloudflare Pages
+  
+  // Explicitly define environment variables for compatibility
   define: {
     'import.meta.env.VITE_CONVEX_URL': JSON.stringify(process.env.VITE_CONVEX_URL || ''),
   },
+  
   build: {
-    // ... keep existing code
     sourcemap: false,
-    rollupOptions: {
-      // ... keep existing code
-    },
     chunkSizeWarningLimit: 1000,
     target: 'esnext',
     minify: 'esbuild',
+    rollupOptions: {
+      output: {
+        // Ensures clean file output for Electron
+        manualChunks: undefined,
+      },
+    },
   },
-  optimizeDeps: {
-    // ... keep existing code
-  },
+  
   server: {
     hmr: true,
   },
