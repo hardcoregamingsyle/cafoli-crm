@@ -92,6 +92,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     { name: "WhatsApp", href: "/whatsapp", icon: MessageSquare },
     { name: "Emailing", href: "/emailing", icon: Mail },
     { name: "Campaigns", href: "/campaigns", icon: BarChart3 },
+    { name: "Bulk Messenger", href: "/bulk-messenger", icon: Send },
     { name: "Catalog", href: "/catalog", icon: Package },
     { name: "Reports", href: "/reports", icon: PieChart },
     { name: "Activity Logs", href: "/logs", icon: FileText },
