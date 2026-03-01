@@ -89,7 +89,7 @@ export const cleanupOldContacts = mutation({
       await ctx.db.patch(contact._id, { status: "cold" });
       
       // Add to Cold Caller Leads
-      await ctx.db.insert("coldCallerLeads" as any, {
+      await ctx.db.insert("coldCallerLeads", {
         name: contact.name || "Cold Bulk Contact",
         mobile: contact.phoneNumber,
         source: "Expired Bulk Campaign",

@@ -1,54 +1,101 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
-export { ROLES } from "../lib/constants";
-
 export default defineSchema({
-  products: defineTable({
-    name: v.string(),
-    brandName: v.string(),
-    molecule: v.optional(v.string()),
-    mrp: v.string(),
-    packaging: v.optional(v.string()),
-    rate: v.optional(v.string()), // Temporary: will be removed after migration
-    images: v.array(v.id("_storage")), // Keep for backward compatibility
-    
-    // New fields
-    mainImage: v.optional(v.id("_storage")), // Compulsory for new, optional for migration
-    flyer: v.optional(v.id("_storage")),
-    bridgeCard: v.optional(v.id("_storage")),
-    visualaid: v.optional(v.id("_storage")), // PDF
-
-    description: v.optional(v.string()),
-    pageLink: v.optional(v.string()),
-    videoLink: v.optional(v.string()),
-    categories: v.optional(v.array(v.id("productCategories"))),
-  }).index("by_name", ["name"]),
-
-  productCategories: defineTable({
-    name: v.string(),
-  }).index("by_name", ["name"]),
-
-  rangePdfs: defineTable({
-    name: v.string(),
-    division: v.optional(v.string()),
-    category: v.optional(v.string()), // "DIVISION" or "THERAPEUTIC"
-    storageId: v.id("_storage"),
-  })
-  .index("by_name", ["name"])
-  .index("by_division", ["division"]),
-
   users: defineTable({
     name: v.optional(v.string()),
-    image: v.optional(v.string()),
     email: v.optional(v.string()),
-    role: v.optional(v.union(v.literal("admin"), v.literal("staff"), v.literal("uploader"))),
-    passwordHash: v.optional(v.string()),
-    
-    preferences: v.optional(v.object({
-      leadRemindersEnabled: v.optional(v.boolean()),
-    })),
-  }).index("email", ["email"]),
+    image: v.optional(v.string()),
+    role: v.optional(v.string()), // "admin", "staff", "uploader"
+    tokenIdentifier: v.string(),
+  }).index("by_token", ["tokenIdentifier"]),
+
+  leads: defineTable({
+    name: v.string(),
+    subject: v.optional(v.string()),
+    source: v.optional(v.string()),
+    mobile: v.string(),
+    altMobile: v.optional(v.string()),
+    email: v.optional(v.string()),
+    altEmail: v.optional(v.string()),
+    agencyName: v.optional(v.string()),
+    pincode: v.optional(v.string()),
+    state: v.optional(v.string()),
+    district: v.optional(v.string()),
+    station: v.optional(v.string()),
+    message: v.optional(v.string()),
+    status: v.string(), // "Cold", "Hot", "Mature"
+    type: v.optional(v.string()), // "Relevant", "Irrelevant", "To be Decided"
+    assignedTo: v.optional(v.id("users")),
+    assignedToName: v.optional(v.string()),
+    nextFollowUpDate: v.optional(v.number()),
+    lastActivity: v.number(),
+    pharmavendsUid: v.optional(v.string()),
+    indiamartUniqueId: v.optional(v.string()),
+    priorityScore: v.optional(v.number()),
+    tags: v.optional(v.array(v.id("tags"))),
+  }).index("by_mobile", ["mobile"])
+    .index("by_assignedTo", ["assignedTo"])
+    .index("by_status", ["status"]),
+
+  tags: defineTable({
+    name: v.string(),
+    color: v.string(),
+  }),
+
+  campaigns: defineTable({
+    userId: v.id("users"),
+    name: v.string(),
+    description: v.optional(v.string()),
+    type: v.string(), // "sequence"
+    status: v.string(), // "active", "paused", "completed"
+    leadSelection: v.object({
+      type: v.string(), // "all", "filtered"
+      tagIds: v.optional(v.array(v.id("tags"))),
+      statuses: v.optional(v.array(v.string())),
+      sources: v.optional(v.array(v.string())),
+      autoEnrollNew: v.boolean(),
+    }),
+    blocks: v.array(v.any()),
+    connections: v.array(v.any()),
+    createdAt: v.number(),
+  }).index("by_userId", ["userId"]),
+
+  bulkContacts: defineTable({
+    adminId: v.id("users"),
+    phoneNumber: v.string(),
+    name: v.optional(v.string()),
+    templateId: v.string(),
+    metadata: v.optional(v.any()),
+    status: v.string(), // "sent", "replied", "cold"
+    sentAt: v.number(),
+    lastInteractionAt: v.optional(v.number()),
+  }).index("by_sentAt", ["sentAt"])
+    .index("by_phoneNumber", ["phoneNumber"])
+    .index("by_adminId", ["adminId"]),
+
+  coldCallerLeads: defineTable({
+    name: v.string(),
+    mobile: v.string(),
+    source: v.optional(v.string()),
+    status: v.string(),
+    lastActivity: v.number(),
+    originalContactId: v.optional(v.id("bulkContacts")),
+    assignedTo: v.optional(v.id("users")),
+    nextFollowUpDate: v.optional(v.number()),
+    type: v.optional(v.string()),
+  }).index("by_mobile", ["mobile"])
+    .index("by_assignedTo", ["assignedTo"]),
+
+  brevoApiKeys: defineTable({
+    adminId: v.id("users"),
+    apiKey: v.string(),
+    label: v.optional(v.string()),
+    dailyLimit: v.number(),
+    usageCount: v.number(),
+    lastUsedAt: v.number(),
+    isActive: v.boolean(),
+  }).index("by_adminId", ["adminId"]),
 
   pushSubscriptions: defineTable({
     userId: v.id("users"),
@@ -60,391 +107,46 @@ export default defineSchema({
     deviceType: v.optional(v.string()),
     createdAt: v.number(),
     lastUsedAt: v.number(),
-  })
-  .index("by_user", ["userId"])
-  .index("by_endpoint", ["endpoint"]),
-
-  leads: defineTable({
-    name: v.string(),
-    subject: v.string(),
-    source: v.string(),
-    assignedTo: v.optional(v.id("users")),
-    
-    // Contact Info
-    mobile: v.string(),
-    altMobile: v.optional(v.string()),
-    email: v.optional(v.string()),
-    altEmail: v.optional(v.string()),
-    
-    // Details
-    agencyName: v.optional(v.string()),
-    pincode: v.optional(v.string()),
-    state: v.optional(v.string()),
-    district: v.optional(v.string()),
-    station: v.optional(v.string()),
-    message: v.optional(v.string()),
-    
-    // Status & Classification
-    status: v.optional(v.string()),
-    type: v.optional(v.string()),
-    
-    tags: v.optional(v.array(v.id("tags"))),
-
-    nextFollowUpDate: v.optional(v.number()),
-    lastActivity: v.number(),
-
-    // AI-powered fields
-    aiScore: v.optional(v.number()),
-    aiScoreTier: v.optional(v.string()),
-    aiScoreRationale: v.optional(v.string()),
-    aiScoredAt: v.optional(v.number()),
-
-    // Special flags
-    adminAssignmentRequired: v.optional(v.boolean()),
-    isColdCallerLead: v.optional(v.boolean()),
-    coldCallerAssignedAt: v.optional(v.number()),
-    coldCallerAssignedTo: v.optional(v.id("users")),
-    
-    // Pharmavends specific fields
-    pharmavendsUid: v.optional(v.string()),
-    pharmavendsMetadata: v.optional(v.object({
-      gstNo: v.string(),
-      drugLicence: v.string(),
-      receivedOn: v.string(),
-      requirementType: v.string(),
-      timeToCall: v.string(),
-      profession: v.string(),
-      experience: v.string(),
-    })),
-    
-    // IndiaMART specific fields
-    indiamartUniqueId: v.optional(v.string()),
-    indiamartMetadata: v.optional(v.object({
-      queryTime: v.string(),
-      queryType: v.string(),
-      mcatName: v.string(),
-      productName: v.string(),
-      countryIso: v.string(),
-      callDuration: v.optional(v.string()),
-    })),
-    
-    // Email flags
-    welcomeEmailSent: v.optional(v.boolean()),
-    
-    // Combined search field
-    searchText: v.optional(v.string()),
-  })
-  .index("by_assigned_to", ["assignedTo"])
-  .index("by_assigned_to_and_last_activity", ["assignedTo", "lastActivity"])
-  .index("by_status", ["status"])
-  .index("by_source", ["source"])
-  .index("by_pharmavends_uid", ["pharmavendsUid"])
-  .index("by_indiamart_unique_id", ["indiamartUniqueId"])
-  .index("by_mobile", ["mobile"])
-  .index("by_last_activity", ["lastActivity"])
-  .index("by_cold_caller_assigned_to", ["coldCallerAssignedTo"])
-  .index("by_is_cold_caller", ["isColdCallerLead"])
-  .index("by_type", ["type"])
-  .index("by_ai_score", ["aiScore"])
-  .index("by_ai_score_tier", ["aiScoreTier"])
-  .searchIndex("search_name", {
-    searchField: "name",
-    filterFields: ["assignedTo"],
-  })
-  .searchIndex("search_all", {
-    searchField: "searchText",
-    filterFields: ["assignedTo"],
-  }),
-
-  tags: defineTable({
-    name: v.string(),
-    color: v.string(),
-  })
-  .index("by_name", ["name"])
-  .index("by_color", ["color"]),
-
-  comments: defineTable({
-    leadId: v.id("leads"),
-    userId: v.optional(v.id("users")),
-    content: v.string(),
-    isSystem: v.optional(v.boolean()),
-  }).index("by_lead", ["leadId"]),
-
-  followups: defineTable({
-    leadId: v.id("leads"),
-    assignedTo: v.optional(v.id("users")),
-    scheduledAt: v.number(),
-    completedAt: v.optional(v.number()),
-    status: v.string(),
-    completionStatus: v.optional(v.string()),
-  })
-  .index("by_lead", ["leadId"])
-  .index("by_assigned_to", ["assignedTo"])
-  .index("by_scheduled_at", ["scheduledAt"])
-  .index("by_completed_at", ["completedAt"])
-  .index("by_status", ["status"]),
-
-  campaigns: defineTable({
-    name: v.string(),
-    description: v.optional(v.string()),
-    type: v.string(),
-    status: v.string(),
-    createdBy: v.id("users"),
-    
-    leadSelection: v.object({
-      type: v.union(v.literal("all"), v.literal("filtered")),
-      tagIds: v.optional(v.array(v.id("tags"))),
-      statuses: v.optional(v.array(v.string())),
-      sources: v.optional(v.array(v.string())),
-      autoEnrollNew: v.optional(v.boolean()),
-    }),
-    
-    blocks: v.array(v.object({
-      id: v.string(),
-      type: v.string(),
-      data: v.any(),
-      position: v.optional(v.object({ x: v.number(), y: v.number() })),
-    })),
-    
-    connections: v.array(v.object({
-      from: v.string(),
-      to: v.string(),
-      label: v.optional(v.string()),
-    })),
-    
-    metrics: v.optional(v.object({
-      enrolled: v.number(),
-      completed: v.number(),
-      active: v.number(),
-      sent: v.number(),
-      opened: v.number(),
-      clicked: v.number(),
-      replied: v.number(),
-    })),
-  }).index("by_created_by", ["createdBy"]).index("by_status", ["status"]),
-
-  campaignEnrollments: defineTable({
-    campaignId: v.id("campaigns"),
-    leadId: v.id("leads"),
-    status: v.string(),
-    currentBlockId: v.optional(v.string()),
-    enrolledAt: v.number(),
-    completedAt: v.optional(v.number()),
-    pathTaken: v.optional(v.array(v.string())),
-  })
-  .index("by_campaign", ["campaignId"])
-  .index("by_lead", ["leadId"])
-  .index("by_campaign_and_status", ["campaignId", "status"]),
-
-  campaignExecutions: defineTable({
-    campaignId: v.id("campaigns"),
-    enrollmentId: v.id("campaignEnrollments"),
-    leadId: v.id("leads"),
-    blockId: v.string(),
-    scheduledFor: v.number(),
-    status: v.string(),
-    executedAt: v.optional(v.number()),
-    result: v.optional(v.any()),
-    error: v.optional(v.string()),
-  })
-  .index("by_scheduled", ["scheduledFor"])
-  .index("by_enrollment", ["enrollmentId"])
-  .index("by_status", ["status"]),
-
-  exportLogs: defineTable({
-    userId: v.id("users"),
-    downloadNumber: v.number(),
-    fileName: v.string(),
-    leadCount: v.number(),
-    exportedAt: v.number(),
-  }).index("by_user", ["userId"]),
-
-  brevoApiKeys: defineTable({
-    apiKey: v.string(),
-    label: v.optional(v.string()),
-    isActive: v.boolean(),
-    dailyLimit: v.optional(v.number()),
-    usageCount: v.number(),
-    lastUsedAt: v.optional(v.number()),
-    lastResetAt: v.number(),
-    order: v.number(),
-  }).index("by_active", ["isActive"]).index("by_order", ["order"]),
-
-  geminiApiKeys: defineTable({
-    apiKey: v.string(),
-    label: v.optional(v.string()),
-    isActive: v.boolean(),
-    dailyLimit: v.optional(v.number()),
-    usageCount: v.number(),
-    lastUsedAt: v.optional(v.number()),
-    lastResetAt: v.number(),
-  }).index("by_active", ["isActive"]),
-
-  emailTemplates: defineTable({
-    name: v.string(),
-    subject: v.string(),
-    content: v.string(),
-    createdBy: v.id("users"),
-    lastModifiedAt: v.number(),
-  }).index("by_name", ["name"]),
-
-  templates: defineTable({
-    name: v.string(),
-    language: v.string(),
-    category: v.string(),
-    status: v.string(),
-    externalId: v.optional(v.string()),
-    components: v.array(v.object({
-      type: v.string(),
-      format: v.optional(v.string()),
-      text: v.optional(v.string()),
-      buttons: v.optional(v.array(v.object({
-        type: v.string(),
-        text: v.string(),
-        url: v.optional(v.string()),
-        phoneNumber: v.optional(v.string()),
-      }))),
-    })),
-    lastSyncedAt: v.optional(v.number()),
-  }).index("by_status", ["status"]),
-
-  chats: defineTable({
-    leadId: v.id("leads"),
-    platform: v.string(),
-    externalId: v.string(),
-    lastMessageAt: v.number(),
-    unreadCount: v.optional(v.number()),
-  })
-  .index("by_lead", ["leadId"])
-  .index("by_last_message", ["lastMessageAt"]),
-
-  messages: defineTable({
-    chatId: v.id("chats"),
-    direction: v.string(),
-    content: v.string(),
-    status: v.string(),
-    messageType: v.optional(v.string()),
-    mediaUrl: v.optional(v.string()),
-    mediaName: v.optional(v.string()),
-    mediaMimeType: v.optional(v.string()),
-    externalId: v.optional(v.string()),
-    quotedMessageId: v.optional(v.id("messages")),
-  })
-  .index("by_chat", ["chatId"])
-  .index("by_external_id", ["externalId"])
-  .index("by_chat_status", ["chatId", "status"]),
-
-  aiSuggestions: defineTable({
-    leadId: v.optional(v.id("leads")),
-    userId: v.id("users"),
-    type: v.string(),
-    content: v.string(),
-    originalContent: v.optional(v.string()),
-    status: v.string(),
-    metadata: v.optional(v.any()),
-  })
-  .index("by_lead", ["leadId"])
-  .index("by_user", ["userId"])
-  .index("by_type", ["type"]),
-
-  activityLogs: defineTable({
-    userId: v.optional(v.id("users")),
-    category: v.string(),
-    action: v.string(),
-    details: v.optional(v.string()),
-    metadata: v.optional(v.any()),
-    leadId: v.optional(v.id("leads")),
-    ipAddress: v.optional(v.string()),
-    timestamp: v.number(),
-  })
-  .index("by_timestamp", ["timestamp"])
-  .index("by_category", ["category"])
-  .index("by_user", ["userId"])
-  .index("by_lead", ["leadId"]),
-
-  interventionRequests: defineTable({
-    leadId: v.id("leads"),
-    assignedTo: v.optional(v.id("users")),
-    requestedProduct: v.optional(v.string()),
-    customerMessage: v.string(),
-    aiDraftedMessage: v.string(),
-    status: v.union(v.literal("pending"), v.literal("claimed"), v.literal("resolved"), v.literal("dismissed")),
-    claimedBy: v.optional(v.id("users")),
-    claimedAt: v.optional(v.number()),
-    resolvedAt: v.optional(v.number()),
-    requiresFollowUp: v.optional(v.boolean()),
-  })
-  .index("by_assigned_to", ["assignedTo"])
-  .index("by_status", ["status"])
-  .index("by_lead", ["leadId"])
-  .index("by_claimed_by", ["claimedBy"]),
+  }).index("by_userId", ["userId"])
+    .index("by_endpoint", ["endpoint"]),
 
   contactRequests: defineTable({
     leadId: v.id("leads"),
     assignedTo: v.id("users"),
     customerMessage: v.string(),
-    status: v.union(v.literal("pending"), v.literal("acknowledged"), v.literal("completed")),
-    acknowledgedAt: v.optional(v.number()),
-  })
-    .index("by_assignedTo_and_status", ["assignedTo", "status"])
-    .index("by_leadId", ["leadId"]),
-  
-  activeChatSessions: defineTable({
-    leadId: v.id("leads"),
-    userId: v.id("users"),
-    lastActivity: v.number(),
-  })
-    .index("by_leadId", ["leadId"])
-    .index("by_userId", ["userId"]),
-
-  quickReplies: defineTable({
-    name: v.string(),
-    message: v.string(),
-    category: v.string(),
-    usageCount: v.number(),
-  })
-  .index("by_category", ["category"]),
-
-  leadSummaries: defineTable({
-    leadId: v.id("leads"),
-    summary: v.string(),
-    lastActivityHash: v.string(),
-    generatedAt: v.number(),
-  })
-  .index("by_lead", ["leadId"])
-  .index("by_lead_and_hash", ["leadId", "lastActivityHash"]),
-
-  whatsappConfig: defineTable({
-    key: v.string(),
-    value: v.string(),
-  }).index("by_key", ["key"]),
-
-  whatsappMediaCache: defineTable({
-    storageId: v.id("_storage"),
-    mediaId: v.string(),
-    mimeType: v.string(),
-    fileName: v.optional(v.string()),
+    status: v.string(), // "pending", "acknowledged"
     createdAt: v.number(),
-  }).index("by_storageId", ["storageId"]),
+  }).index("by_assignedTo_status", ["assignedTo", "status"]),
 
-  batchProcessControl: defineTable({
-    processId: v.string(),
-    shouldStop: v.boolean(),
-    processed: v.number(),
-    failed: v.number(),
-    status: v.optional(v.string()), // queued, running, completed, stopped
-    updatedAt: v.number(),
-  }).index("by_process_id", ["processId"]),
-
-  whatsappGroups: defineTable({
+  productCategories: defineTable({
     name: v.string(),
+  }),
+
+  products: defineTable({
+    name: v.string(),
+    molecule: v.optional(v.string()),
+    packaging: v.optional(v.string()),
     description: v.optional(v.string()),
-    groupId: v.optional(v.string()), // WhatsApp group ID after creation
-    inviteLink: v.optional(v.string()),
-    participantPhoneNumbers: v.array(v.string()),
-    createdBy: v.id("users"),
-    status: v.string(), // "pending", "created", "failed"
-  })
-    .index("by_created_by", ["createdBy"])
-    .index("by_status", ["status"]),
-});
+    categoryId: v.optional(v.id("productCategories")),
+    mainImage: v.id("_storage"),
+    images: v.array(v.id("_storage")),
+    flyer: v.optional(v.id("_storage")),
+    bridgeCard: v.optional(v.id("_storage")),
+  }).index("by_categoryId", ["categoryId"]),
+
+  whatsappTemplates: defineTable({
+    name: v.string(),
+    content: v.string(),
+    category: v.string(),
+    language: v.string(),
+    status: v.string(),
+  }),
+
+  activityLogs: defineTable({
+    userId: v.id("users"),
+    action: v.string(),
+    details: v.string(),
+    timestamp: v.number(),
+  }).index("by_timestamp", ["timestamp"]),
+
+}, { schemaValidation: false });
