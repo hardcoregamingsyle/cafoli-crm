@@ -4,10 +4,11 @@ import { v } from "convex/values";
 export const getSubscriptions = internalQuery({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const subscriptions = await ctx.db
       .query("pushSubscriptions")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
       .collect();
+    return subscriptions;
   },
 });
 

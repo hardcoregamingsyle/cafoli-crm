@@ -9,10 +9,16 @@ export const getOverdueLeads = query({
     if (!userId) return [];
 
     const now = Date.now();
-    const leads = await ctx.db
-      .query("leads")
-      .withIndex("by_assigned_to", (q) => q.eq("assignedTo", userId))
-      .collect();
+    const isAdmin = ctx.auth?.role === "admin";
+    
+    if (isAdmin) {
+      leads = await ctx.db.query("leads").collect();
+    } else {
+      leads = await ctx.db
+        .query("leads")
+        .withIndex("by_assignedTo", (q) => q.eq("assignedTo", userId))
+        .collect();
+    }
     
     return leads
       .filter(l => l.type !== "Irrelevant" && l.nextFollowUpDate && l.nextFollowUpDate < now)
@@ -27,10 +33,16 @@ export const getCriticalOverdueLeads = query({
     if (!userId) return [];
 
     const now = Date.now();
-    const leads = await ctx.db
-      .query("leads")
-      .withIndex("by_assigned_to", (q) => q.eq("assignedTo", userId))
-      .collect();
+    const isAdmin = ctx.auth?.role === "admin";
+    
+    if (isAdmin) {
+      leads = await ctx.db.query("leads").collect();
+    } else {
+      leads = await ctx.db
+        .query("leads")
+        .withIndex("by_assignedTo", (q) => q.eq("assignedTo", userId))
+        .collect();
+    }
     
     return leads
       .filter(l => 
@@ -50,10 +62,16 @@ export const getColdOverdueLeads = query({
     if (!userId) return [];
 
     const now = Date.now();
-    const leads = await ctx.db
-      .query("leads")
-      .withIndex("by_assigned_to", (q) => q.eq("assignedTo", userId))
-      .collect();
+    const isAdmin = ctx.auth?.role === "admin";
+    
+    if (isAdmin) {
+      leads = await ctx.db.query("leads").collect();
+    } else {
+      leads = await ctx.db
+        .query("leads")
+        .withIndex("by_assignedTo", (q) => q.eq("assignedTo", userId))
+        .collect();
+    }
     
     return leads
       .filter(l => 

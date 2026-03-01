@@ -28,10 +28,9 @@ export const storeMessage = internalMutation({
       // Create new chat if it doesn't exist
       const chatId = await ctx.db.insert("chats", {
         leadId: args.leadId,
-        platform: "whatsapp",
-        externalId: args.phoneNumber,
-        lastMessageAt: Date.now(),
         unreadCount: 0,
+        lastMessageAt: Date.now(),
+        platform: "whatsapp",
       });
       chat = await ctx.db.get(chatId);
       console.log(`Created WhatsApp chat for lead ${args.leadId} inside storeMessage`);
@@ -71,7 +70,7 @@ export const storeMessage = internalMutation({
       direction: args.direction,
       content: args.content,
       status: args.status,
-      messageType: args.messageType,
+      messageType: args.messageType || "text",
       mediaUrl: args.mediaUrl,
       mediaName: args.mediaName,
       mediaMimeType: args.mediaMimeType,
@@ -135,10 +134,9 @@ export const ensureChatExists = internalMutation({
       // Create new chat
       const chatId = await ctx.db.insert("chats", {
         leadId: args.leadId,
-        platform: "whatsapp",
-        externalId: args.phoneNumber,
+        unreadCount: 1,
         lastMessageAt: Date.now(),
-        unreadCount: 0,
+        platform: "whatsapp",
       });
       chat = await ctx.db.get(chatId);
       console.log(`Created WhatsApp chat for lead ${args.leadId}`);

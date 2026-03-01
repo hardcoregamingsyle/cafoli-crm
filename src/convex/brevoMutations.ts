@@ -18,15 +18,17 @@ export const addBrevoApiKey = mutation({
     // Get the highest order number
     const existingKeys = await ctx.db.query("brevoApiKeys").collect();
     const maxOrder = existingKeys.length > 0 
-      ? Math.max(...existingKeys.map(k => k.order)) 
+      ? Math.max(...existingKeys.map(k => k.order || 0)) 
       : -1;
 
     const keyId = await ctx.db.insert("brevoApiKeys", {
+      adminId: args.adminId,
       apiKey: args.apiKey,
       label: args.label,
       isActive: true,
       dailyLimit: args.dailyLimit || 300, // Default Brevo free tier limit
       usageCount: 0,
+      lastUsedAt: Date.now(),
       lastResetAt: Date.now(),
       order: maxOrder + 1,
     });
@@ -90,7 +92,7 @@ export const getBrevoApiKeys = query({
       .withIndex("by_order")
       .collect();
 
-    return keys.sort((a, b) => a.order - b.order);
+    return keys.sort((a, b) => (a.order || 0) - (b.order || 0));
   },
 });
 

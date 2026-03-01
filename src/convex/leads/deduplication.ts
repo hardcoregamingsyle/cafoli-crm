@@ -49,7 +49,7 @@ export const deduplicateLeads = mutation({
             id: l._id,
             name: l.name,
             createdAt: l._creationTime,
-            source: l.source,
+            source: l.source || "Unknown",
           })),
           keepId: keepLead._id,
           deleteIds: deleteLeads.map(l => l._id),

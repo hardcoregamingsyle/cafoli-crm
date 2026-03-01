@@ -13,7 +13,7 @@ export default defineSchema({
     email: v.optional(v.string()),
     image: v.optional(v.string()),
     role: v.optional(v.string()), // "admin", "staff", "uploader"
-    tokenIdentifier: v.string(),
+    tokenIdentifier: v.optional(v.string()),
     passwordHash: v.optional(v.string()),
     preferences: v.optional(v.any()),
     lastActivity: v.optional(v.number()),
@@ -51,17 +51,21 @@ export default defineSchema({
     adminAssignmentRequired: v.optional(v.boolean()),
     isColdCallerLead: v.optional(v.boolean()),
     coldCallerAssignedTo: v.optional(v.id("users")),
+    coldCallerAssignedAt: v.optional(v.number()),
     indiamartMetadata: v.optional(v.any()),
     searchText: v.optional(v.string()),
     welcomeEmailSent: v.optional(v.boolean()),
   }).index("by_mobile", ["mobile"])
     .index("by_assignedTo", ["assignedTo"])
     .index("by_status", ["status"])
-    .index("by_assigned_to", ["assignedTo"])
     .index("by_is_cold_caller", ["isColdCallerLead"])
     .index("by_cold_caller_assigned_to", ["coldCallerAssignedTo"])
     .index("by_last_activity", ["lastActivity"])
-    .index("by_assigned_to_and_last_activity", ["assignedTo", "lastActivity"]),
+    .index("by_assigned_to_and_last_activity", ["assignedTo", "lastActivity"])
+    .searchIndex("search_all", {
+      searchField: "searchText",
+      filterFields: ["assignedTo", "status"],
+    }),
 
   tags: defineTable({
     name: v.string(),
@@ -80,14 +84,13 @@ export default defineSchema({
       tagIds: v.optional(v.array(v.id("tags"))),
       statuses: v.optional(v.array(v.string())),
       sources: v.optional(v.array(v.string())),
-      autoEnrollNew: v.boolean(),
+      autoEnrollNew: v.optional(v.boolean()),
     }),
     blocks: v.array(v.any()),
     connections: v.array(v.any()),
     createdAt: v.number(),
     metrics: v.optional(v.any()),
-  }).index("by_userId", ["userId"])
-    .index("by_created_by", ["userId"]),
+  }).index("by_userId", ["userId"]),
 
   bulkContacts: defineTable({
     adminId: v.id("users"),
@@ -140,8 +143,7 @@ export default defineSchema({
     createdAt: v.number(),
     lastUsedAt: v.number(),
   }).index("by_userId", ["userId"])
-    .index("by_endpoint", ["endpoint"])
-    .index("by_user", ["userId"]),
+    .index("by_endpoint", ["endpoint"]),
 
   contactRequests: defineTable({
     leadId: v.id("leads"),
@@ -150,8 +152,7 @@ export default defineSchema({
     status: v.string(), // "pending", "acknowledged"
     createdAt: v.number(),
     acknowledgedAt: v.optional(v.number()),
-  }).index("by_assignedTo_status", ["assignedTo", "status"])
-    .index("by_assignedTo_and_status", ["assignedTo", "status"]),
+  }).index("by_assignedTo_status", ["assignedTo", "status"]),
 
   productCategories: defineTable({
     name: v.string(),
@@ -169,6 +170,7 @@ export default defineSchema({
     flyer: v.optional(v.id("_storage")),
     bridgeCard: v.optional(v.id("_storage")),
     visualaid: v.optional(v.id("_storage")),
+    videoLink: v.optional(v.string()),
     mrp: v.optional(v.string()),
     pageLink: v.optional(v.string()),
   }).index("by_categoryId", ["categoryId"])
@@ -186,15 +188,18 @@ export default defineSchema({
   templates: defineTable({
      name: v.string(),
      content: v.string(),
+     category: v.optional(v.string()),
+     language: v.optional(v.string()),
   }),
 
   activityLogs: defineTable({
-    userId: v.id("users"),
+    userId: v.optional(v.id("users")),
     action: v.string(),
     details: v.string(),
     timestamp: v.number(),
     leadId: v.optional(v.id("leads")),
     category: v.optional(v.string()),
+    metadata: v.optional(v.any()),
   }).index("by_timestamp", ["timestamp"])
     .index("by_category", ["category"])
     .index("by_user", ["userId"])
@@ -205,6 +210,8 @@ export default defineSchema({
     label: v.optional(v.string()),
     isActive: v.boolean(),
     usageCount: v.optional(v.number()),
+    lastResetAt: v.optional(v.number()),
+    lastUsedAt: v.optional(v.number()),
   }).index("by_active", ["isActive"]),
 
   activeChatSessions: defineTable({
@@ -217,6 +224,7 @@ export default defineSchema({
     leadId: v.id("leads"),
     unreadCount: v.optional(v.number()),
     lastMessageAt: v.optional(v.number()),
+    platform: v.optional(v.string()),
   }).index("by_lead", ["leadId"]),
 
   messages: defineTable({
@@ -257,17 +265,19 @@ export default defineSchema({
 
   interventionRequests: defineTable({
     leadId: v.id("leads"),
-    assignedTo: v.id("users"),
+    assignedTo: v.optional(v.id("users")),
     status: v.string(),
     claimedBy: v.optional(v.id("users")),
     claimedAt: v.optional(v.number()),
     requiresFollowUp: v.optional(v.boolean()),
+    resolvedAt: v.optional(v.number()),
   }).index("by_status", ["status"])
     .index("by_claimed_by", ["claimedBy"]),
 
   rangePdfs: defineTable({
     name: v.string(),
     storageId: v.id("_storage"),
+    division: v.optional(v.string()),
   }),
 
   whatsappConfig: defineTable({
@@ -277,18 +287,23 @@ export default defineSchema({
 
   whatsappGroups: defineTable({
     name: v.string(),
+    description: v.optional(v.string()),
+    status: v.optional(v.string()),
     createdBy: v.id("users"),
   }).index("by_created_by", ["createdBy"]),
 
   whatsappMediaCache: defineTable({
     storageId: v.id("_storage"),
     mediaId: v.string(),
+    mimeType: v.optional(v.string()),
   }).index("by_storageId", ["storageId"]),
 
   emailTemplates: defineTable({
     name: v.string(),
     subject: v.string(),
     content: v.string(),
+    createdBy: v.optional(v.id("users")),
+    lastModifiedAt: v.optional(v.number()),
   }),
 
   quickReplies: defineTable({
@@ -296,6 +311,7 @@ export default defineSchema({
     title: v.string(),
     content: v.string(),
     usageCount: v.optional(v.number()),
+    name: v.optional(v.string()),
   }),
 
   exportLogs: defineTable({
@@ -304,6 +320,7 @@ export default defineSchema({
     fileName: v.string(),
     leadCount: v.number(),
     timestamp: v.number(),
+    exportedAt: v.optional(v.number()),
   }),
 
   emailEnrollments: defineTable({
@@ -316,13 +333,35 @@ export default defineSchema({
     leadId: v.id("leads"),
     campaignId: v.id("campaigns"),
     status: v.string(),
+    currentBlockId: v.optional(v.string()),
+    enrolledAt: v.optional(v.number()),
+    pathTaken: v.optional(v.array(v.string())),
   }).index("by_campaign", ["campaignId"]),
 
   campaignExecutions: defineTable({
     campaignId: v.id("campaigns"),
+    enrollmentId: v.id("campaignEnrollments"),
     leadId: v.id("leads"),
+    blockId: v.string(),
     status: v.string(),
     scheduledFor: v.number(),
+    executedAt: v.optional(v.number()),
+    error: v.optional(v.string()),
+    result: v.optional(v.any()),
   }).index("by_status", ["status"]),
+
+  followups: defineTable({
+    leadId: v.id("leads"),
+    userId: v.id("users"),
+    assignedTo: v.optional(v.id("users")),
+    scheduledAt: v.number(),
+    status: v.string(), // "pending", "completed", "overdue"
+    completionStatus: v.optional(v.string()),
+    completedAt: v.optional(v.number()),
+    notes: v.optional(v.string()),
+  }).index("by_lead", ["leadId"])
+    .index("by_user", ["userId"])
+    .index("by_assignedTo", ["assignedTo"])
+    .index("by_scheduled_at", ["scheduledAt"]),
 
 }, { schemaValidation: false });

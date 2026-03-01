@@ -22,15 +22,15 @@ async function getNextApiKey(ctx: ActionCtx): Promise<{ key: string; keyId: Id<"
 
   // Reset usage counts for keys where 24 hours have passed
   for (const key of keys) {
-    if (now - key.lastResetAt > oneDayMs) {
+    if (now - (key.lastResetAt || 0) > oneDayMs) {
       await ctx.runMutation(internal.brevoMutations.resetDailyUsageInternal, { keyId: key._id });
     }
   }
 
   // Find first key that hasn't hit its limit
   for (const key of keys) {
-    const resetTime = now - key.lastResetAt > oneDayMs ? now : key.lastResetAt;
-    const usageCount = now - key.lastResetAt > oneDayMs ? 0 : key.usageCount;
+    const resetTime = now - (key.lastResetAt || 0) > oneDayMs ? now : (key.lastResetAt || 0);
+    const usageCount = now - (key.lastResetAt || 0) > oneDayMs ? 0 : key.usageCount;
     
     if (usageCount < (key.dailyLimit || 300)) {
       return { key: key.apiKey, keyId: key._id };

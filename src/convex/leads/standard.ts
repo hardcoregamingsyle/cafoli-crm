@@ -57,10 +57,10 @@ export const createLead = mutation({
     // Log lead creation
     await ctx.scheduler.runAfter(0, internal.activityLogs.logActivity, {
       userId,
-      category: "Leads: Incoming",
-      action: `Created new lead: ${args.name}`,
-      leadId,
-      details: `Source: ${args.source}`,
+      category: "Lead",
+      action: "Created",
+      details: `Lead created`,
+      leadId: args.id,
     });
     
     // Send welcome email if email exists
@@ -136,8 +136,9 @@ export const updateLead = mutation({
     if (args.patch.status && args.patch.status !== lead.status) {
       await ctx.scheduler.runAfter(0, internal.activityLogs.logActivity, {
         userId,
-        category: "Leads: Status",
-        action: `Changed status from ${lead.status} to ${args.patch.status}`,
+        category: "Lead",
+        action: "Status Changed",
+        details: `Status changed to ${args.status}`,
         leadId: args.id,
       });
     }
@@ -146,8 +147,9 @@ export const updateLead = mutation({
     if (args.patch.name || args.patch.mobile || args.patch.email) {
       await ctx.scheduler.runAfter(0, internal.activityLogs.logActivity, {
         userId,
-        category: "Leads: Details Change",
-        action: "Updated lead details",
+        category: "Lead",
+        action: "Updated",
+        details: `Lead updated`,
         leadId: args.id,
       });
     }
@@ -280,8 +282,9 @@ export const assignLead = mutation({
     // Log assignment
     await ctx.scheduler.runAfter(0, internal.activityLogs.logActivity, {
       userId: currentUserId,
-      category: "Leads: Assignment",
-      action: `Assigned lead to ${assignedUserName}`,
+      category: "Lead",
+      action: "Assigned",
+      details: `Lead assigned to ${assignedUser.name || assignedUser.email}`,
       leadId: args.leadId,
     });
 
@@ -324,8 +327,9 @@ export const unassignLead = mutation({
     // Log activity
     await ctx.scheduler.runAfter(0, internal.activityLogs.logActivity, {
       userId: args.userId,
-      category: "Leads: Assignment",
-      action: "Unassigned lead",
+      category: "Lead",
+      action: "Status Changed",
+      details: `Status changed to ${args.status}`,
       leadId: args.leadId,
     });
   },

@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
 
 export const LOG_CATEGORIES = {
@@ -9,6 +9,24 @@ export const LOG_CATEGORIES = {
   LEAD_INCOMING: "lead_incoming",
   EMAIL: "email",
 } as const;
+
+export const logActivity = internalMutation({
+  args: {
+    userId: v.optional(v.id("users")),
+    action: v.string(),
+    details: v.string(),
+    leadId: v.optional(v.id("leads")),
+    category: v.optional(v.string()),
+    metadata: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    const timestamp = Date.now();
+    return await ctx.db.insert("activityLogs", {
+      ...args,
+      timestamp,
+    });
+  },
+});
 
 export const log = mutation({
   args: {

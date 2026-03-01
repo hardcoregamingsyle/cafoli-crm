@@ -13,6 +13,7 @@ export const createContactRequest = mutation({
       assignedTo: args.assignedTo,
       customerMessage: args.customerMessage,
       status: "pending",
+      createdAt: Date.now(),
     });
     return requestId;
   },
@@ -30,19 +31,18 @@ export const createContactRequestInternal = internalMutation({
       assignedTo: args.assignedTo,
       customerMessage: args.customerMessage,
       status: "pending",
+      createdAt: Date.now(),
     });
     return requestId;
   },
 });
 
-export const getPendingContactRequests = query({
-  args: {
-    userId: v.id("users"),
-  },
+export const getPendingRequests = query({
+  args: { userId: v.id("users") },
   handler: async (ctx, args) => {
     const requests = await ctx.db
       .query("contactRequests")
-      .withIndex("by_assignedTo_and_status", (q) =>
+      .withIndex("by_assignedTo_status", (q) =>
         q.eq("assignedTo", args.userId).eq("status", "pending")
       )
       .collect();

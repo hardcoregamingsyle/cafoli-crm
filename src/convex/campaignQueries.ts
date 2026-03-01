@@ -16,7 +16,7 @@ export const getCampaigns = query({
       return await ctx.db.query("campaigns").order("desc").collect();
     } else {
       return await ctx.db.query("campaigns")
-        .withIndex("by_created_by", (q) => q.eq("createdBy", args.userId!))
+        .withIndex("by_userId", (q) => q.eq("userId", args.userId!))
         .order("desc")
         .collect();
     }

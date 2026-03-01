@@ -10,7 +10,7 @@ export const getActiveKeys = internalQuery({
       .withIndex("by_active", (q) => q.eq("isActive", true))
       .collect();
 
-    return keys.sort((a, b) => a.order - b.order);
+    return keys.sort((a, b) => (a.order || 0) - (b.order || 0));
   },
 });
 

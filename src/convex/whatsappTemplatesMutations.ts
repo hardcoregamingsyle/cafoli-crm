@@ -22,22 +22,22 @@ export const upsertTemplate = internalMutation({
   },
   handler: async (ctx, args) => {
     // Check if template exists
-    const existing = await ctx.db
+    const existingTemplate = await ctx.db
       .query("templates")
       .filter((q) => q.eq(q.field("name"), args.name))
       .filter((q) => q.eq(q.field("language"), args.language))
       .first();
 
-    if (existing) {
+    if (existingTemplate) {
       // Update existing template
-      await ctx.db.patch(existing._id, {
+      await ctx.db.patch(existingTemplate._id, {
         category: args.category,
         status: args.status,
         externalId: args.externalId,
         components: args.components,
         lastSyncedAt: Date.now(),
       });
-      return existing._id;
+      return existingTemplate._id;
     } else {
       // Create new template
       return await ctx.db.insert("templates", {

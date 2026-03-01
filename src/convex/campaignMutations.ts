@@ -143,7 +143,7 @@ export const activateCampaign = mutation({
         leads = await ctx.db.query("leads").collect();
       } else {
         leads = await ctx.db.query("leads")
-          .withIndex("by_assigned_to", (q) => q.eq("assignedTo", args.userId))
+          .withIndex("by_assignedTo", (q) => q.eq("assignedTo", args.userId))
           .collect();
       }
     } else {

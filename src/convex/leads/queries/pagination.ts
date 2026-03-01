@@ -35,24 +35,27 @@ export const getPaginatedLeads = query({
 
     // Search logic
     if (args.search) {
-      let results = await ctx.db
+      const isAdmin = user.role === ROLES.ADMIN;
+      let query = ctx.db
         .query("leads")
         .withSearchIndex("search_all", (q) => {
           let search = q.search("searchText", args.search!);
-          if (args.filter === "mine") {
+          if (!isAdmin) {
             search = search.eq("assignedTo", userId);
           }
+          if (args.status && args.status !== "All") {
+            search = search.eq("status", args.status);
+          }
           return search;
-        })
-        .take(1000);
-
+        });
+      
       if (user.role !== ROLES.ADMIN) {
-        results = results.filter(l => l.type !== "Irrelevant");
+        query = query.filter(l => l.type !== "Irrelevant");
       }
 
-      results = applyFilters(results, args);
-      results = sortLeads(results, args.sortBy);
-      const enrichedResults = await enrichLeads(ctx, results);
+      query = applyFilters(query, args);
+      query = sortLeads(query, args.sortBy);
+      const enrichedResults = await enrichLeads(ctx, query);
       return { page: enrichedResults, isDone: true, continueCursor: "" };
     }
 
