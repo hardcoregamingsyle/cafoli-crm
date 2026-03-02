@@ -1,6 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query, action, internalMutation } from "./_generated/server";
-import { api, internal } from "./_generated/api";
+import { mutation, query, internalMutation } from "./_generated/server";
 
 export const getBulkContacts = query({
   args: { adminId: v.id("users") },
@@ -36,30 +35,46 @@ export const trackSentMessages = mutation({
   },
 });
 
+export const insertBulkContact = internalMutation({
+  args: {
+    adminId: v.id("users"),
+    phoneNumber: v.string(),
+    name: v.optional(v.string()),
+    templateId: v.string(),
+    externalMessageId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("bulkContacts", {
+      adminId: args.adminId,
+      phoneNumber: args.phoneNumber,
+      name: args.name,
+      templateId: args.templateId,
+      status: "sent",
+      sentAt: Date.now(),
+    });
+  },
+});
+
 export const processReply = internalMutation({
   args: { phoneNumber: v.string(), message: v.string() },
   handler: async (ctx, args) => {
     const contact = await ctx.db
       .query("bulkContacts")
       .withIndex("by_phoneNumber", (q) => q.eq("phoneNumber", args.phoneNumber))
-      .filter((q) => q.eq(q.field("status"), "sent"))
       .first();
 
-    if (contact) {
-      // Update contact status
+    if (contact && contact.status === "sent") {
       await ctx.db.patch(contact._id, {
         status: "replied",
         lastInteractionAt: Date.now(),
       });
 
-      // Check if lead already exists
       const existingLead = await ctx.db
         .query("leads")
         .withIndex("by_mobile", (q) => q.eq("mobile", args.phoneNumber))
         .first();
 
       if (!existingLead) {
-        // Create new lead from bulk contact reply
         const leadId = await ctx.db.insert("leads", {
           name: contact.name || "Bulk Contact",
           mobile: contact.phoneNumber,
@@ -68,7 +83,7 @@ export const processReply = internalMutation({
           type: "To be Decided",
           lastActivity: Date.now(),
           message: args.message,
-          priorityScore: 50, // Default mid-score for replies
+          priorityScore: 50,
         });
         return leadId;
       }
@@ -81,25 +96,25 @@ export const processReply = internalMutation({
 export const cleanupOldContacts = internalMutation({
   handler: async (ctx) => {
     const hundredDaysAgo = Date.now() - (100 * 24 * 60 * 60 * 1000);
-    
+
     const oldContacts = await ctx.db
       .query("bulkContacts")
       .withIndex("by_sentAt", (q) => q.lt("sentAt", hundredDaysAgo))
-      .filter((q) => q.eq(q.field("status"), "sent"))
-      .collect();
+      .take(50);
 
     for (const contact of oldContacts) {
-      await ctx.db.patch(contact._id, { status: "cold" });
-      
-      // Add to Cold Caller Leads
-      await ctx.db.insert("coldCallerLeads", {
-        name: contact.name || "Cold Bulk Contact",
-        mobile: contact.phoneNumber,
-        source: "Expired Bulk Campaign",
-        status: "Cold",
-        lastActivity: Date.now(),
-        originalContactId: contact._id,
-      });
+      if (contact.status === "sent") {
+        await ctx.db.patch(contact._id, { status: "cold" });
+
+        await ctx.db.insert("coldCallerLeads", {
+          name: contact.name || "Cold Bulk Contact",
+          mobile: contact.phoneNumber,
+          source: "Expired Bulk Campaign",
+          status: "Cold",
+          lastActivity: Date.now(),
+          originalContactId: contact._id,
+        });
+      }
     }
   },
 });
