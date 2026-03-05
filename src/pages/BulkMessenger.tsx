@@ -9,7 +9,7 @@ import { useAction, useQuery } from "convex/react";
 import { getConvexApi } from "@/lib/convex-api";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import { Upload, Send, FileText, AlertCircle, Users, CheckCircle2, XCircle, History } from "lucide-react";
+import { Upload, Send, FileText, AlertCircle, Users, CheckCircle2, XCircle, History, RefreshCw } from "lucide-react";
 import Papa from "papaparse";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -23,10 +23,24 @@ export default function BulkMessenger() {
   const [selectedTemplate, setSelectedTemplate] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults] = useState<{ sent: number; failed: number; total: number; errors: any[] } | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const templates = useQuery(api.whatsappTemplatesQueries.getTemplates) || [];
   const sendBulk = useAction(api.whatsappBulk.sendBulkTemplateMessages);
+  const syncTemplates = useAction(api.whatsappTemplates.syncTemplates);
   const history = useQuery(api.bulkMessaging.getBulkContacts, user ? { adminId: user._id } : "skip") || [];
+
+  const handleSyncTemplates = async () => {
+    setIsSyncing(true);
+    try {
+      const result = await syncTemplates();
+      toast.success(`Successfully synced ${result.count} templates`);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to sync templates");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -74,9 +88,12 @@ export default function BulkMessenger() {
         return;
       }
 
+      const [templateName, templateLanguage] = selectedTemplate.split("|");
+
       const result = await sendBulk({
         contacts,
-        templateName: selectedTemplate,
+        templateName,
+        templateLanguage,
         adminId: user._id,
       });
 
@@ -166,12 +183,24 @@ export default function BulkMessenger() {
           </Card>
 
           <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Campaign Configuration
-              </CardTitle>
-              <CardDescription>Select a WhatsApp template and send to all contacts.</CardDescription>
+            <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+              <div className="space-y-1">
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Campaign Configuration
+                </CardTitle>
+                <CardDescription>Select a WhatsApp template and send to all contacts.</CardDescription>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleSyncTemplates}
+                disabled={isSyncing}
+                className="gap-2"
+              >
+                <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
+                Sync Templates
+              </Button>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
@@ -185,7 +214,9 @@ export default function BulkMessenger() {
                       <SelectItem value="no_templates" disabled>No templates available</SelectItem>
                     ) : (
                       templates.map((t: any) => (
-                        <SelectItem key={t.name} value={t.name}>{t.name}</SelectItem>
+                        <SelectItem key={t._id} value={`${t.name}|${t.language}`}>
+                          {t.name} ({t.language})
+                        </SelectItem>
                       ))
                     )}
                   </SelectContent>
