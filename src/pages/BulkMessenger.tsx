@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,13 +22,25 @@ export default function BulkMessenger() {
   const [mapping, setMapping] = useState({ phone: "", name: "" });
   const [selectedTemplate, setSelectedTemplate] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
-  const [results, setResults] = useState<{ sent: number; failed: number; total: number; errors: any[] } | null>(null);
+  const [processId, setProcessId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
   const templates = useQuery(api.whatsappTemplatesQueries.getTemplates) || [];
   const sendBulk = useAction(api.whatsappBulk.sendBulkTemplateMessages);
+  const batchStatus = useQuery(api.whatsappBulk.getBatchStatus, processId ? { processId } : "skip");
   const syncTemplates = useAction(api.whatsappTemplates.syncTemplates);
   const history = useQuery(api.bulkMessaging.getBulkContacts, user ? { adminId: user._id } : "skip") || [];
+
+  useEffect(() => {
+    if (batchStatus) {
+      if (batchStatus.status === "completed") {
+        setIsProcessing(false);
+        if (isProcessing) {
+          toast.success(`Completed sending bulk messages!`);
+        }
+      }
+    }
+  }, [batchStatus]);
 
   const handleSyncTemplates = async () => {
     setIsSyncing(true);
@@ -51,7 +63,7 @@ export default function BulkMessenger() {
       skipEmptyLines: true,
       complete: (results) => {
         setCsvData(results.data as any[]);
-        setResults(null);
+        setProcessId(null);
         toast.success(`Loaded ${results.data.length} contacts from CSV`);
 
         const headers = results.meta.fields || [];
@@ -73,7 +85,7 @@ export default function BulkMessenger() {
     }
 
     setIsProcessing(true);
-    setResults(null);
+    setProcessId(null);
 
     try {
       const contacts = csvData
@@ -85,6 +97,7 @@ export default function BulkMessenger() {
 
       if (contacts.length === 0) {
         toast.error("No valid phone numbers found in the selected column");
+        setIsProcessing(false);
         return;
       }
 
@@ -97,17 +110,12 @@ export default function BulkMessenger() {
         adminId: user._id,
       });
 
-      setResults(result);
-
-      if (result.sent > 0) {
-        toast.success(`Sent ${result.sent} of ${result.total} messages successfully`);
-      }
-      if (result.failed > 0) {
-        toast.error(`${result.failed} messages failed to send`);
-      }
+      setProcessId(result.processId);
+      toast.success(`Started sending messages to ${result.total} contacts in the background.`);
+      
+      // We don't set isProcessing to false here, we let the batchStatus handle it
     } catch (error: any) {
-      toast.error(error?.message || "Failed to send bulk messages");
-    } finally {
+      toast.error(error?.message || "Failed to start bulk messages");
       setIsProcessing(false);
     }
   };
@@ -248,34 +256,34 @@ export default function BulkMessenger() {
               </div>
 
               {/* Results */}
-              {results && (
+              {batchStatus && (
                 <div className="border rounded-lg p-4 space-y-3">
-                  <h3 className="font-semibold">Send Results</h3>
-                  <Progress value={(results.sent / results.total) * 100} className="h-2" />
+                  <h3 className="font-semibold flex items-center gap-2">
+                    {batchStatus.status === "processing" ? (
+                      <RefreshCw className="h-4 w-4 animate-spin text-blue-500" />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    )}
+                    {batchStatus.status === "processing" ? "Sending Messages..." : "Send Complete"}
+                  </h3>
+                  <Progress 
+                    value={((batchStatus.processed || 0) + (batchStatus.failed || 0)) / (batchStatus.total || 1) * 100} 
+                    className="h-2" 
+                  />
                   <div className="grid grid-cols-3 gap-3 text-sm">
                     <div className="flex items-center gap-2 text-green-600">
                       <CheckCircle2 className="h-4 w-4" />
-                      <span>{results.sent} Sent</span>
+                      <span>{batchStatus.processed || 0} Sent</span>
                     </div>
                     <div className="flex items-center gap-2 text-destructive">
                       <XCircle className="h-4 w-4" />
-                      <span>{results.failed} Failed</span>
+                      <span>{batchStatus.failed || 0} Failed</span>
                     </div>
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Users className="h-4 w-4" />
-                      <span>{results.total} Total</span>
+                      <span>{batchStatus.total || 0} Total</span>
                     </div>
                   </div>
-                  {results.errors.length > 0 && (
-                    <details className="text-xs text-muted-foreground">
-                      <summary className="cursor-pointer">View errors ({results.errors.length})</summary>
-                      <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
-                        {results.errors.slice(0, 20).map((e, i) => (
-                          <p key={i}>{e.phone}: {e.error}</p>
-                        ))}
-                      </div>
-                    </details>
-                  )}
                 </div>
               )}
 

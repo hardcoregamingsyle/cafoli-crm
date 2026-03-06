@@ -118,3 +118,39 @@ export const cleanupOldContacts = internalMutation({
     }
   },
 });
+
+export const initBatch = internalMutation({
+  args: { processId: v.string(), total: v.number() },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("batchProcessControl", {
+      processId: args.processId,
+      processed: 0,
+      failed: 0,
+      total: args.total,
+      status: "processing",
+      updatedAt: Date.now(),
+    });
+  }
+});
+
+export const updateBatchProgress = internalMutation({
+  args: { processId: v.string(), processed: v.number(), failed: v.number(), isComplete: v.boolean() },
+  handler: async (ctx, args) => {
+    const batch = await ctx.db.query("batchProcessControl").withIndex("by_process_id", q => q.eq("processId", args.processId)).first();
+    if (batch) {
+      await ctx.db.patch(batch._id, {
+        processed: (batch.processed || 0) + args.processed,
+        failed: (batch.failed || 0) + args.failed,
+        status: args.isComplete ? "completed" : "processing",
+        updatedAt: Date.now(),
+      });
+    }
+  }
+});
+
+export const getBatchStatus = query({
+  args: { processId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db.query("batchProcessControl").withIndex("by_process_id", q => q.eq("processId", args.processId)).first();
+  }
+});

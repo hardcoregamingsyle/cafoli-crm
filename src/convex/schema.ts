@@ -269,6 +269,7 @@ export default defineSchema({
     failed: v.optional(v.number()),
     status: v.optional(v.string()),
     updatedAt: v.optional(v.number()),
+    total: v.optional(v.number()),
   }).index("by_process_id", ["processId"]),
 
   interventionRequests: defineTable({
