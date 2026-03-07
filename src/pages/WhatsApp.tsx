@@ -119,97 +119,79 @@ export default function WhatsApp() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col h-[calc(100vh-4rem)] bg-background">
-        <div className="flex-shrink-0 p-4 border-b flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between bg-card">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">WhatsApp</h1>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => setShowCreateGroupDialog(true)}
-            >
-              <Users className="mr-2 h-4 w-4" />
-              Create Group
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => setShowBulkDialog(true)}
-            >
-              <Send className="mr-2 h-4 w-4" />
-              Bulk Send
-            </Button>
-            {user?.role === ROLES.ADMIN && (
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={handleUpdateInterface}
-                disabled={isUpdating}
-              >
-                <Settings className="mr-2 h-4 w-4" />
-                {isUpdating ? "Syncing..." : "Sync Interface"}
+      <div className="flex h-[calc(100vh-4rem)] bg-background overflow-hidden">
+        {/* Left Sidebar */}
+        <div className="w-[350px] flex-shrink-0 border-r flex flex-col bg-muted/10">
+          {/* Sidebar Header */}
+          <div className="h-16 border-b flex items-center justify-between px-4 bg-background">
+            <h1 className="text-xl font-semibold">Messages</h1>
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" onClick={() => setShowCreateGroupDialog(true)} title="Create Group">
+                <Users className="h-4 w-4" />
               </Button>
-            )}
+              <Button variant="ghost" size="icon" onClick={() => setShowBulkDialog(true)} title="Bulk Send">
+                <Send className="h-4 w-4" />
+              </Button>
+              {user?.role === ROLES.ADMIN && (
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={handleUpdateInterface} 
+                  disabled={isUpdating} 
+                  title="Sync Interface"
+                >
+                  <Settings className={`h-4 w-4 ${isUpdating ? "animate-spin" : ""}`} />
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
 
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <Tabs defaultValue="chats" className="h-full flex flex-col">
-            <div className="px-4 pt-2 border-b bg-card">
-              <TabsList className="mb-2">
-                <TabsTrigger value="chats">
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  Chats
-                </TabsTrigger>
-                <TabsTrigger value="groups">
-                  <Users className="h-4 w-4 mr-2" />
-                  Groups
-                </TabsTrigger>
+          {/* Tabs for Chats / Groups */}
+          <Tabs defaultValue="chats" className="flex-1 flex flex-col min-h-0">
+            <div className="px-4 py-2 bg-background border-b">
+              <TabsList className="w-full grid grid-cols-2">
+                <TabsTrigger value="chats">Chats</TabsTrigger>
+                <TabsTrigger value="groups">Groups</TabsTrigger>
               </TabsList>
             </div>
-
-            <TabsContent value="chats" className="flex-1 min-h-0 overflow-hidden m-0 border-none data-[state=active]:flex">
-              <div className="flex w-full h-full">
-                {/* Contacts List */}
-                <div className="w-[350px] border-r flex-shrink-0 bg-background">
-                  <ContactList
-                    leads={leads}
-                    selectedLeadId={selectedLeadId}
-                    onSelectLead={setSelectedLeadId}
-                    onLoadMore={() => {}}
-                    canLoadMore={canLoadMore}
-                    isLoading={isLoading}
-                    searchQuery={searchQuery}
-                    onSearchChange={setSearchQuery}
-                  />
-                </div>
-
-                {/* Chat Area */}
-                <div className="flex-1 min-w-0 bg-background">
-                  {selectedLeadId && selectedLead ? (
-                    <ChatWindow 
-                      selectedLeadId={selectedLeadId} 
-                      selectedLead={selectedLead} 
-                    />
-                  ) : (
-                    <div className="flex flex-col h-full items-center justify-center bg-muted/10">
-                      <div className="text-center">
-                        <MessageSquare className="h-16 w-16 mx-auto mb-4 text-muted-foreground/20" />
-                        <p className="text-lg font-medium mb-1">Select a contact</p>
-                        <p className="text-sm text-muted-foreground">Choose a contact to start messaging</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+            
+            <TabsContent value="chats" className="flex-1 min-h-0 m-0 data-[state=active]:flex flex-col">
+              <ContactList
+                leads={leads}
+                selectedLeadId={selectedLeadId}
+                onSelectLead={setSelectedLeadId}
+                onLoadMore={() => {}}
+                canLoadMore={canLoadMore}
+                isLoading={isLoading}
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+              />
             </TabsContent>
-
-            <TabsContent value="groups" className="flex-1 overflow-auto p-4 m-0">
+            
+            <TabsContent value="groups" className="flex-1 min-h-0 m-0 data-[state=active]:flex flex-col">
               <GroupsList />
             </TabsContent>
           </Tabs>
+        </div>
+
+        {/* Main Chat Area */}
+        <div className="flex-1 min-w-0 bg-background flex flex-col">
+          {selectedLeadId && selectedLead ? (
+            <ChatWindow 
+              selectedLeadId={selectedLeadId} 
+              selectedLead={selectedLead} 
+            />
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center bg-muted/5">
+              <div className="h-24 w-24 rounded-full bg-primary/10 flex items-center justify-center mb-6">
+                <MessageSquare className="h-10 w-10 text-primary/40" />
+              </div>
+              <h2 className="text-2xl font-semibold mb-2">WhatsApp Messages</h2>
+              <p className="text-muted-foreground max-w-md text-center">
+                Select a contact from the sidebar to start messaging. You can send text, media, and use AI to generate replies.
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
