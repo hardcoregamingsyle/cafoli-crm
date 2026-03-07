@@ -1,6 +1,5 @@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Id } from "@/convex/_generated/dataModel";
@@ -88,8 +87,8 @@ export function ContactList({
   };
 
   return (
-    <Card className="flex flex-col border-r h-full overflow-hidden">
-      <CardHeader className="pb-3 flex-shrink-0 space-y-3">
+    <div className="flex flex-col h-full overflow-hidden bg-background">
+      <div className="p-4 border-b flex-shrink-0 space-y-3">
         <div className="relative">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -103,7 +102,7 @@ export function ContactList({
           <ToggleGroupItem value="all" size="sm" className="text-xs">All</ToggleGroupItem>
           <ToggleGroupItem value="unread" size="sm" className="text-xs">Unread</ToggleGroupItem>
         </ToggleGroup>
-      </CardHeader>
+      </div>
       <div className="flex-1 overflow-y-auto min-h-0">
         <div className="space-y-1 px-2 pb-2">
           {filteredLeads.map((lead) => (
@@ -161,6 +160,6 @@ export function ContactList({
           )}
         </div>
       </div>
-    </Card>
+    </div>
   );
 }

@@ -2,7 +2,6 @@ import { TemplatesDialog } from "@/components/TemplatesDialog";
 import { QuickRepliesDialog } from "./QuickRepliesDialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader } from "@/components/ui/card";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import { getConvexApi } from "@/lib/convex-api";
@@ -374,8 +373,8 @@ export function ChatWindow({ selectedLeadId, selectedLead }: ChatWindowProps) {
   };
 
   return (
-    <Card className="flex flex-col h-full overflow-hidden relative">
-      <CardHeader className="border-b py-3 flex-shrink-0">
+    <div className="flex flex-col h-full overflow-hidden relative bg-background">
+      <div className="border-b p-3 flex-shrink-0 bg-background z-10">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Avatar className="h-10 w-10">
@@ -400,7 +399,7 @@ export function ChatWindow({ selectedLeadId, selectedLead }: ChatWindowProps) {
             </Button>
           </div>
         </div>
-      </CardHeader>
+      </div>
 
       <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 bg-[#efeae2] relative min-h-0">
         <div
@@ -634,6 +633,6 @@ export function ChatWindow({ selectedLeadId, selectedLead }: ChatWindowProps) {
           </Button>
         </div>
       </div>
-    </Card>
+    </div>
   );
 }

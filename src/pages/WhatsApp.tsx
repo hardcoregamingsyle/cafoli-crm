@@ -1,7 +1,6 @@
 import AppLayout from "@/components/AppLayout";
 import { ChatWindow } from "@/components/whatsapp/ChatWindow";
 import { ContactList } from "@/components/whatsapp/ContactList";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { getConvexApi } from "@/lib/convex-api";
 import { CreateGroupDialog } from "@/components/whatsapp/CreateGroupDialog";
@@ -120,26 +119,23 @@ export default function WhatsApp() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col h-[calc(100vh-4rem)]">
-        <div className="flex-shrink-0 p-6 pb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col h-[calc(100vh-4rem)] bg-background">
+        <div className="flex-shrink-0 p-4 border-b flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between bg-card">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">WhatsApp Messaging</h1>
-            <p className="text-muted-foreground">
-              {user?.role === ROLES.ADMIN 
-                ? "Send WhatsApp messages to all leads and manage groups." 
-                : "Send WhatsApp messages to your assigned leads and manage groups."}
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight">WhatsApp</h1>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button 
-              variant="default" 
+              variant="outline" 
+              size="sm"
               onClick={() => setShowCreateGroupDialog(true)}
             >
               <Users className="mr-2 h-4 w-4" />
               Create Group
             </Button>
             <Button 
-              variant="default" 
+              variant="outline" 
+              size="sm"
               onClick={() => setShowBulkDialog(true)}
             >
               <Send className="mr-2 h-4 w-4" />
@@ -148,6 +144,7 @@ export default function WhatsApp() {
             {user?.role === ROLES.ADMIN && (
               <Button 
                 variant="outline" 
+                size="sm"
                 onClick={handleUpdateInterface}
                 disabled={isUpdating}
               >
@@ -158,52 +155,58 @@ export default function WhatsApp() {
           </div>
         </div>
 
-        <div className="flex-1 px-6 pb-6 min-h-0 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden">
           <Tabs defaultValue="chats" className="h-full flex flex-col">
-            <TabsList className="mb-4">
-              <TabsTrigger value="chats">
-                <MessageSquare className="h-4 w-4 mr-2" />
-                Chats
-              </TabsTrigger>
-              <TabsTrigger value="groups">
-                <Users className="h-4 w-4 mr-2" />
-                Groups
-              </TabsTrigger>
-            </TabsList>
+            <div className="px-4 pt-2 border-b bg-card">
+              <TabsList className="mb-2">
+                <TabsTrigger value="chats">
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Chats
+                </TabsTrigger>
+                <TabsTrigger value="groups">
+                  <Users className="h-4 w-4 mr-2" />
+                  Groups
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
-            <TabsContent value="chats" className="flex-1 min-h-0 overflow-hidden">
-              <div className="grid md:grid-cols-[350px_1fr] gap-4 h-full">
+            <TabsContent value="chats" className="flex-1 min-h-0 overflow-hidden m-0 border-none data-[state=active]:flex">
+              <div className="flex w-full h-full">
                 {/* Contacts List */}
-                <ContactList
-                  leads={leads}
-                  selectedLeadId={selectedLeadId}
-                  onSelectLead={setSelectedLeadId}
-                  onLoadMore={() => {}}
-                  canLoadMore={canLoadMore}
-                  isLoading={isLoading}
-                  searchQuery={searchQuery}
-                  onSearchChange={setSearchQuery}
-                />
+                <div className="w-[350px] border-r flex-shrink-0 bg-background">
+                  <ContactList
+                    leads={leads}
+                    selectedLeadId={selectedLeadId}
+                    onSelectLead={setSelectedLeadId}
+                    onLoadMore={() => {}}
+                    canLoadMore={canLoadMore}
+                    isLoading={isLoading}
+                    searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
+                  />
+                </div>
 
                 {/* Chat Area */}
-                {selectedLeadId && selectedLead ? (
-                  <ChatWindow 
-                    selectedLeadId={selectedLeadId} 
-                    selectedLead={selectedLead} 
-                  />
-                ) : (
-                  <Card className="flex flex-col h-full overflow-hidden items-center justify-center">
-                    <div className="text-center">
-                      <MessageSquare className="h-20 w-20 mx-auto mb-4 text-muted-foreground/20" />
-                      <p className="text-lg font-semibold mb-2">Select a contact</p>
-                      <p className="text-muted-foreground">Choose a contact to start messaging</p>
+                <div className="flex-1 min-w-0 bg-background">
+                  {selectedLeadId && selectedLead ? (
+                    <ChatWindow 
+                      selectedLeadId={selectedLeadId} 
+                      selectedLead={selectedLead} 
+                    />
+                  ) : (
+                    <div className="flex flex-col h-full items-center justify-center bg-muted/10">
+                      <div className="text-center">
+                        <MessageSquare className="h-16 w-16 mx-auto mb-4 text-muted-foreground/20" />
+                        <p className="text-lg font-medium mb-1">Select a contact</p>
+                        <p className="text-sm text-muted-foreground">Choose a contact to start messaging</p>
+                      </div>
                     </div>
-                  </Card>
-                )}
+                  )}
+                </div>
               </div>
             </TabsContent>
 
-            <TabsContent value="groups" className="flex-1 overflow-auto">
+            <TabsContent value="groups" className="flex-1 overflow-auto p-4 m-0">
               <GroupsList />
             </TabsContent>
           </Tabs>
