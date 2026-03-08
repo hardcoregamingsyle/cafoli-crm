@@ -13,7 +13,10 @@ export const getUniqueSources = query({
       isAdmin = user?.role === ROLES.ADMIN;
     }
 
-    const leads = await ctx.db.query("leads").collect();
+    // To get unique sources efficiently without scanning millions of leads,
+    // we should ideally have a separate table for sources.
+    // For now, we'll scan up to 5000 recent leads to find sources.
+    const leads = await ctx.db.query("leads").withIndex("by_last_activity").order("desc").take(5000);
     const sources = new Set<string>();
     
     for (const lead of leads) {
@@ -38,7 +41,9 @@ export const getAllLeadsForExport = query({
       throw new Error("Only admins can export all leads");
     }
 
-    const leads = await ctx.db.query("leads").collect();
+    // For export, we should use pagination, but since this is a single query,
+    // we'll limit to 10000 to prevent memory crashes.
+    const leads = await ctx.db.query("leads").withIndex("by_last_activity").order("desc").take(10000);
     
     const enrichedLeads = await Promise.all(
       leads.map(async (lead) => {

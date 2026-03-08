@@ -5,7 +5,7 @@ import { internal } from "./_generated/api";
 export const getR2TestLeads = internalQuery({
   args: {},
   handler: async (ctx): Promise<any[]> => {
-    return await ctx.db.query("leads").filter(q => q.eq(q.field("source"), "R2 Test")).collect();
+    return await ctx.db.query("leads").withIndex("by_source", q => q.eq("source", "R2 Test")).take(1000);
   }
 });
 
@@ -84,8 +84,7 @@ export const offloadToR2 = mutation({
     // Find leads to offload (e.g., oldest activity)
     const leadsToOffload = await ctx.db
       .query("leads")
-      .withIndex("by_last_activity")
-      .filter(q => q.eq(q.field("source"), "R2 Test"))
+      .withIndex("by_source_and_last_activity", q => q.eq("source", "R2 Test"))
       .take(args.limit);
 
     let offloadedCount = 0;
@@ -133,10 +132,10 @@ export const getR2Stats = query({
   handler: async (ctx) => {
     const convexLeads = await ctx.db
       .query("leads")
-      .filter(q => q.eq(q.field("source"), "R2 Test"))
-      .collect();
+      .withIndex("by_source", q => q.eq("source", "R2 Test"))
+      .take(1000);
       
-    const r2Leads = await ctx.db.query("r2_leads_mock").collect();
+    const r2Leads = await ctx.db.query("r2_leads_mock").take(1000);
     
     return {
       convexActiveCount: convexLeads.length,

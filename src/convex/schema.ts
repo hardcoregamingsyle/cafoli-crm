@@ -62,6 +62,8 @@ export default defineSchema({
     .index("by_cold_caller_assigned_to", ["coldCallerAssignedTo"])
     .index("by_last_activity", ["lastActivity"])
     .index("by_assigned_to_and_last_activity", ["assignedTo", "lastActivity"])
+    .index("by_source", ["source"])
+    .index("by_source_and_last_activity", ["source", "lastActivity"])
     .searchIndex("search_all", {
       searchField: "searchText",
       filterFields: ["assignedTo", "status"],

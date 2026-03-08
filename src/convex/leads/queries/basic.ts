@@ -22,18 +22,41 @@ export const getLeads = query({
         .query("leads")
         .withIndex("by_assignedTo", (q) => q.eq("assignedTo", userId))
         .order("desc")
-        .collect();
-      leads = leads.filter(l => l.type !== "Irrelevant");
+        .filter(q => q.neq(q.field("type"), "Irrelevant"))
+        .take(1000);
     } else if (args.filter === "unassigned") {
-      leads = await ctx.db.query("leads").order("desc").collect();
-      leads = leads.filter(l => !l.assignedTo && l.type !== "Irrelevant" && !l.isColdCallerLead);
+      leads = await ctx.db.query("leads")
+        .withIndex("by_last_activity")
+        .order("desc")
+        .filter(q => q.and(
+          q.eq(q.field("assignedTo"), undefined),
+          q.neq(q.field("type"), "Irrelevant"),
+          q.or(
+            q.eq(q.field("isColdCallerLead"), false),
+            q.eq(q.field("isColdCallerLead"), undefined)
+          )
+        ))
+        .take(1000);
     } else if (args.filter === "all") {
       if (user.role !== ROLES.ADMIN) return [];
-      leads = await ctx.db.query("leads").order("desc").collect();
-      leads = leads.filter(l => l.type !== "Irrelevant");
+      leads = await ctx.db.query("leads")
+        .withIndex("by_last_activity")
+        .order("desc")
+        .filter(q => q.neq(q.field("type"), "Irrelevant"))
+        .take(1000);
     } else {
-      leads = await ctx.db.query("leads").order("desc").collect();
-      leads = leads.filter(l => !l.assignedTo && l.type !== "Irrelevant" && !l.isColdCallerLead);
+      leads = await ctx.db.query("leads")
+        .withIndex("by_last_activity")
+        .order("desc")
+        .filter(q => q.and(
+          q.eq(q.field("assignedTo"), undefined),
+          q.neq(q.field("type"), "Irrelevant"),
+          q.or(
+            q.eq(q.field("isColdCallerLead"), false),
+            q.eq(q.field("isColdCallerLead"), undefined)
+          )
+        ))
+        .take(1000);
     }
 
     if (user.role !== ROLES.ADMIN) {
@@ -98,7 +121,10 @@ export const getLeadsWithUnreadCounts = query({
 
     if (!user) return [];
 
-    let leads = await ctx.db.query("leads").collect();
+    let leads = await ctx.db.query("leads")
+      .withIndex("by_last_activity")
+      .order("desc")
+      .take(1000);
     
     if (user.role !== ROLES.ADMIN) {
       leads = leads.filter(l => l.source !== "R2 Test");

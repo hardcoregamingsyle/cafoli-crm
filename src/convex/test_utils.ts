@@ -146,7 +146,7 @@ export const prepareBaseR2Leads = internalMutation({
   args: {},
   handler: async (ctx) => {
     // Load any offloaded leads back
-    const r2Leads = await ctx.db.query("r2_leads_mock").collect();
+    const r2Leads = await ctx.db.query("r2_leads_mock").take(1000);
     for (const r2Lead of r2Leads) {
       const data = r2Lead.leadData;
       delete data._id;
@@ -156,7 +156,7 @@ export const prepareBaseR2Leads = internalMutation({
     }
 
     // Ensure we have exactly 150
-    const currentLeads = await ctx.db.query("leads").filter(q => q.eq(q.field("source"), "R2 Test")).collect();
+    const currentLeads = await ctx.db.query("leads").withIndex("by_source", q => q.eq("source", "R2 Test")).take(1000);
     
     if (currentLeads.length < 150) {
       const needed = 150 - currentLeads.length;
@@ -193,8 +193,18 @@ export const verifyAndTestR2 = internalMutation({
   }> => {
     const startVerify = Date.now();
     
-    const originalR2Leads = await ctx.db.query("leads").filter(q => q.eq(q.field("source"), "R2 Test")).collect();
-    const webhookLeads = await ctx.db.query("leads").filter(q => q.eq(q.field("message"), "R2_TEST_MESSAGE")).collect();
+    const originalR2Leads = await ctx.db.query("leads").withIndex("by_source", q => q.eq("source", "R2 Test")).take(1000);
+    
+    const webhookLeads = [];
+    for (let i = 0; i < 75; i++) {
+      const imMobile = `919999888${i.toString().padStart(3, '0')}`;
+      const imLead = await ctx.db.query("leads").withIndex("by_mobile", q => q.eq("mobile", imMobile)).first();
+      if (imLead && imLead.message === "R2_TEST_MESSAGE") webhookLeads.push(imLead);
+
+      const waMobile = `919999777${i.toString().padStart(3, '0')}`;
+      const waLead = await ctx.db.query("leads").withIndex("by_mobile", q => q.eq("mobile", waMobile)).first();
+      if (waLead && waLead.message === "R2_TEST_MESSAGE") webhookLeads.push(waLead);
+    }
     
     const allTestLeads = [...originalR2Leads, ...webhookLeads];
 
@@ -215,7 +225,7 @@ export const verifyAndTestR2 = internalMutation({
 
     // Load from R2
     const startLoad = Date.now();
-    const r2Leads = await ctx.db.query("r2_leads_mock").collect();
+    const r2Leads = await ctx.db.query("r2_leads_mock").take(1000);
     
     let mismatchCount = 0;
     let loadedCount = 0;
@@ -247,7 +257,7 @@ export const verifyAndTestR2 = internalMutation({
 
     // Clean up webhook leads so they don't pollute the DB
     for (const lead of webhookLeads) {
-      const reloadedLead = await ctx.db.query("leads").filter(q => q.eq(q.field("mobile"), lead.mobile)).first();
+      const reloadedLead = await ctx.db.query("leads").withIndex("by_mobile", q => q.eq("mobile", lead.mobile)).first();
       if (reloadedLead) {
         await ctx.db.delete(reloadedLead._id);
       }

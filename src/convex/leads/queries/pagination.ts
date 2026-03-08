@@ -63,19 +63,40 @@ export const getPaginatedLeads = query({
 
     // "Mine" filter
     if (args.filter === "mine") {
-      const allLeads = await ctx.db
+      const result = await ctx.db
         .query("leads")
         .withIndex("by_assignedTo", (q) => q.eq("assignedTo", userId))
-        .collect();
+        .order("desc")
+        .filter((q) => {
+          let predicate = q.neq(q.field("type"), "Irrelevant");
+          if (user.role !== ROLES.ADMIN) {
+            predicate = q.and(predicate, q.neq(q.field("source"), "R2 Test"));
+          }
+          
+          if (args.statuses && args.statuses.length > 0 && !args.statuses.includes("All")) {
+            const statusConditions = args.statuses.map(s => q.eq(q.field("status"), s));
+            predicate = q.and(predicate, q.or(...statusConditions));
+          }
+          
+          if (args.sources && args.sources.length > 0 && !args.sources.includes("All")) {
+            const sourceConditions = args.sources.map(s => q.eq(q.field("source"), s));
+            predicate = q.and(predicate, q.or(...sourceConditions));
+          }
+          
+          return predicate;
+        })
+        .paginate(args.paginationOpts);
 
-      let activeLeads = allLeads.filter(l => l.type !== "Irrelevant");
-      if (user.role !== ROLES.ADMIN) {
-        activeLeads = activeLeads.filter(l => l.source !== "R2 Test");
+      let page = result.page;
+      
+      if (args.tags && args.tags.length > 0) {
+        page = page.filter(lead => 
+          lead.tags && args.tags!.some(tagId => lead.tags!.includes(tagId))
+        );
       }
-      activeLeads = applyFilters(activeLeads, args);
 
       if (!args.sortBy) {
-        activeLeads.sort((a, b) => {
+        page.sort((a, b) => {
           const dateA = a.nextFollowUpDate;
           const dateB = b.nextFollowUpDate;
           
@@ -86,54 +107,14 @@ export const getPaginatedLeads = query({
           return b.lastActivity - a.lastActivity;
         });
       } else {
-        activeLeads = sortLeads(activeLeads, args.sortBy);
+        page = sortLeads(page, args.sortBy);
       }
 
-      const { numItems, cursor } = args.paginationOpts;
-      const offset = cursor ? parseInt(cursor) : 0;
-      const page = activeLeads.slice(offset, offset + numItems);
-      const isDone = offset + numItems >= activeLeads.length;
-      const continueCursor = isDone ? "" : (offset + numItems).toString();
-
       const enrichedPage = await enrichLeads(ctx, page);
-      return { page: enrichedPage, isDone, continueCursor };
+      return { ...result, page: enrichedPage };
     }
 
-    // Other filters with in-memory processing
-    const hasFilters = (args.statuses && args.statuses.length > 0) ||
-                      (args.sources && args.sources.length > 0) ||
-                      (args.tags && args.tags.length > 0) ||
-                      (args.assignedToUsers && args.assignedToUsers.length > 0) ||
-                      args.sortBy;
-
-    if (hasFilters) {
-      const allLeads = await ctx.db.query("leads").order("desc").collect();
-      let filtered = allLeads.filter(l => {
-        if (user.role !== ROLES.ADMIN && l.source === "R2 Test") return false;
-        
-        if (args.filter === "unassigned") {
-          return !l.assignedTo && l.type !== "Irrelevant" && !l.isColdCallerLead;
-        }
-        if (args.filter === "irrelevant") return l.type === "Irrelevant";
-        if (args.filter === "all") return l.type !== "Irrelevant";
-        if (args.filter === "cold_caller") return l.isColdCallerLead === true;
-        return !l.assignedTo && l.type !== "Irrelevant" && !l.isColdCallerLead;
-      });
-
-      filtered = applyFilters(filtered, args);
-      filtered = sortLeads(filtered, args.sortBy);
-
-      const { numItems, cursor } = args.paginationOpts;
-      const offset = cursor ? parseInt(cursor) : 0;
-      const page = filtered.slice(offset, offset + numItems);
-      const isDone = offset + numItems >= filtered.length;
-      const continueCursor = isDone ? "" : (offset + numItems).toString();
-      
-      const enrichedPage = await enrichLeads(ctx, page);
-      return { page: enrichedPage, isDone, continueCursor };
-    }
-
-    // Default indexed query
+    // Other filters
     const result = await ctx.db
       .query("leads")
       .withIndex("by_last_activity")
@@ -162,11 +143,38 @@ export const getPaginatedLeads = query({
           predicate = q.and(predicate, q.neq(q.field("source"), "R2 Test"));
         }
 
+        if (args.statuses && args.statuses.length > 0 && !args.statuses.includes("All")) {
+          const statusConditions = args.statuses.map(s => q.eq(q.field("status"), s));
+          predicate = q.and(predicate, q.or(...statusConditions));
+        }
+        
+        if (args.sources && args.sources.length > 0 && !args.sources.includes("All")) {
+          const sourceConditions = args.sources.map(s => q.eq(q.field("source"), s));
+          predicate = q.and(predicate, q.or(...sourceConditions));
+        }
+
+        if (args.assignedToUsers && args.assignedToUsers.length > 0) {
+          const assignedConditions = args.assignedToUsers.map(u => q.eq(q.field("assignedTo"), u));
+          predicate = q.and(predicate, q.or(...assignedConditions));
+        }
+
         return predicate;
       })
       .paginate(args.paginationOpts);
 
-    const enrichedPage = await enrichLeads(ctx, result.page);
+    let page = result.page;
+    
+    if (args.tags && args.tags.length > 0) {
+      page = page.filter(lead => 
+        lead.tags && args.tags!.some(tagId => lead.tags!.includes(tagId))
+      );
+    }
+
+    if (args.sortBy) {
+      page = sortLeads(page, args.sortBy);
+    }
+
+    const enrichedPage = await enrichLeads(ctx, page);
     return { ...result, page: enrichedPage };
   },
 });
