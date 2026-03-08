@@ -380,4 +380,9 @@ export default defineSchema({
     .index("by_assignedTo", ["assignedTo"])
     .index("by_scheduled_at", ["scheduledAt"]),
 
+  r2_leads_mock: defineTable({
+    originalId: v.string(),
+    leadData: v.any(),
+  }),
+
 }, { schemaValidation: false });

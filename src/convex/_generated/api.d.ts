@@ -64,6 +64,7 @@ import type * as products from "../products.js";
 import type * as pushNotifications from "../pushNotifications.js";
 import type * as pushNotificationsActions from "../pushNotificationsActions.js";
 import type * as quickReplies from "../quickReplies.js";
+import type * as r2_cache_prototype from "../r2_cache_prototype.js";
 import type * as rangePdfs from "../rangePdfs.js";
 import type * as reportPdfGenerator from "../reportPdfGenerator.js";
 import type * as reports from "../reports.js";
@@ -156,6 +157,7 @@ declare const fullApi: ApiFromModules<{
   pushNotifications: typeof pushNotifications;
   pushNotificationsActions: typeof pushNotificationsActions;
   quickReplies: typeof quickReplies;
+  r2_cache_prototype: typeof r2_cache_prototype;
   rangePdfs: typeof rangePdfs;
   reportPdfGenerator: typeof reportPdfGenerator;
   reports: typeof reports;
