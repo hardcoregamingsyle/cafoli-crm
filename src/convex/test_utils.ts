@@ -179,20 +179,9 @@ export const prepareBaseR2Leads = internalMutation({
   }
 });
 
-export const verifyAndTestR2 = internalMutation({
-  args: { sendTime: v.number() },
-  handler: async (ctx, args): Promise<{
-    sendTimeMs: number;
-    verifyTimeMs: number;
-    offloadTimeMs: number;
-    loadTimeMs: number;
-    totalTestLeadsFound: number;
-    mismatchCount: number;
-    loadedCount: number;
-    success: boolean;
-  }> => {
-    const startVerify = Date.now();
-    
+export const getTestLeadsForOffload = internalQuery({
+  args: {},
+  handler: async (ctx) => {
     const originalR2Leads = await ctx.db.query("leads").withIndex("by_source", q => q.eq("source", "R2 Test")).take(1000);
     
     const webhookLeads = [];
@@ -206,32 +195,33 @@ export const verifyAndTestR2 = internalMutation({
       if (waLead && waLead.message === "R2_TEST_MESSAGE") webhookLeads.push(waLead);
     }
     
-    const allTestLeads = [...originalR2Leads, ...webhookLeads];
+    return [...originalR2Leads, ...webhookLeads];
+  }
+});
 
-    const verifyTime = Date.now() - startVerify;
-
-    // Offload to R2
-    const startOffload = Date.now();
-    const offloadedData = [];
-    for (const lead of allTestLeads) {
+export const offloadTestLeads = internalMutation({
+  args: { leads: v.array(v.any()) },
+  handler: async (ctx, args) => {
+    for (const lead of args.leads) {
       await ctx.db.insert("r2_leads_mock", {
         originalId: lead._id,
         leadData: lead,
       });
       await ctx.db.delete(lead._id);
-      offloadedData.push(lead);
     }
-    const offloadTime = Date.now() - startOffload;
+  }
+});
 
-    // Load from R2
-    const startLoad = Date.now();
+export const loadAndVerifyTestLeads = internalMutation({
+  args: { offloadedLeads: v.array(v.any()) },
+  handler: async (ctx, args) => {
     const r2Leads = await ctx.db.query("r2_leads_mock").take(1000);
     
     let mismatchCount = 0;
     let loadedCount = 0;
 
     for (const r2Lead of r2Leads) {
-      const original = offloadedData.find(l => l._id === r2Lead.originalId);
+      const original = args.offloadedLeads.find((l: any) => l._id === r2Lead.originalId);
       if (original) {
         const data = r2Lead.leadData;
         delete data._id;
@@ -253,26 +243,19 @@ export const verifyAndTestR2 = internalMutation({
         loadedCount++;
       }
     }
-    const loadTime = Date.now() - startLoad;
+    return { mismatchCount, loadedCount };
+  }
+});
 
-    // Clean up webhook leads so they don't pollute the DB
-    for (const lead of webhookLeads) {
+export const cleanupTestWebhookLeads = internalMutation({
+  args: { webhookLeads: v.array(v.any()) },
+  handler: async (ctx, args) => {
+    for (const lead of args.webhookLeads) {
       const reloadedLead = await ctx.db.query("leads").withIndex("by_mobile", q => q.eq("mobile", lead.mobile)).first();
       if (reloadedLead) {
         await ctx.db.delete(reloadedLead._id);
       }
     }
-
-    return {
-      sendTimeMs: args.sendTime,
-      verifyTimeMs: verifyTime,
-      offloadTimeMs: offloadTime,
-      loadTimeMs: loadTime,
-      totalTestLeadsFound: allTestLeads.length,
-      mismatchCount,
-      loadedCount,
-      success: allTestLeads.length >= 300 && mismatchCount === 0
-    };
   }
 });
 
@@ -353,16 +336,43 @@ export const simulateWebhooksAndTestR2 = action({
 
     await Promise.all(promises);
     const endSend = Date.now();
-    const sendTime = endSend - startSend;
+    const sendTimeMs = endSend - startSend;
 
-    // Wait longer for webhooks to process (increased from 6s to 8s to ensure all 300 leads are found)
-    await new Promise(resolve => setTimeout(resolve, 8000));
+    // Poll for webhooks to process (up to 30 seconds)
+    let allTestLeads: any[] = [];
+    const startVerify = Date.now();
+    for (let attempt = 0; attempt < 15; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      allTestLeads = await ctx.runQuery(internal.test_utils.getTestLeadsForOffload);
+      if (allTestLeads.length >= 300) {
+        break;
+      }
+    }
+    const verifyTimeMs = Date.now() - startVerify;
 
-    // Verify and Test R2
-    const result = (await ctx.runMutation(internal.test_utils.verifyAndTestR2, {
-      sendTime
-    })) as any;
+    // Offload to R2
+    const startOffload = Date.now();
+    await ctx.runMutation(internal.test_utils.offloadTestLeads, { leads: allTestLeads });
+    const offloadTimeMs = Date.now() - startOffload;
 
-    return result;
+    // Load from R2
+    const startLoad = Date.now();
+    const { mismatchCount, loadedCount } = await ctx.runMutation(internal.test_utils.loadAndVerifyTestLeads, { offloadedLeads: allTestLeads });
+    const loadTimeMs = Date.now() - startLoad;
+
+    // Clean up webhook leads
+    const webhookLeads = allTestLeads.filter(l => l.source !== "R2 Test");
+    await ctx.runMutation(internal.test_utils.cleanupTestWebhookLeads, { webhookLeads });
+
+    return {
+      sendTimeMs,
+      verifyTimeMs,
+      offloadTimeMs,
+      loadTimeMs,
+      totalTestLeadsFound: allTestLeads.length,
+      mismatchCount,
+      loadedCount,
+      success: allTestLeads.length >= 300 && mismatchCount === 0
+    };
   }
 });
