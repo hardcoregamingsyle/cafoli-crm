@@ -60,7 +60,7 @@ export const processIndiamartLead = internalMutation({
       // Fallback: check by unique query ID (for legacy data)
       existingLead = await ctx.db
         .query("leads")
-        .filter((q) => q.eq(q.field("indiamartUniqueId"), args.uniqueQueryId))
+        .withIndex("by_indiamart_id", (q) => q.eq("indiamartUniqueId", args.uniqueQueryId))
         .first();
     }
 
@@ -242,7 +242,7 @@ export const checkIndiamartLeadExists = internalQuery({
     // Fallback: check by unique query ID (for legacy data)
     const leadByQueryId = await ctx.db
       .query("leads")
-      .filter((q) => q.eq(q.field("indiamartUniqueId"), args.uniqueQueryId))
+      .withIndex("by_indiamart_id", (q) => q.eq("indiamartUniqueId", args.uniqueQueryId))
       .first();
     
     if (!leadByQueryId) return null;

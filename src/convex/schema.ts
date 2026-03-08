@@ -64,6 +64,7 @@ export default defineSchema({
     .index("by_assigned_to_and_last_activity", ["assignedTo", "lastActivity"])
     .index("by_source", ["source"])
     .index("by_source_and_last_activity", ["source", "lastActivity"])
+    .index("by_indiamart_id", ["indiamartUniqueId"])
     .searchIndex("search_all", {
       searchField: "searchText",
       filterFields: ["assignedTo", "status"],
