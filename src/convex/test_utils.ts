@@ -10,6 +10,38 @@ export const getAnyUser = internalQuery({
   }
 });
 
+export const deleteTestLeads = internalMutation({
+  args: {},
+  returns: v.string(),
+  handler: async (ctx) => {
+    const leads = await ctx.db.query("leads").collect();
+    let count = 0;
+    for (const lead of leads) {
+      if (lead.name.startsWith("Test ")) {
+        // Also delete associated chats and messages to be thorough
+        const chats = await ctx.db.query("chats").withIndex("by_lead", q => q.eq("leadId", lead._id)).collect();
+        for (const chat of chats) {
+          const messages = await ctx.db.query("messages").withIndex("by_chat", q => q.eq("chatId", chat._id)).collect();
+          for (const msg of messages) {
+            await ctx.db.delete(msg._id);
+          }
+          await ctx.db.delete(chat._id);
+        }
+        
+        // Delete associated comments
+        const comments = await ctx.db.query("comments").withIndex("by_lead", q => q.eq("leadId", lead._id)).collect();
+        for (const comment of comments) {
+          await ctx.db.delete(comment._id);
+        }
+
+        await ctx.db.delete(lead._id);
+        count++;
+      }
+    }
+    return `Deleted ${count} test leads and their associated data.`;
+  }
+});
+
 export const testIndiamartLeadProcessing = internalMutation({
   args: {},
   returns: v.any(),
