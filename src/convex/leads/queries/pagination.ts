@@ -52,7 +52,7 @@ export const getPaginatedLeads = query({
       let results = await query.collect();
       
       if (user.role !== ROLES.ADMIN) {
-        results = results.filter(l => l.type !== "Irrelevant");
+        results = results.filter(l => l.type !== "Irrelevant" && l.source !== "R2 Test");
       }
 
       results = applyFilters(results, args);
@@ -69,6 +69,9 @@ export const getPaginatedLeads = query({
         .collect();
 
       let activeLeads = allLeads.filter(l => l.type !== "Irrelevant");
+      if (user.role !== ROLES.ADMIN) {
+        activeLeads = activeLeads.filter(l => l.source !== "R2 Test");
+      }
       activeLeads = applyFilters(activeLeads, args);
 
       if (!args.sortBy) {
@@ -106,6 +109,8 @@ export const getPaginatedLeads = query({
     if (hasFilters) {
       const allLeads = await ctx.db.query("leads").order("desc").collect();
       let filtered = allLeads.filter(l => {
+        if (user.role !== ROLES.ADMIN && l.source === "R2 Test") return false;
+        
         if (args.filter === "unassigned") {
           return !l.assignedTo && l.type !== "Irrelevant" && !l.isColdCallerLead;
         }
@@ -151,6 +156,10 @@ export const getPaginatedLeads = query({
           predicate = q.eq(q.field("isColdCallerLead"), true);
         } else {
           predicate = q.neq(q.field("type"), "Irrelevant");
+        }
+
+        if (user.role !== ROLES.ADMIN) {
+          predicate = q.and(predicate, q.neq(q.field("source"), "R2 Test"));
         }
 
         return predicate;

@@ -36,6 +36,10 @@ export const getLeads = query({
       leads = leads.filter(l => !l.assignedTo && l.type !== "Irrelevant" && !l.isColdCallerLead);
     }
 
+    if (user.role !== ROLES.ADMIN) {
+      leads = leads.filter(l => l.source !== "R2 Test");
+    }
+
     return leads;
   },
 });
@@ -94,8 +98,12 @@ export const getLeadsWithUnreadCounts = query({
 
     if (!user) return [];
 
-    const leads = await ctx.db.query("leads").collect();
+    let leads = await ctx.db.query("leads").collect();
     
+    if (user.role !== ROLES.ADMIN) {
+      leads = leads.filter(l => l.source !== "R2 Test");
+    }
+
     const leadsWithUnread = await Promise.all(
       leads.map(async (lead) => {
         const chat = await ctx.db

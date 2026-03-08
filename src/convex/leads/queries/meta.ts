@@ -1,15 +1,24 @@
 import { v } from "convex/values";
 import { query } from "../../_generated/server";
 import { ROLES } from "../../schema";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
 export const getUniqueSources = query({
   args: {},
   handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    let isAdmin = false;
+    if (userId) {
+      const user = await ctx.db.get(userId);
+      isAdmin = user?.role === ROLES.ADMIN;
+    }
+
     const leads = await ctx.db.query("leads").collect();
     const sources = new Set<string>();
     
     for (const lead of leads) {
       if (lead.source) {
+        if (!isAdmin && lead.source === "R2 Test") continue;
         sources.add(lead.source);
       }
     }
