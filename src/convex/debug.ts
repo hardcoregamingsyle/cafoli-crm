@@ -46,3 +46,21 @@ export const checkCorruptedLeads = internalQuery({
     };
   }
 });
+
+export const deleteCorruptedLeads = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const leads = await ctx.db.query("leads").collect();
+    const corrupted = leads.filter(l => !l.mobile || l.mobile.length < 10 || l.mobile.includes("+") || l.mobile.includes(" ") || l.mobile.includes("-"));
+    
+    let deleted = 0;
+    for (const lead of corrupted) {
+      // Only delete if name is also junk (like "*")
+      if (!lead.name || lead.name === "*" || lead.name.trim() === "") {
+        await ctx.db.delete(lead._id);
+        deleted++;
+      }
+    }
+    return { deleted, total: corrupted.length };
+  }
+});

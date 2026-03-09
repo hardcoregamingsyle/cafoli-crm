@@ -171,6 +171,16 @@ export const createPharmavendsLead = internalMutation({
     const standardizedMobile = standardizePhoneNumber(args.mobile);
     const standardizedAltMobile = args.altMobile ? standardizePhoneNumber(args.altMobile) : undefined;
 
+    // Skip leads with invalid mobile numbers or junk names
+    if (!standardizedMobile || standardizedMobile.length < 10) {
+      console.warn(`Skipping lead with invalid mobile: uid=${args.uid}, mobile="${args.mobile}", name="${args.name}"`);
+      return null;
+    }
+    if (!args.name || args.name.trim() === "" || args.name.trim() === "*") {
+      console.warn(`Skipping lead with invalid name: uid=${args.uid}, name="${args.name}"`);
+      return null;
+    }
+
     // Generate search text
     const searchText = [
       args.name,
