@@ -1,6 +1,7 @@
 import { internalQuery, internalMutation, action } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import { Id } from "./_generated/dataModel";
 
 export const getAnyUser = internalQuery({
   args: {},
@@ -282,6 +283,64 @@ export const cleanupTestWebhookLeads = internalMutation({
         await ctx.db.delete(reloadedLead._id);
       }
     }
+  }
+});
+
+export const createOldTestLeads = internalMutation({
+  args: {},
+  returns: v.array(v.id("leads")),
+  handler: async (ctx) => {
+    const fortyDaysAgo = Date.now() - 40 * 24 * 60 * 60 * 1000;
+    const leadIds = [];
+    for (let i = 0; i < 5; i++) {
+      const id = await ctx.db.insert("leads", {
+        name: `Auto Offload Test Lead ${i}`,
+        mobile: `91999999999${i}`,
+        status: "Cold",
+        type: "To be Decided",
+        lastActivity: fortyDaysAgo,
+        source: "R2 Test",
+      });
+      leadIds.push(id);
+    }
+    return leadIds;
+  }
+});
+
+export const verifyOffloadedLeads = internalQuery({
+  args: { leadIds: v.array(v.id("leads")) },
+  returns: v.number(),
+  handler: async (ctx, args) => {
+    let offloadedCount = 0;
+    for (const id of args.leadIds) {
+      const inLeads = await ctx.db.get(id);
+      if (!inLeads) {
+        const inR2 = await ctx.db.query("r2_leads_mock").collect();
+        const found = inR2.find(r => r.originalId === id);
+        if (found) offloadedCount++;
+      }
+    }
+    return offloadedCount;
+  }
+});
+
+export const testAutoOffload = action({
+  args: {},
+  returns: v.string(),
+  handler: async (ctx) => {
+    // 1. Create 5 test leads with lastActivity = 40 days ago
+    const leadIds = (await ctx.runMutation(internal.test_utils.createOldTestLeads)) as Id<"leads">[];
+    
+    // 2. Run auto offload
+    await ctx.runMutation(internal.r2_cache_prototype.autoOffloadToR2);
+
+    // 3. Verify
+    const offloadedCount = (await ctx.runQuery(internal.test_utils.verifyOffloadedLeads, { leadIds })) as number;
+
+    // 4. Clean up the test leads from R2
+    await ctx.runMutation(internal.test_utils.deleteTestLeads);
+
+    return `Created ${leadIds.length} old test leads. After auto-offload, ${offloadedCount} were successfully moved to R2.`;
   }
 });
 
