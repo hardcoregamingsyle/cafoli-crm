@@ -394,6 +394,8 @@ export default defineSchema({
     source: v.optional(v.string()),
   }).index("by_mobile", ["mobile"])
     .index("by_indiamart_id", ["indiamartUniqueId"])
+    .index("by_original_id", ["originalId"])
+    .index("by_source", ["source"])
     .searchIndex("search_all", {
       searchField: "searchText",
     }),

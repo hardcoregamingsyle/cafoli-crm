@@ -39,13 +39,13 @@ export const deleteTestLeads = internalMutation({
     }
 
     // Also delete from r2_leads_mock
-    const r2Leads = await ctx.db.query("r2_leads_mock").take(1000);
+    const r2Leads = await ctx.db.query("r2_leads_mock")
+      .withIndex("by_source", q => q.eq("source", "R2 Test"))
+      .take(1000);
     let r2Count = 0;
     for (const r2Lead of r2Leads) {
-      if (r2Lead.name?.includes("Test") || r2Lead.source === "R2 Test" || r2Lead.name?.includes("R2 Webhook")) {
-        await ctx.db.delete(r2Lead._id);
-        r2Count++;
-      }
+      await ctx.db.delete(r2Lead._id);
+      r2Count++;
     }
 
     return `Deleted ${count} test leads and ${r2Count} R2 test leads.`;
@@ -156,8 +156,10 @@ export const testProcessWhatsAppLeadPerformance = internalMutation({
 export const prepareBaseR2Leads = internalMutation({
   args: {},
   handler: async (ctx) => {
-    // Load any offloaded leads back
-    const r2Leads = await ctx.db.query("r2_leads_mock").take(1000);
+    // Load any offloaded test leads back
+    const r2Leads = await ctx.db.query("r2_leads_mock")
+      .withIndex("by_source", q => q.eq("source", "R2 Test"))
+      .take(1000);
     for (const r2Lead of r2Leads) {
       const data = r2Lead.leadData;
       delete data._id;
@@ -226,14 +228,15 @@ export const offloadTestLeads = internalMutation({
 export const loadAndVerifyTestLeads = internalMutation({
   args: { offloadedLeads: v.array(v.any()) },
   handler: async (ctx, args) => {
-    const r2Leads = await ctx.db.query("r2_leads_mock").take(1000);
-    
     let mismatchCount = 0;
     let loadedCount = 0;
 
-    for (const r2Lead of r2Leads) {
-      const original = args.offloadedLeads.find((l: any) => l._id === r2Lead.originalId);
-      if (original) {
+    for (const original of args.offloadedLeads) {
+      const r2Lead = await ctx.db.query("r2_leads_mock")
+        .withIndex("by_original_id", q => q.eq("originalId", original._id))
+        .first();
+        
+      if (r2Lead) {
         const data = r2Lead.leadData;
         delete data._id;
         delete data._creationTime;
@@ -313,9 +316,10 @@ export const verifyOffloadedLeads = internalQuery({
     for (const id of args.leadIds) {
       const inLeads = await ctx.db.get(id);
       if (!inLeads) {
-        const inR2 = await ctx.db.query("r2_leads_mock").take(1000);
-        const found = inR2.find(r => r.originalId === id);
-        if (found) offloadedCount++;
+        const inR2 = await ctx.db.query("r2_leads_mock")
+          .withIndex("by_original_id", q => q.eq("originalId", id))
+          .first();
+        if (inR2) offloadedCount++;
       }
     }
     return offloadedCount;
