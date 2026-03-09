@@ -102,10 +102,10 @@ crons.cron(
   {}
 );
 
-// Auto offload inactive leads to R2 daily at 3 AM IST (9:30 PM UTC previous day)
-crons.cron(
+// Auto offload inactive leads to R2 every 10 minutes
+crons.interval(
   "auto_offload_to_r2",
-  "30 21 * * *",
+  { minutes: 10 },
   internal.r2_cache_prototype.autoOffloadToR2,
   {}
 );
