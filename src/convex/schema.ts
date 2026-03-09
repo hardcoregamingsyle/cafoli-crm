@@ -386,6 +386,9 @@ export default defineSchema({
   r2_leads_mock: defineTable({
     originalId: v.string(),
     leadData: v.any(),
-  }),
+    mobile: v.optional(v.string()),
+    indiamartUniqueId: v.optional(v.string()),
+  }).index("by_mobile", ["mobile"])
+    .index("by_indiamart_id", ["indiamartUniqueId"]),
 
 }, { schemaValidation: false });

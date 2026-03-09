@@ -2,6 +2,8 @@ import { mutation, internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import { LOG_CATEGORIES } from "./activityLogs";
+import { restoreLeadFromR2Core } from "./r2_cache_prototype";
+import { Id } from "./_generated/dataModel";
 
 function standardizePhoneNumber(phone: string): string {
   if (!phone) return "";
@@ -148,6 +150,28 @@ export const processWhatsAppLead = internalMutation({
         .query("leads")
         .withIndex("by_mobile", (q) => q.eq("mobile", args.phoneNumber))
         .first();
+    }
+
+    if (!existingLead) {
+      // Check R2 for standardized phone
+      let r2Lead = await ctx.db
+        .query("r2_leads_mock")
+        .withIndex("by_mobile", (q) => q.eq("mobile", standardizedPhone))
+        .first();
+        
+      if (!r2Lead) {
+        r2Lead = await ctx.db
+          .query("r2_leads_mock")
+          .withIndex("by_mobile", (q) => q.eq("mobile", args.phoneNumber))
+          .first();
+      }
+      
+      if (r2Lead) {
+        const restoredLeadId = await restoreLeadFromR2Core(ctx, r2Lead._id);
+        if (restoredLeadId) {
+          existingLead = await ctx.db.get(restoredLeadId as Id<"leads">);
+        }
+      }
     }
 
     if (existingLead) {

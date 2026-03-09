@@ -1,6 +1,8 @@
 import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import { restoreLeadFromR2Core } from "./r2_cache_prototype";
+import { Id } from "./_generated/dataModel";
 
 function standardizePhoneNumber(phone: string): string {
   if (!phone) return "";
@@ -62,6 +64,31 @@ export const processIndiamartLead = internalMutation({
         .query("leads")
         .withIndex("by_indiamart_id", (q) => q.eq("indiamartUniqueId", args.uniqueQueryId))
         .first();
+    }
+
+    if (!existingLead) {
+      // Check R2
+      let r2Lead = null;
+      if (standardizedMobile) {
+        r2Lead = await ctx.db
+          .query("r2_leads_mock")
+          .withIndex("by_mobile", (q) => q.eq("mobile", standardizedMobile))
+          .first();
+      }
+      
+      if (!r2Lead && args.uniqueQueryId) {
+        r2Lead = await ctx.db
+          .query("r2_leads_mock")
+          .withIndex("by_indiamart_id", (q) => q.eq("indiamartUniqueId", args.uniqueQueryId))
+          .first();
+      }
+      
+      if (r2Lead) {
+        const restoredLeadId = await restoreLeadFromR2Core(ctx, r2Lead._id);
+        if (restoredLeadId) {
+          existingLead = await ctx.db.get(restoredLeadId as Id<"leads">);
+        }
+      }
     }
 
     if (existingLead) {
@@ -245,12 +272,31 @@ export const checkIndiamartLeadExists = internalQuery({
       .withIndex("by_indiamart_id", (q) => q.eq("indiamartUniqueId", args.uniqueQueryId))
       .first();
     
-    if (!leadByQueryId) return null;
+    if (leadByQueryId) {
+      return {
+        _id: leadByQueryId._id,
+        type: leadByQueryId.type,
+      };
+    }
 
-    return {
-      _id: leadByQueryId._id,
-      type: leadByQueryId.type,
-    };
+    // Check R2
+    let r2Lead = await ctx.db
+      .query("r2_leads_mock")
+      .withIndex("by_mobile", (q) => q.eq("mobile", standardizedMobile))
+      .first();
+      
+    if (!r2Lead && args.uniqueQueryId) {
+      r2Lead = await ctx.db
+        .query("r2_leads_mock")
+        .withIndex("by_indiamart_id", (q) => q.eq("indiamartUniqueId", args.uniqueQueryId))
+        .first();
+    }
+    
+    if (r2Lead) {
+      return null; // Will be restored in processIndiamartLead
+    }
+
+    return null;
   },
 });
 
