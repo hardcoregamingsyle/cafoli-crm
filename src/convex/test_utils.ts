@@ -16,7 +16,7 @@ export const deleteTestLeads = internalMutation({
     const leads = await ctx.db.query("leads").collect();
     let count = 0;
     for (const lead of leads) {
-      if (lead.name.startsWith("Test ")) {
+      if (lead.name.includes("Test") || lead.source === "R2 Test" || lead.name.includes("R2 Webhook")) {
         // Also delete associated chats and messages to be thorough
         const chats = await ctx.db.query("chats").withIndex("by_lead", q => q.eq("leadId", lead._id)).collect();
         for (const chat of chats) {
@@ -37,7 +37,18 @@ export const deleteTestLeads = internalMutation({
         count++;
       }
     }
-    return `Deleted ${count} test leads and their associated data.`;
+
+    // Also delete from r2_leads_mock
+    const r2Leads = await ctx.db.query("r2_leads_mock").collect();
+    let r2Count = 0;
+    for (const r2Lead of r2Leads) {
+      if (r2Lead.name?.includes("Test") || r2Lead.source === "R2 Test" || r2Lead.name?.includes("R2 Webhook")) {
+        await ctx.db.delete(r2Lead._id);
+        r2Count++;
+      }
+    }
+
+    return `Deleted ${count} test leads and ${r2Count} R2 test leads.`;
   }
 });
 
