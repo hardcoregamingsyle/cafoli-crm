@@ -14,33 +14,32 @@ export const deleteTestLeads = internalMutation({
   args: {},
   returns: v.string(),
   handler: async (ctx) => {
-    const leads = await ctx.db.query("leads").collect();
+    // Use index instead of collect() to avoid reading too many bytes
+    const leads = await ctx.db.query("leads").withIndex("by_source", q => q.eq("source", "R2 Test")).take(1000);
     let count = 0;
     for (const lead of leads) {
-      if (lead.name.includes("Test") || lead.source === "R2 Test" || lead.name.includes("R2 Webhook")) {
-        // Also delete associated chats and messages to be thorough
-        const chats = await ctx.db.query("chats").withIndex("by_lead", q => q.eq("leadId", lead._id)).collect();
-        for (const chat of chats) {
-          const messages = await ctx.db.query("messages").withIndex("by_chat", q => q.eq("chatId", chat._id)).collect();
-          for (const msg of messages) {
-            await ctx.db.delete(msg._id);
-          }
-          await ctx.db.delete(chat._id);
+      // Also delete associated chats and messages to be thorough
+      const chats = await ctx.db.query("chats").withIndex("by_lead", q => q.eq("leadId", lead._id)).collect();
+      for (const chat of chats) {
+        const messages = await ctx.db.query("messages").withIndex("by_chat", q => q.eq("chatId", chat._id)).collect();
+        for (const msg of messages) {
+          await ctx.db.delete(msg._id);
         }
-        
-        // Delete associated comments
-        const comments = await ctx.db.query("comments").withIndex("by_lead", q => q.eq("leadId", lead._id)).collect();
-        for (const comment of comments) {
-          await ctx.db.delete(comment._id);
-        }
-
-        await ctx.db.delete(lead._id);
-        count++;
+        await ctx.db.delete(chat._id);
       }
+      
+      // Delete associated comments
+      const comments = await ctx.db.query("comments").withIndex("by_lead", q => q.eq("leadId", lead._id)).collect();
+      for (const comment of comments) {
+        await ctx.db.delete(comment._id);
+      }
+
+      await ctx.db.delete(lead._id);
+      count++;
     }
 
     // Also delete from r2_leads_mock
-    const r2Leads = await ctx.db.query("r2_leads_mock").collect();
+    const r2Leads = await ctx.db.query("r2_leads_mock").take(1000);
     let r2Count = 0;
     for (const r2Lead of r2Leads) {
       if (r2Lead.name?.includes("Test") || r2Lead.source === "R2 Test" || r2Lead.name?.includes("R2 Webhook")) {
@@ -290,7 +289,6 @@ export const createOldTestLeads = internalMutation({
   args: {},
   returns: v.array(v.id("leads")),
   handler: async (ctx) => {
-    const fortyDaysAgo = Date.now() - 40 * 24 * 60 * 60 * 1000;
     const leadIds = [];
     for (let i = 0; i < 5; i++) {
       const id = await ctx.db.insert("leads", {
@@ -298,7 +296,7 @@ export const createOldTestLeads = internalMutation({
         mobile: `91999999999${i}`,
         status: "Cold",
         type: "To be Decided",
-        lastActivity: fortyDaysAgo,
+        lastActivity: 0, // Set to 0 so they are the absolute oldest and picked up first
         source: "R2 Test",
       });
       leadIds.push(id);
@@ -315,7 +313,7 @@ export const verifyOffloadedLeads = internalQuery({
     for (const id of args.leadIds) {
       const inLeads = await ctx.db.get(id);
       if (!inLeads) {
-        const inR2 = await ctx.db.query("r2_leads_mock").collect();
+        const inR2 = await ctx.db.query("r2_leads_mock").take(1000);
         const found = inR2.find(r => r.originalId === id);
         if (found) offloadedCount++;
       }
@@ -326,13 +324,13 @@ export const verifyOffloadedLeads = internalQuery({
 
 export const testAutoOffload = action({
   args: {},
-  returns: v.string(),
-  handler: async (ctx) => {
-    // 1. Create 5 test leads with lastActivity = 40 days ago
+  returns: v.any(),
+  handler: async (ctx): Promise<any> => {
+    // 1. Create 5 test leads with lastActivity = 0
     const leadIds = (await ctx.runMutation(internal.test_utils.createOldTestLeads)) as Id<"leads">[];
     
     // 2. Run auto offload
-    await ctx.runMutation(internal.r2_cache_prototype.autoOffloadToR2);
+    const offloadedInRun = (await ctx.runMutation(internal.r2_cache_prototype.autoOffloadToR2)) as number;
 
     // 3. Verify
     const offloadedCount = (await ctx.runQuery(internal.test_utils.verifyOffloadedLeads, { leadIds })) as number;
@@ -340,7 +338,14 @@ export const testAutoOffload = action({
     // 4. Clean up the test leads from R2
     await ctx.runMutation(internal.test_utils.deleteTestLeads);
 
-    return `Created ${leadIds.length} old test leads. After auto-offload, ${offloadedCount} were successfully moved to R2.`;
+    return {
+      message: `Created ${leadIds.length} old test leads. After auto-offload, ${offloadedCount} were successfully moved to R2.`,
+      debug: {
+        created: leadIds.length,
+        offloadedInRun,
+        verifiedOffloaded: offloadedCount
+      }
+    };
   }
 });
 

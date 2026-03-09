@@ -326,5 +326,6 @@ export const autoOffloadToR2 = internalMutation({
     }
 
     console.log(`Auto-offloaded ${offloadedCount} leads to R2.`);
+    return offloadedCount;
   }
 });
