@@ -64,3 +64,44 @@ export const deleteCorruptedLeads = internalMutation({
     return { deleted, total: corrupted.length };
   }
 });
+
+export const checkBulkContactsStatus = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const total = await ctx.db.query("bulkContacts").take(1000);
+    const replied = total.filter(c => c.status === "replied");
+    const sent = total.filter(c => c.status === "sent");
+    const cold = total.filter(c => c.status === "cold");
+    
+    // Check how many replied contacts have corresponding leads
+    let repliedWithLead = 0;
+    let repliedWithoutLead = 0;
+    const sampleMissingLeads: any[] = [];
+    
+    for (const contact of replied.slice(0, 50)) {
+      const lead = await ctx.db
+        .query("leads")
+        .withIndex("by_mobile", (q) => q.eq("mobile", contact.phoneNumber))
+        .first();
+      
+      if (lead) {
+        repliedWithLead++;
+      } else {
+        repliedWithoutLead++;
+        if (sampleMissingLeads.length < 5) {
+          sampleMissingLeads.push({ phone: contact.phoneNumber, name: contact.name });
+        }
+      }
+    }
+    
+    return {
+      total: total.length,
+      replied: replied.length,
+      sent: sent.length,
+      cold: cold.length,
+      repliedWithLead,
+      repliedWithoutLead,
+      sampleMissingLeads,
+    };
+  },
+});
