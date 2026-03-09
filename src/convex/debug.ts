@@ -74,15 +74,38 @@ export const checkBulkContactsStatus = internalQuery({
     const cold = total.filter(c => c.status === "cold");
     
     // Check how many replied contacts have corresponding leads
+    // Try both 10-digit and 12-digit formats
     let repliedWithLead = 0;
     let repliedWithoutLead = 0;
     const sampleMissingLeads: any[] = [];
     
     for (const contact of replied.slice(0, 50)) {
-      const lead = await ctx.db
+      const phone = contact.phoneNumber;
+      const cleaned = phone.replace(/\D/g, "");
+      const twelveDigit = cleaned.length === 10 ? "91" + cleaned : cleaned;
+      const tenDigit = cleaned.startsWith("91") && cleaned.length === 12 ? cleaned.slice(2) : cleaned;
+
+      // Try 12-digit first (how leads are stored)
+      let lead = await ctx.db
         .query("leads")
-        .withIndex("by_mobile", (q) => q.eq("mobile", contact.phoneNumber))
+        .withIndex("by_mobile", (q) => q.eq("mobile", twelveDigit))
         .first();
+      
+      if (!lead) {
+        // Try 10-digit
+        lead = await ctx.db
+          .query("leads")
+          .withIndex("by_mobile", (q) => q.eq("mobile", tenDigit))
+          .first();
+      }
+      
+      if (!lead) {
+        // Try original format
+        lead = await ctx.db
+          .query("leads")
+          .withIndex("by_mobile", (q) => q.eq("mobile", phone))
+          .first();
+      }
       
       if (lead) {
         repliedWithLead++;
@@ -94,6 +117,21 @@ export const checkBulkContactsStatus = internalQuery({
       }
     }
     
+    // Also check sent contacts for leads (to see how many of the 1000 sent have leads)
+    let sentWithLead = 0;
+    for (const contact of sent.slice(0, 50)) {
+      const phone = contact.phoneNumber;
+      const cleaned = phone.replace(/\D/g, "");
+      const twelveDigit = cleaned.length === 10 ? "91" + cleaned : cleaned;
+      
+      const lead = await ctx.db
+        .query("leads")
+        .withIndex("by_mobile", (q) => q.eq("mobile", twelveDigit))
+        .first();
+      
+      if (lead) sentWithLead++;
+    }
+    
     return {
       total: total.length,
       replied: replied.length,
@@ -102,6 +140,7 @@ export const checkBulkContactsStatus = internalQuery({
       repliedWithLead,
       repliedWithoutLead,
       sampleMissingLeads,
+      sentWithLeadSample: `${sentWithLead}/50 of sent contacts have leads`,
     };
   },
 });
@@ -199,5 +238,30 @@ export const recoverBulkContactReplies = internalMutation({
     }
 
     return { matched, created, alreadyReplied, total: allContacts.length };
+  },
+});
+
+export const getBulkContactsStats = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    // Get total leads in system
+    const totalLeads = await ctx.db.query("leads").take(5000);
+    const bulkCampaignLeads = totalLeads.filter(l => l.source === "Bulk Campaign Reply");
+    const whatsappLeads = totalLeads.filter(l => l.source === "WhatsApp");
+    
+    // Get bulk contacts breakdown
+    const bulkContacts = await ctx.db.query("bulkContacts").take(2000);
+    const replied = bulkContacts.filter(c => c.status === "replied");
+    const sent = bulkContacts.filter(c => c.status === "sent");
+    
+    return {
+      totalLeadsInSystem: totalLeads.length,
+      bulkCampaignLeads: bulkCampaignLeads.length,
+      whatsappLeads: whatsappLeads.length,
+      totalBulkContactsTracked: bulkContacts.length,
+      repliedBulkContacts: replied.length,
+      sentBulkContacts: sent.length,
+      note: "If totalBulkContactsTracked < 2100, some sends were not tracked in DB",
+    };
   },
 });
