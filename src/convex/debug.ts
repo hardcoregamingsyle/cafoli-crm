@@ -33,3 +33,16 @@ export const resetAllPasswords = internalMutation({
     return `Updated passwords for ${count} users`;
   },
 });
+
+export const checkCorruptedLeads = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const leads = await ctx.db.query("leads").collect();
+    const corrupted = leads.filter(l => !l.mobile || l.mobile.length < 10 || l.mobile.includes("+") || l.mobile.includes(" ") || l.mobile.includes("-"));
+    return {
+      total: leads.length,
+      corruptedCount: corrupted.length,
+      sample: corrupted.slice(0, 10)
+    };
+  }
+});
