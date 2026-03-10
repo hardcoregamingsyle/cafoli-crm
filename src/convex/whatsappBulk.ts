@@ -1,6 +1,6 @@
 "use node";
 
-import { action, internalAction } from "./_generated/server";
+import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { internal, api } from "./_generated/api";
 
@@ -34,11 +34,14 @@ export const processBulkTemplateChunk = action({
     try {
       for (const contact of currentChunk) {
         try {
-          const phone = contact.phoneNumber.replace(/\D/g, "");
-          if (!phone) {
+          const rawPhone = contact.phoneNumber.replace(/\D/g, "");
+          if (!rawPhone) {
             failed++;
             continue;
           }
+
+          // Standardize to 12-digit for WhatsApp API (91XXXXXXXXXX)
+          const phone = rawPhone.length === 10 ? "91" + rawPhone : rawPhone;
 
           const response = await fetch(
             `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
@@ -69,7 +72,7 @@ export const processBulkTemplateChunk = action({
 
           sent++;
 
-          // Track in DB
+          // Track in DB — store as 12-digit to match lead format
           await ctx.runMutation(internal.bulkMessaging.insertBulkContact, {
             adminId: args.adminId,
             phoneNumber: phone,
