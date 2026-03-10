@@ -1,10 +1,10 @@
 "use node";
 
-import { action } from "./_generated/server";
+import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
-import { internal, api } from "./_generated/api";
+import { internal } from "./_generated/api";
 
-export const processBulkTemplateChunk = action({
+export const processBulkTemplateChunk = internalAction({
   args: {
     contacts: v.array(v.object({
       phoneNumber: v.string(),
@@ -98,7 +98,7 @@ export const processBulkTemplateChunk = action({
       });
 
       if (!isComplete) {
-        await ctx.scheduler.runAfter(0, api.whatsappBulk.processBulkTemplateChunk, {
+        await ctx.scheduler.runAfter(0, internal.whatsappBulk.processBulkTemplateChunk, {
           contacts: remainingContacts,
           templateName: args.templateName,
           templateLanguage: args.templateLanguage,
@@ -136,7 +136,7 @@ export const sendBulkTemplateMessages = action({
       total: args.contacts.length,
     });
 
-    await ctx.scheduler.runAfter(0, api.whatsappBulk.processBulkTemplateChunk, {
+    await ctx.scheduler.runAfter(0, internal.whatsappBulk.processBulkTemplateChunk, {
       contacts: args.contacts,
       templateName: args.templateName,
       templateLanguage: args.templateLanguage,

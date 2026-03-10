@@ -2,7 +2,7 @@
 
 import { action, internalAction } from "../_generated/server";
 import { v } from "convex/values";
-import { internal } from "../_generated/api";
+import { internal, api } from "../_generated/api";
 
 // Helper to validate WhatsApp credentials
 function getWhatsAppCredentials(): { accessToken: string; phoneNumberId: string } {
@@ -238,7 +238,8 @@ export const sendMediaInternal = internalAction({
     mimeType: v.string(),
   },
   handler: async (ctx, args): Promise<{ success: boolean; messageId?: string }> => {
-    const result = await ctx.runAction(internal.whatsapp.messages.sendMedia, args);
+    // Use string reference to avoid TypeScript type instantiation depth issue
+    const result = await ctx.runAction("whatsapp/messages:sendMedia" as any, args);
     if (!result) {
       throw new Error("Failed to send media: No response from internal action");
     }

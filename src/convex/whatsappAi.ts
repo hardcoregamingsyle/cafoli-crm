@@ -1,7 +1,7 @@
 "use node";
 import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
-import { internal } from "./_generated/api";
+import { internal, api } from "./_generated/api";
 import { generateWithGemini, extractJsonFromMarkdown } from "./lib/gemini";
 
 export const generateChatSummary = action({
@@ -249,7 +249,7 @@ export const generateAndSendAiReplyInternal = internalAction({
                   correctMimeType = file.type === "pdf" ? "application/pdf" : "image/jpeg";
                 }
 
-                await ctx.runAction(internal.whatsapp.messages.sendMedia, {
+                await ctx.runAction("whatsapp/messages:sendMedia" as any, {
                   leadId: args.leadId,
                   phoneNumber: args.phoneNumber,
                   storageId: file.storageId,
@@ -291,7 +291,7 @@ export const generateAndSendAiReplyInternal = internalAction({
          if (pdf) {
            const metadata = await ctx.runQuery(internal.products.getStorageMetadata, { storageId: pdf.storageId });
            
-           await ctx.runAction(internal.whatsapp.messages.sendMedia, {
+           await ctx.runAction("whatsapp/messages:sendMedia" as any, {
              leadId: args.leadId,
              phoneNumber: args.phoneNumber,
              storageId: pdf.storageId,
@@ -318,7 +318,7 @@ export const generateAndSendAiReplyInternal = internalAction({
             try {
               const metadata = await ctx.runQuery(internal.products.getStorageMetadata, { storageId: pdf.storageId });
               
-              await ctx.runAction(internal.whatsapp.messages.sendMedia, {
+              await ctx.runAction("whatsapp/messages:sendMedia" as any, {
                 leadId: args.leadId,
                 phoneNumber: args.phoneNumber,
                 storageId: pdf.storageId,
