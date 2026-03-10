@@ -125,14 +125,33 @@ export const cleanupOldContacts = internalMutation({
       if (contact.status === "sent") {
         await ctx.db.patch(contact._id, { status: "cold" });
 
-        await ctx.db.insert("coldCallerLeads", {
-          name: contact.name || "Cold Bulk Contact",
-          mobile: contact.phoneNumber,
-          source: "Expired Bulk Campaign",
-          status: "Cold",
-          lastActivity: Date.now(),
-          originalContactId: contact._id,
-        });
+        // Check if a lead already exists for this phone number
+        const cleaned = contact.phoneNumber.replace(/\D/g, "");
+        const twelveDigit = cleaned.length === 10 ? "91" + cleaned : cleaned;
+        
+        const existingLead = await ctx.db
+          .query("leads")
+          .withIndex("by_mobile", (q) => q.eq("mobile", twelveDigit))
+          .first();
+
+        if (!existingLead) {
+          // Create as a cold caller lead directly in the leads table
+          await ctx.db.insert("leads", {
+            name: contact.name || `Cold Bulk Contact ${contact.phoneNumber}`,
+            mobile: twelveDigit,
+            source: "Expired Bulk Campaign",
+            status: "Cold",
+            type: "To be Decided",
+            lastActivity: Date.now(),
+            isColdCallerLead: true,
+            adminAssignmentRequired: false,
+          });
+        } else if (!existingLead.isColdCallerLead) {
+          // Mark existing lead as cold caller lead
+          await ctx.db.patch(existingLead._id, {
+            isColdCallerLead: true,
+          });
+        }
       }
     }
   },

@@ -31,6 +31,8 @@ export const getLeads = query({
         .filter(q => q.and(
           q.eq(q.field("assignedTo"), undefined),
           q.neq(q.field("type"), "Irrelevant"),
+          // Exclude bulk campaign leads that haven't replied yet
+          q.neq(q.field("adminAssignmentRequired"), true),
           q.or(
             q.eq(q.field("isColdCallerLead"), false),
             q.eq(q.field("isColdCallerLead"), undefined)
@@ -51,6 +53,8 @@ export const getLeads = query({
         .filter(q => q.and(
           q.eq(q.field("assignedTo"), undefined),
           q.neq(q.field("type"), "Irrelevant"),
+          // Exclude bulk campaign leads that haven't replied yet
+          q.neq(q.field("adminAssignmentRequired"), true),
           q.or(
             q.eq(q.field("isColdCallerLead"), false),
             q.eq(q.field("isColdCallerLead"), undefined)

@@ -211,6 +211,21 @@ export const processWhatsAppLead = internalMutation({
     }
 
     if (existingLead) {
+      // Update lead name if we now have a real WhatsApp name and the current name is just a phone number
+      if (args.name && args.name !== args.phoneNumber && args.name !== standardizedPhone) {
+        const currentName = existingLead.name || "";
+        const isNameJustPhone = /^\d+$/.test(currentName.replace(/\s/g, ""));
+        if (isNameJustPhone || currentName === args.phoneNumber || currentName === standardizedPhone) {
+          await ctx.db.patch(existingLead._id, { name: args.name });
+        }
+      }
+      // If this was a bulk campaign lead awaiting assignment, clear that flag since they replied
+      if (existingLead.adminAssignmentRequired) {
+        await ctx.db.patch(existingLead._id, {
+          adminAssignmentRequired: false,
+          lastActivity: Date.now(),
+        });
+      }
       // Also try to mark bulk contact as replied if not already done
       await markBulkContactReplied(ctx, standardizedPhone, args.phoneNumber);
       return { leadId: existingLead._id, isNewLead: false };
@@ -226,9 +241,9 @@ export const processWhatsAppLead = internalMutation({
         lastInteractionAt: Date.now(),
       });
 
-      // Create lead from bulk contact reply
+      // Create lead from bulk contact reply - NOT adminAssignmentRequired since they replied
       const leadId = await ctx.db.insert("leads", {
-        name: contact.name || `Bulk Contact ${standardizedPhone}`,
+        name: args.name || contact.name || `Bulk Contact ${standardizedPhone}`,
         mobile: standardizedPhone,
         source: "Bulk Campaign Reply",
         status: "Cold",
@@ -236,7 +251,7 @@ export const processWhatsAppLead = internalMutation({
         lastActivity: Date.now(),
         message: args.message,
         priorityScore: 50,
-        adminAssignmentRequired: true,
+        adminAssignmentRequired: false,
       });
 
       // Log lead creation
