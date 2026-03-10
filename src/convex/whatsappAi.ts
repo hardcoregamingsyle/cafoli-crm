@@ -389,7 +389,15 @@ export const generateAndSendAiReplyInternal = internalAction({
               customerMessage: args.prompt,
             });
           } else {
-            logAiError("CONTACT_REQUEST", new Error("Lead has no assigned user"), { leadId: args.leadId });
+            // No assigned user - create an intervention request instead so it doesn't go unnoticed
+            logAiInfo("CONTACT_REQUEST", "Lead has no assigned user, creating intervention request instead", { leadId: args.leadId });
+            await ctx.runMutation(internal.interventionRequests.createInterventionRequestInternal, { 
+              leadId: args.leadId,
+              assignedTo: undefined,
+              requestedProduct: undefined,
+              customerMessage: args.prompt,
+              aiDraftedMessage: `Contact request from unassigned lead: ${aiAction.reason || "Customer wants to be contacted."}`,
+            });
           }
       } else {
         logAiError("UNKNOWN_ACTION", new Error(`Unknown AI action: ${aiAction.action}`), { aiAction });

@@ -31,6 +31,19 @@ export async function enrichLeads(ctx: QueryCtx, leads: any[]) {
         enriched.tagsData = tags;
       }
 
+      // Enrich with unread message count from chats table
+      if (lead._id && !lead._isR2) {
+        const chat = await ctx.db
+          .query("chats")
+          .withIndex("by_lead", (q) => q.eq("leadId", lead._id))
+          .first();
+        if (chat) {
+          enriched.unreadCount = chat.unreadCount || 0;
+        } else {
+          enriched.unreadCount = 0;
+        }
+      }
+
       return enriched;
     })
   );
