@@ -16,6 +16,7 @@ export const getPaginatedLeads = query({
     tags: v.optional(v.array(v.id("tags"))),
     assignedToUsers: v.optional(v.array(v.id("users"))),
     sortBy: v.optional(v.string()),
+    includeR2: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const userId = args.userId || await getAuthUserId(ctx);
@@ -36,7 +37,7 @@ export const getPaginatedLeads = query({
     // Search logic
     if (args.search) {
       const isAdmin = user.role === ROLES.ADMIN;
-      let query = ctx.db
+      let searchQuery = ctx.db
         .query("leads")
         .withSearchIndex("search_all", (q) => {
           let search = q.search("searchText", args.search!);
@@ -49,10 +50,34 @@ export const getPaginatedLeads = query({
           return search;
         });
       
-      let results = await query.collect();
+      let results = await searchQuery.collect();
       
       if (user.role !== ROLES.ADMIN) {
         results = results.filter(l => l.type !== "Irrelevant" && l.source !== "R2 Test");
+      }
+
+      // Also search R2 if includeR2 is true
+      if (args.includeR2) {
+        const r2Results = await ctx.db
+          .query("r2_leads_mock")
+          .withSearchIndex("search_all", (q) => q.search("searchText", args.search!))
+          .take(20);
+        
+        // Convert R2 results to lead-like objects
+        const r2AsLeads = r2Results.map((r2) => ({
+          ...r2.leadData?.lead,
+          _id: r2._id,
+          _creationTime: r2._creationTime,
+          _isR2: true,
+          r2Id: r2._id,
+          name: r2.name || r2.leadData?.lead?.name || "Unknown",
+          mobile: r2.mobile || r2.leadData?.lead?.mobile || "",
+          status: r2.status || r2.leadData?.lead?.status || "Cold",
+          source: r2.source || r2.leadData?.lead?.source,
+          lastActivity: r2.leadData?.lead?.lastActivity || r2._creationTime,
+        }));
+        
+        results = [...results, ...r2AsLeads as any];
       }
 
       results = applyFilters(results, args);

@@ -1,6 +1,7 @@
 import { mutation, query, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
+import { paginationOptsValidator } from "convex/server";
 
 export async function restoreLeadFromR2Core(ctx: any, r2Id: Id<"r2_leads_mock">) {
   const r2Lead = await ctx.db.get(r2Id);
@@ -77,7 +78,9 @@ export const offloadToR2 = mutation({
 
     let offloadedCount = 0;
     for (const lead of leadsToOffload) {
-      // Fetch relational data
+      // Skip assigned leads - keep them in Convex
+      if (lead.assignedTo) continue;
+
       const chats = await ctx.db.query("chats").withIndex("by_lead", q => q.eq("leadId", lead._id)).collect();
       const messages = [];
       for (const chat of chats) {
@@ -87,15 +90,8 @@ export const offloadToR2 = mutation({
       const comments = await ctx.db.query("comments").withIndex("by_lead", q => q.eq("leadId", lead._id)).collect();
       const followups = await ctx.db.query("followups").withIndex("by_lead", q => q.eq("leadId", lead._id)).collect();
 
-      const fullData = {
-        lead,
-        chats,
-        messages,
-        comments,
-        followups
-      };
+      const fullData = { lead, chats, messages, comments, followups };
 
-      // Save to mock R2
       await ctx.db.insert("r2_leads_mock", {
         originalId: lead._id,
         leadData: fullData,
@@ -107,7 +103,6 @@ export const offloadToR2 = mutation({
         source: lead.source,
       });
       
-      // Delete from Convex (RAM)
       for (const msg of messages) await ctx.db.delete(msg._id);
       for (const chat of chats) await ctx.db.delete(chat._id);
       for (const comment of comments) await ctx.db.delete(comment._id);
@@ -131,7 +126,6 @@ export const loadFromR2 = mutation({
       const data = r2Lead.leadData;
       
       if (data.lead) {
-        // It's the new format with relational data
         const leadData = data.lead;
         delete leadData._id;
         delete leadData._creationTime;
@@ -139,7 +133,6 @@ export const loadFromR2 = mutation({
 
         const idMap: Record<string, string> = { [r2Lead.originalId]: newLeadId };
 
-        // Restore chats
         for (const chat of data.chats || []) {
           const oldChatId = chat._id;
           delete chat._id;
@@ -149,7 +142,6 @@ export const loadFromR2 = mutation({
           idMap[oldChatId] = newChatId;
         }
 
-        // Restore messages
         const messages = (data.messages || []).sort((a: any, b: any) => a._creationTime - b._creationTime);
         for (const msg of messages) {
           const oldMsgId = msg._id;
@@ -163,7 +155,6 @@ export const loadFromR2 = mutation({
           idMap[oldMsgId] = newMsgId;
         }
 
-        // Restore comments
         for (const comment of data.comments || []) {
           delete comment._id;
           delete comment._creationTime;
@@ -171,7 +162,6 @@ export const loadFromR2 = mutation({
           await ctx.db.insert("comments", comment);
         }
 
-        // Restore followups
         for (const followup of data.followups || []) {
           delete followup._id;
           delete followup._creationTime;
@@ -179,14 +169,12 @@ export const loadFromR2 = mutation({
           await ctx.db.insert("followups", followup);
         }
       } else {
-        // Old format (just lead data)
         const leadData = data;
         delete leadData._id;
         delete leadData._creationTime;
         await ctx.db.insert("leads", leadData);
       }
       
-      // Remove from R2 mock
       await ctx.db.delete(r2Lead._id);
       loadedCount++;
     }
@@ -210,13 +198,7 @@ export const offloadSingleToR2 = mutation({
     const comments = await ctx.db.query("comments").withIndex("by_lead", q => q.eq("leadId", lead._id)).collect();
     const followups = await ctx.db.query("followups").withIndex("by_lead", q => q.eq("leadId", lead._id)).collect();
 
-    const fullData = {
-      lead,
-      chats,
-      messages,
-      comments,
-      followups
-    };
+    const fullData = { lead, chats, messages, comments, followups };
 
     await ctx.db.insert("r2_leads_mock", {
       originalId: lead._id,
@@ -275,17 +257,20 @@ export const restoreSingleFromR2 = mutation({
 export const autoOffloadToR2 = internalMutation({
   args: {},
   handler: async (ctx) => {
-    // Offload leads inactive for 30 days
+    // Only offload UNASSIGNED leads inactive for 30 days
+    // Assigned leads stay in Convex for fast access
     const daysInactive = 30;
     const cutoff = Date.now() - daysInactive * 24 * 60 * 60 * 1000;
     const leadsToOffload = await ctx.db
       .query("leads")
       .withIndex("by_last_activity", q => q.lt("lastActivity", cutoff))
-      .take(100); // Process in batches of 100
+      .take(100);
 
     let offloadedCount = 0;
     for (const lead of leadsToOffload) {
-      // Fetch relational data
+      // Skip assigned leads - keep them in Convex for fast access
+      if (lead.assignedTo) continue;
+
       const chats = await ctx.db.query("chats").withIndex("by_lead", q => q.eq("leadId", lead._id)).collect();
       const messages = [];
       for (const chat of chats) {
@@ -295,15 +280,8 @@ export const autoOffloadToR2 = internalMutation({
       const comments = await ctx.db.query("comments").withIndex("by_lead", q => q.eq("leadId", lead._id)).collect();
       const followups = await ctx.db.query("followups").withIndex("by_lead", q => q.eq("leadId", lead._id)).collect();
 
-      const fullData = {
-        lead,
-        chats,
-        messages,
-        comments,
-        followups
-      };
+      const fullData = { lead, chats, messages, comments, followups };
 
-      // Save to mock R2
       await ctx.db.insert("r2_leads_mock", {
         originalId: lead._id,
         leadData: fullData,
@@ -315,7 +293,6 @@ export const autoOffloadToR2 = internalMutation({
         source: lead.source,
       });
       
-      // Delete from Convex (RAM)
       for (const msg of messages) await ctx.db.delete(msg._id);
       for (const chat of chats) await ctx.db.delete(chat._id);
       for (const comment of comments) await ctx.db.delete(comment._id);
@@ -325,7 +302,74 @@ export const autoOffloadToR2 = internalMutation({
       offloadedCount++;
     }
 
-    console.log(`Auto-offloaded ${offloadedCount} leads to R2.`);
+    console.log(`Auto-offloaded ${offloadedCount} unassigned inactive leads to R2.`);
     return offloadedCount;
   }
+});
+
+export const getPaginatedR2Leads = query({
+  args: {
+    paginationOpts: paginationOptsValidator,
+    filter: v.optional(v.string()),
+    userId: v.optional(v.id("users")),
+    search: v.optional(v.string()),
+    statuses: v.optional(v.array(v.string())),
+    sources: v.optional(v.array(v.string())),
+    sortBy: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (args.search) {
+      const results = await ctx.db
+        .query("r2_leads_mock")
+        .withSearchIndex("search_all", (q) => q.search("searchText", args.search!))
+        .take(50);
+      return { page: results, isDone: true, continueCursor: "" };
+    }
+
+    const result = await ctx.db
+      .query("r2_leads_mock")
+      .order("desc")
+      .filter((q) => {
+        let predicate: any = q.neq(q.field("_id"), "" as any);
+
+        if (args.statuses && args.statuses.length > 0 && !args.statuses.includes("All")) {
+          const statusConditions = args.statuses.map((s) => q.eq(q.field("status"), s));
+          predicate = q.and(predicate, q.or(...statusConditions));
+        }
+
+        if (args.sources && args.sources.length > 0 && !args.sources.includes("All")) {
+          const sourceConditions = args.sources.map((s) => q.eq(q.field("source"), s));
+          predicate = q.and(predicate, q.or(...sourceConditions));
+        }
+
+        return predicate;
+      })
+      .paginate(args.paginationOpts);
+
+    return result;
+  },
+});
+
+export const getCombinedStats = query({
+  args: {},
+  handler: async (ctx) => {
+    const convexLeads = await ctx.db.query("leads").take(5000);
+    const r2Leads = await ctx.db.query("r2_leads_mock").take(5000);
+
+    const now = Date.now();
+    const oneDayAgo = now - 86400000;
+
+    const convexNew = convexLeads.filter((l) => l._creationTime > oneDayAgo).length;
+    const convexPending = convexLeads.filter(
+      (l) => l.nextFollowUpDate && l.nextFollowUpDate < now
+    ).length;
+
+    return {
+      totalLeads: convexLeads.length + r2Leads.length,
+      convexCount: convexLeads.length,
+      r2Count: r2Leads.length,
+      newLeadsToday: convexNew,
+      pendingFollowUps: convexPending,
+    };
+  },
 });
