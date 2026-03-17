@@ -133,6 +133,8 @@ export default function Leads() {
   const ITEMS_PER_PAGE = 50;
   const [paginationOpts, setPaginationOpts] = useState({ numItems: ITEMS_PER_PAGE, cursor: null as string | null });
   const [isRestoring, setIsRestoring] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Only use paginated query when NOT in semantic search mode
   const paginatedResult = useQuery(
@@ -152,15 +154,24 @@ export default function Leads() {
 
   const [allLoadedLeads, setAllLoadedLeads] = useState<Doc<"leads">[]>([]);
 
-  // Reset loaded leads when filters change
+  // Reset loaded leads when filters change — show loading indicator
   useEffect(() => {
+    setIsResetting(true);
     setAllLoadedLeads([]);
     setPaginationOpts({ numItems: ITEMS_PER_PAGE, cursor: null });
+
+    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    resetTimerRef.current = setTimeout(() => setIsResetting(false), 3000);
+
+    return () => {
+      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    };
   }, [state.filter, state.search, state.selectedStatuses, state.selectedSources, state.selectedTags, state.selectedAssignedTo, state.sortBy, state.viewColdCallerLeads, state.viewIrrelevantLeads]);
 
   // Append new leads when pagination result changes
   useEffect(() => {
     if (paginatedResult?.page) {
+      setIsResetting(false);
       setAllLoadedLeads(prev => {
         if (paginationOpts.cursor === null) {
           return paginatedResult.page;
@@ -174,13 +185,13 @@ export default function Leads() {
 
   const { ref: loadMoreRef, inView } = useInView({
     threshold: 0,
+    rootMargin: "200px", // Prefetch 200px before bottom
   });
 
   // Load more when scrolling to bottom
   useEffect(() => {
     if (inView && paginatedResult && !paginatedResult.isDone && paginatedResult.continueCursor) {
       setPaginationOpts(prev => {
-        // Avoid re-setting the same cursor
         if (prev.cursor === paginatedResult.continueCursor) return prev;
         return { numItems: ITEMS_PER_PAGE, cursor: paginatedResult.continueCursor };
       });

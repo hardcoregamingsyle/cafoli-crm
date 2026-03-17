@@ -93,57 +93,91 @@ export const getLeadsWithChatStatus = query({
     filter: v.union(v.literal("all"), v.literal("mine")),
     userId: v.optional(v.id("users")),
     searchQuery: v.optional(v.string()),
-    cursor: v.optional(v.union(v.string(), v.null())),
-    numItems: v.optional(v.number()),
+    paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx, args) => {
-    const limit = args.numItems || 50;
+    const limit = args.paginationOpts.numItems || 50;
 
-    // Fetch leads
-    let leads;
-    
+    // Fetch paginated leads from the DB using proper indexes
+    let paginatedLeads;
+
     if (args.searchQuery) {
-      // Use search index if query is provided
+      // Search mode — use search index, no native pagination support, take a reasonable cap
+      let rawLeads;
       if (args.filter === "mine" && args.userId) {
-        leads = await ctx.db
+        rawLeads = await ctx.db
           .query("leads")
-          .withSearchIndex("search_all", (q) => 
-            q.search("searchText", args.searchQuery!)
-             .eq("assignedTo", args.userId!)
+          .withSearchIndex("search_all", (q) =>
+            q.search("searchText", args.searchQuery!).eq("assignedTo", args.userId!)
           )
-          .collect();
+          .take(200);
       } else {
-        leads = await ctx.db
+        rawLeads = await ctx.db
           .query("leads")
-          .withSearchIndex("search_all", (q) => 
+          .withSearchIndex("search_all", (q) =>
             q.search("searchText", args.searchQuery!)
           )
-          .collect();
+          .take(200);
       }
-    } else {
-      // Standard list
-      if (args.filter === "mine" && args.userId) {
-        leads = await ctx.db
-          .query("leads")
-          .withIndex("by_assigned_to_and_last_activity", (q) => q.eq("assignedTo", args.userId))
-          .order("desc")
-          .take(500);
-      } else {
-        leads = await ctx.db
-          .query("leads")
-          .withIndex("by_last_activity")
-          .order("desc")
-          .take(500);
-      }
+
+      // Enrich with chat status
+      const enriched = await Promise.all(
+        rawLeads.map(async (lead) => {
+          const chat = await ctx.db
+            .query("chats")
+            .withIndex("by_lead", (q) => q.eq("leadId", lead._id))
+            .first();
+          return {
+            ...lead,
+            hasChat: !!chat,
+            unreadCount: chat?.unreadCount || 0,
+            lastMessageAt: chat?.lastMessageAt || 0,
+          };
+        })
+      );
+
+      const visibleLeads = enriched
+        .filter((l) => l.hasChat)
+        .sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0));
+
+      // Manual pagination for search results
+      const cursor = args.paginationOpts.cursor;
+      const cursorIndex = cursor
+        ? visibleLeads.findIndex((l) => l._id === cursor) + 1
+        : 0;
+      const page = visibleLeads.slice(cursorIndex, cursorIndex + limit);
+      const nextCursor =
+        cursorIndex + limit < visibleLeads.length
+          ? (page[page.length - 1]?._id ?? null)
+          : null;
+
+      return { page, isDone: nextCursor === null, continueCursor: nextCursor ?? "" };
     }
 
-    const leadsWithChatStatus = await Promise.all(
-      leads.map(async (lead) => {
+    // Standard mode — use native Convex pagination on index
+    if (args.filter === "mine" && args.userId) {
+      paginatedLeads = await ctx.db
+        .query("leads")
+        .withIndex("by_assigned_to_and_last_activity", (q) =>
+          q.eq("assignedTo", args.userId)
+        )
+        .order("desc")
+        .paginate(args.paginationOpts);
+    } else {
+      paginatedLeads = await ctx.db
+        .query("leads")
+        .withIndex("by_last_activity")
+        .order("desc")
+        .paginate(args.paginationOpts);
+    }
+
+    // Enrich with chat status
+    const enriched = await Promise.all(
+      paginatedLeads.page.map(async (lead) => {
         const chat = await ctx.db
           .query("chats")
           .withIndex("by_lead", (q) => q.eq("leadId", lead._id))
           .first();
-
         return {
           ...lead,
           hasChat: !!chat,
@@ -153,23 +187,15 @@ export const getLeadsWithChatStatus = query({
       })
     );
 
-    const visibleLeads = leadsWithChatStatus
-      .filter((lead) => lead.hasChat)
+    // Only return leads that have chats, sorted by last message
+    const visibleLeads = enriched
+      .filter((l) => l.hasChat)
       .sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0));
 
-    // Manual cursor-based pagination
-    const cursorIndex = args.cursor
-      ? visibleLeads.findIndex((l) => l._id === args.cursor) + 1
-      : 0;
-    const page = visibleLeads.slice(cursorIndex, cursorIndex + limit);
-    const nextCursor = cursorIndex + limit < visibleLeads.length
-      ? page[page.length - 1]?._id ?? null
-      : null;
-
     return {
-      page,
-      nextCursor,
-      isDone: nextCursor === null,
+      page: visibleLeads,
+      isDone: paginatedLeads.isDone,
+      continueCursor: paginatedLeads.continueCursor,
     };
   },
 });

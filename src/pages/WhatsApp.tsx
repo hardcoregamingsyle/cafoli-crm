@@ -12,7 +12,7 @@ import { ROLES } from "@/lib/constants";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useAction } from "convex/react";
 import { MessageSquare, Settings, Send } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { LeadSelector } from "@/components/LeadSelector";
@@ -21,28 +21,43 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 
 const api = getConvexApi() as any;
 
+const ITEMS_PER_PAGE = 50;
+
 export default function WhatsApp() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
-  const [cursor, setCursor] = useState<string | null>(null);
+  const [paginationOpts, setPaginationOpts] = useState<{ numItems: number; cursor: string | null }>({
+    numItems: ITEMS_PER_PAGE,
+    cursor: null,
+  });
   const [allLeads, setAllLeads] = useState<any[]>([]);
+  const [isResetting, setIsResetting] = useState(false);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Determine filter based on user role
   const filter = user?.role === ROLES.ADMIN ? "all" : "mine";
 
   const leadsResult = useQuery(
     api.whatsappQueries.getLeadsWithChatStatus,
-    { filter, userId: user?._id, searchQuery: searchQuery || undefined, cursor: cursor, numItems: 50 }
+    user
+      ? {
+          filter,
+          userId: user._id,
+          searchQuery: searchQuery || undefined,
+          paginationOpts,
+        }
+      : "skip"
   );
 
   // Accumulate leads across pages
   useEffect(() => {
     if (leadsResult?.page) {
-      if (cursor === null) {
+      if (paginationOpts.cursor === null) {
         setAllLeads(leadsResult.page);
+        setIsResetting(false);
       } else {
-        setAllLeads(prev => {
+        setAllLeads((prev) => {
           const existingIds = new Set(prev.map((l: any) => l._id));
           const newLeads = leadsResult.page.filter((l: any) => !existingIds.has(l._id));
           return [...prev, ...newLeads];
@@ -51,19 +66,31 @@ export default function WhatsApp() {
     }
   }, [leadsResult]);
 
-  // Reset when search changes
+  // Reset when search or filter changes — show loading indicator
   useEffect(() => {
-    setCursor(null);
+    setIsResetting(true);
     setAllLeads([]);
+    setPaginationOpts({ numItems: ITEMS_PER_PAGE, cursor: null });
+
+    // Safety: clear resetting flag after 3s if query never returns
+    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    resetTimerRef.current = setTimeout(() => setIsResetting(false), 3000);
+
+    return () => {
+      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    };
   }, [searchQuery, filter]);
 
   const leads = allLeads;
-  const canLoadMore = !!(leadsResult?.nextCursor);
-  const isLoading = leadsResult === undefined;
+  const canLoadMore = !!(leadsResult && !leadsResult.isDone && leadsResult.continueCursor);
+  const isLoading = leadsResult === undefined || isResetting;
 
   const handleLoadMore = () => {
-    if (leadsResult?.nextCursor) {
-      setCursor(leadsResult.nextCursor);
+    if (leadsResult?.continueCursor && !leadsResult.isDone) {
+      setPaginationOpts((prev) => {
+        if (prev.cursor === leadsResult.continueCursor) return prev;
+        return { numItems: ITEMS_PER_PAGE, cursor: leadsResult.continueCursor };
+      });
     }
   };
 
@@ -192,7 +219,7 @@ export default function WhatsApp() {
                 canLoadMore={canLoadMore}
                 isLoading={isLoading}
                 searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
+                onSearchChange={(q) => setSearchQuery(q)}
               />
             </TabsContent>
             
