@@ -473,7 +473,20 @@ export const createIndiamartLead = internalMutation({
       return null;
     }
 
-    const leadId = await ctx.db.insert("leads", {
+    // Generate search text
+    const searchText = [
+      args.name,
+      args.subject,
+      standardizedMobile,
+      standardizedAltMobile,
+      args.email,
+      args.altEmail,
+      args.message,
+    ].filter(Boolean).join(" ");
+
+    // NEW LEADS GO DIRECTLY TO R2 (cold storage) to keep Convex lean
+    // They will be restored to Convex only when a user opens them or a WhatsApp message arrives
+    const leadData = {
       name: args.name,
       subject: args.subject,
       source: "IndiaMART",
@@ -490,8 +503,20 @@ export const createIndiamartLead = internalMutation({
       lastActivity: Date.now(),
       indiamartUniqueId: args.uniqueQueryId,
       indiamartMetadata: args.metadata,
+      searchText,
+    };
+
+    await ctx.db.insert("r2_leads_mock", {
+      originalId: `indiamart_${args.uniqueQueryId}`,
+      leadData: { lead: leadData },
+      mobile: standardizedMobile,
+      indiamartUniqueId: args.uniqueQueryId,
+      name: args.name,
+      searchText,
+      status: "Cold",
+      source: "IndiaMART",
     });
-    
+
     // Send welcome email if email is provided
     if (args.email) {
       try {
@@ -504,29 +529,10 @@ export const createIndiamartLead = internalMutation({
         console.error("Failed to schedule welcome email:", error);
       }
     }
-    
-    // Send welcome WhatsApp message to primary mobile
-    try {
-      await ctx.scheduler.runAfter(0, internal.whatsappTemplates.sendWelcomeMessage, {
-        phoneNumber: standardizedMobile,
-        leadId: leadId,
-      });
-    } catch (error) {
-      console.error("Failed to schedule welcome WhatsApp template to primary mobile:", error);
-    }
-    
-    // Send welcome WhatsApp message to alternate mobile if exists
-    if (standardizedAltMobile) {
-      try {
-        await ctx.scheduler.runAfter(0, internal.whatsappTemplates.sendWelcomeMessage, {
-          phoneNumber: standardizedAltMobile,
-          leadId: leadId,
-        });
-      } catch (error) {
-        console.error("Failed to schedule welcome WhatsApp template to alternate mobile:", error);
-      }
-    }
-    
-    return leadId;
+
+    // NOTE: Welcome WhatsApp is NOT sent here because we don't have a Convex leadId yet.
+    // When the lead replies to any future message, processWhatsAppLead will restore them from R2.
+
+    return null; // R2 leads don't have a Convex leadId yet
   },
 });

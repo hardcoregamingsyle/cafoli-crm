@@ -5,6 +5,19 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { Id } from "./_generated/dataModel";
 import { LOG_CATEGORIES } from "./activityLogs";
 
+// Helper to extract lead fields from r2_leads_mock entries
+function extractR2LeadFields(r2Lead: any) {
+  const lead = r2Lead.leadData?.lead || r2Lead.leadData || {};
+  return {
+    _id: r2Lead._id,
+    _creationTime: r2Lead._creationTime,
+    source: r2Lead.source || lead.source,
+    status: r2Lead.status || lead.status,
+    type: lead.type,
+    assignedTo: lead.assignedTo,
+  };
+}
+
 export const getReportStats = internalQuery({
   args: {
     startDate: v.number(),
@@ -14,22 +27,29 @@ export const getReportStats = internalQuery({
   handler: async (ctx, args) => {
     const userId = args.userId;
     if (!userId) {
-      // If no userId provided, generate overall stats
       const leads = await ctx.db
         .query("leads")
-        .withIndex("by_creation_time", (q) => 
+        .withIndex("by_creation_time", (q) =>
           q.gte("_creationTime", args.startDate).lte("_creationTime", args.endDate)
         )
         .collect();
 
+      // Include R2 leads in stats
+      const r2Leads = await ctx.db.query("r2_leads_mock").take(5000);
+      const r2InRange = r2Leads
+        .filter((r) => r._creationTime >= args.startDate && r._creationTime <= args.endDate)
+        .map(extractR2LeadFields);
+
+      const allLeads = [...leads, ...r2InRange];
+
       const followups = await ctx.db
         .query("followups")
-        .withIndex("by_scheduled_at", (q) => 
+        .withIndex("by_scheduled_at", (q) =>
           q.gte("scheduledAt", args.startDate).lte("scheduledAt", args.endDate)
         )
         .collect();
 
-      return generateStats(ctx, leads, followups, true);
+      return generateStats(ctx, allLeads, followups, true);
     }
 
     const user = await ctx.db.get(userId);
@@ -39,18 +59,25 @@ export const getReportStats = internalQuery({
 
     let leads = await ctx.db
       .query("leads")
-      .withIndex("by_creation_time", (q) => 
+      .withIndex("by_creation_time", (q) =>
         q.gte("_creationTime", args.startDate).lte("_creationTime", args.endDate)
       )
       .collect();
 
-    if (!isAdmin) {
+    // Include R2 leads for admins
+    if (isAdmin) {
+      const r2Leads = await ctx.db.query("r2_leads_mock").take(5000);
+      const r2InRange = r2Leads
+        .filter((r) => r._creationTime >= args.startDate && r._creationTime <= args.endDate)
+        .map(extractR2LeadFields);
+      leads = [...leads, ...r2InRange] as any[];
+    } else {
       leads = leads.filter(l => l.assignedTo === userId);
     }
 
     let followups = await ctx.db
       .query("followups")
-      .withIndex("by_scheduled_at", (q) => 
+      .withIndex("by_scheduled_at", (q) =>
         q.gte("scheduledAt", args.startDate).lte("scheduledAt", args.endDate)
       )
       .collect();
@@ -72,19 +99,27 @@ export const getDetailedReportStats = internalQuery({
     // 1. Overall Stats
     const leads = await ctx.db
       .query("leads")
-      .withIndex("by_creation_time", (q) => 
+      .withIndex("by_creation_time", (q) =>
         q.gte("_creationTime", args.startDate).lte("_creationTime", args.endDate)
       )
       .collect();
 
+    // Include R2 leads
+    const r2Leads = await ctx.db.query("r2_leads_mock").take(5000);
+    const r2InRange = r2Leads
+      .filter((r) => r._creationTime >= args.startDate && r._creationTime <= args.endDate)
+      .map(extractR2LeadFields);
+
+    const allLeads = [...leads, ...r2InRange] as any[];
+
     const followups = await ctx.db
       .query("followups")
-      .withIndex("by_scheduled_at", (q) => 
+      .withIndex("by_scheduled_at", (q) =>
         q.gte("scheduledAt", args.startDate).lte("scheduledAt", args.endDate)
       )
       .collect();
 
-    const overallStats = await generateStats(ctx, leads, followups, true);
+    const overallStats = await generateStats(ctx, allLeads, followups, true);
 
     // 2. Per User Stats
     const users = await ctx.db.query("users").collect();
@@ -213,7 +248,7 @@ async function generateStats(ctx: any, leads: any[], followups: any[], isAdmin: 
     const usersMap = new Map<string, string>();
     
     const users = await Promise.all(userIds.map(uid => ctx.db.get(uid)));
-    users.forEach((u, i) => {
+    users.forEach((u: any, i: number) => {
       if (u && u.name && u.role !== "owner") usersMap.set(userIds[i], u.name);
     });
 
@@ -282,18 +317,25 @@ export const getReportStatsPublic = query({
 
     let leads = await ctx.db
       .query("leads")
-      .withIndex("by_creation_time", (q) => 
+      .withIndex("by_creation_time", (q) =>
         q.gte("_creationTime", args.startDate).lte("_creationTime", args.endDate)
       )
       .collect();
 
-    if (!isAdmin) {
+    // Include R2 leads for admins
+    if (isAdmin) {
+      const r2Leads = await ctx.db.query("r2_leads_mock").take(5000);
+      const r2InRange = r2Leads
+        .filter((r) => r._creationTime >= args.startDate && r._creationTime <= args.endDate)
+        .map(extractR2LeadFields);
+      leads = [...leads, ...r2InRange] as any[];
+    } else {
       leads = leads.filter(l => l.assignedTo === userId);
     }
 
     let followups = await ctx.db
       .query("followups")
-      .withIndex("by_scheduled_at", (q) => 
+      .withIndex("by_scheduled_at", (q) =>
         q.gte("scheduledAt", args.startDate).lte("scheduledAt", args.endDate)
       )
       .collect();
@@ -333,7 +375,7 @@ export const getLeadsByFilter = query({
 
     const leads = await ctx.db
       .query("leads")
-      .withIndex("by_creation_time", (q) => 
+      .withIndex("by_creation_time", (q) =>
         q.gte("_creationTime", args.startDate).lte("_creationTime", args.endDate)
       )
       .collect();
