@@ -1,5 +1,6 @@
 import { TemplatesDialog } from "@/components/TemplatesDialog";
 import { QuickRepliesDialog } from "./QuickRepliesDialog";
+import { ChatMessageBubble } from "./ChatMessageBubble";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
@@ -9,7 +10,7 @@ import { getConvexApi } from "@/lib/convex-api";
 const api = getConvexApi() as any;
 import { Id } from "@/convex/_generated/dataModel";
 import { useAction, useMutation, usePaginatedQuery } from "convex/react";
-import { Check, CheckCheck, MessageSquare, MoreVertical, Paperclip, Phone, Reply, Send, Smile, Video, X, AlertTriangle, ImageIcon, HelpCircle, FileText, Sparkles, Loader2, ArrowLeft } from "lucide-react";
+import { MessageSquare, MoreVertical, Paperclip, Phone, Send, Smile, Video, X, AlertTriangle, ImageIcon, HelpCircle, FileText, Sparkles, Loader2, ArrowLeft } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -346,19 +347,6 @@ export function ChatWindow({ selectedLeadId, selectedLead, onBack }: ChatWindowP
     });
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "sent":
-        return <Check className="h-3 w-3 inline ml-1 text-gray-500" />;
-      case "delivered":
-        return <CheckCheck className="h-3 w-3 inline ml-1 text-gray-500" />;
-      case "read":
-        return <CheckCheck className="h-3 w-3 inline ml-1 text-blue-500" />;
-      default:
-        return null;
-    }
-  };
-
   const formatMessageDate = (timestamp: number) => {
     const date = new Date(timestamp);
     const today = new Date();
@@ -384,40 +372,6 @@ export function ChatWindow({ selectedLeadId, selectedLead, onBack }: ChatWindowP
     }
 
     return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-');
-  };
-
-  const renderMessageContent = (message: any) => {
-    if (message.messageType === "image" && message.mediaUrl) {
-      return (
-        <div className="space-y-2">
-          <img 
-            src={message.mediaUrl} 
-            alt={message.mediaName || "Image"} 
-            className="rounded-lg max-w-full h-auto max-h-64 object-cover"
-          />
-          {message.content && <p className="text-sm text-gray-900">{message.content}</p>}
-        </div>
-      );
-    }
-    
-    if (message.messageType === "file" && message.mediaUrl) {
-      return (
-        <div className="space-y-2">
-          <a 
-            href={message.mediaUrl} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 p-2 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
-          >
-            <Paperclip className="h-4 w-4" />
-            <span className="text-sm font-medium">{message.mediaName || "File"}</span>
-          </a>
-          {message.content && <p className="text-sm text-gray-900">{message.content}</p>}
-        </div>
-      );
-    }
-    
-    return <p className="text-sm text-gray-900 whitespace-pre-wrap break-words">{message.content}</p>;
   };
 
   return (
@@ -513,55 +467,12 @@ export function ChatWindow({ selectedLeadId, selectedLead, onBack }: ChatWindowP
                       </div>
                     </div>
                   )}
-                  <div
-                    className={`flex ${message.direction === "outbound" ? "justify-end" : "justify-start"} group`}
-                  >
-                    <div className="flex items-end gap-2 max-w-[75%]">
-                      {message.direction === "inbound" && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity bg-white/50 hover:bg-white shadow-sm rounded-full"
-                          onClick={() => setReplyingTo(message)}
-                          title="Reply"
-                        >
-                          <Reply className="h-3.5 w-3.5 text-muted-foreground" />
-                        </Button>
-                      )}
-                      <div
-                        className={`rounded-2xl px-3.5 py-2 shadow-sm w-full ${
-                          message.direction === "outbound"
-                            ? "bg-[#d9fdd3] rounded-br-sm"
-                            : "bg-white rounded-bl-sm"
-                        }`}
-                      >
-                        {message.quotedMessage && (
-                          <div className="mb-2 p-2 bg-black/5 rounded-xl border-l-4 border-primary/50 text-xs">
-                            <p className="font-semibold text-primary/80 mb-0.5">
-                              {message.quotedMessage.direction === "outbound" ? "You" : selectedLead.name}
-                            </p>
-                            <p className="truncate opacity-70">{message.quotedMessage.content || "Media"}</p>
-                          </div>
-                        )}
-                        {renderMessageContent(message)}
-                        <div className="text-[10px] mt-1 text-gray-500 text-right flex items-center justify-end gap-1 font-medium">
-                          {formatTime(message._creationTime)}
-                          {message.direction === "outbound" && getStatusIcon(message.status)}
-                        </div>
-                      </div>
-                      {message.direction === "outbound" && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity bg-white/50 hover:bg-white shadow-sm rounded-full"
-                          onClick={() => setReplyingTo(message)}
-                          title="Reply"
-                        >
-                          <Reply className="h-3.5 w-3.5 text-muted-foreground" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
+                  <ChatMessageBubble
+                    message={message}
+                    selectedLeadName={selectedLead.name}
+                    onReply={setReplyingTo}
+                    formatTime={formatTime}
+                  />
                 </React.Fragment>
               );
             })

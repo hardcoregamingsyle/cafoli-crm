@@ -164,6 +164,20 @@ async function sendTemplateMessageHelper(
       }
     }
 
+    const templateButtons = (template.components?.find((component: any) => component.type === "BUTTONS")?.buttons || [])
+      .filter((button: any) => Boolean(button?.text))
+      .map((button: any) => ({
+        type: String(button.type || "QUICK_REPLY"),
+        text: String(button.text),
+        url: typeof button.url === "string" ? button.url : undefined,
+        phoneNumber:
+          typeof button.phone_number === "string"
+            ? button.phone_number
+            : typeof button.phoneNumber === "string"
+              ? button.phoneNumber
+              : undefined,
+      }));
+
     // Store message in database with actual template content
     await ctx.runMutation("whatsappMutations:storeMessage" as any, {
       leadId: leadId,
@@ -172,6 +186,8 @@ async function sendTemplateMessageHelper(
       direction: "outbound",
       status: "sent",
       externalId: data.messages?.[0]?.id || "",
+      templateName: templateName,
+      templateButtons,
     });
 
     console.log(`Template message sent successfully`, {

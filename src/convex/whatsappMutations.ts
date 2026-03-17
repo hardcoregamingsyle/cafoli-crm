@@ -63,6 +63,13 @@ export const storeMessage = internalMutation({
     mediaUrl: v.optional(v.string()),
     mediaName: v.optional(v.string()),
     mediaMimeType: v.optional(v.string()),
+    templateName: v.optional(v.string()),
+    templateButtons: v.optional(v.array(v.object({
+      type: v.string(),
+      text: v.string(),
+      url: v.optional(v.string()),
+      phoneNumber: v.optional(v.string()),
+    }))),
     quotedMessageId: v.optional(v.id("messages")),
     quotedMessageExternalId: v.optional(v.string()),
   },
@@ -122,6 +129,8 @@ export const storeMessage = internalMutation({
       mediaUrl: args.mediaUrl,
       mediaName: args.mediaName,
       mediaMimeType: args.mediaMimeType,
+      templateName: args.templateName,
+      templateButtons: args.templateButtons,
       externalId: args.externalId,
       quotedMessageId: quotedMessageId,
     });

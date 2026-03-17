@@ -136,6 +136,7 @@ export const sendTemplateToLead = internalAction({
       direction: "outbound",
       status: "sent",
       externalId: data.messages?.[0]?.id || "",
+      templateName: template.name,
     });
 
     return { success: true, messageId: data.messages?.[0]?.id };
