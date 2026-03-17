@@ -57,15 +57,40 @@ export const getAllLeadsForExport = query({
     
     const enrichedR2Leads = r2Leads.map((r2Lead) => {
       // R2 lead data is stored as { lead, chats, messages, comments, followups }
-      // or as a flat lead object
-      const leadData = r2Lead.leadData?.lead ?? r2Lead.leadData;
-      if (!leadData) return null;
+      // Extract ONLY the lead sub-object to avoid column shifting in CSV
+      const rawData = r2Lead.leadData;
+      if (!rawData) return null;
 
+      // If nested format: { lead: {...}, chats: [...], ... }
+      // If flat format: the leadData IS the lead object
+      const leadData = rawData.lead ? rawData.lead : rawData;
+      if (!leadData || typeof leadData !== "object") return null;
+
+      // Build a clean lead object with only lead fields (no chats/messages/etc.)
       return {
-        ...leadData,
-        _id: r2Lead._id, // use r2 id for uniqueness
-        _creationTime: r2Lead._creationTime,
+        name: leadData.name ?? "",
+        subject: leadData.subject ?? "",
+        source: leadData.source ?? "",
+        mobile: leadData.mobile ?? "",
+        altMobile: leadData.altMobile ?? "",
+        email: leadData.email ?? "",
+        altEmail: leadData.altEmail ?? "",
+        agencyName: leadData.agencyName ?? "",
+        pincode: leadData.pincode ?? "",
+        state: leadData.state ?? "",
+        district: leadData.district ?? "",
+        station: leadData.station ?? "",
+        message: leadData.message ?? "",
+        status: leadData.status ?? "",
+        type: leadData.type ?? "",
+        assignedTo: leadData.assignedTo ?? null,
         assignedToName: "",
+        nextFollowUpDate: leadData.nextFollowUpDate ?? null,
+        lastActivity: leadData.lastActivity ?? r2Lead._creationTime,
+        pharmavendsUid: leadData.pharmavendsUid ?? "",
+        indiamartUniqueId: leadData.indiamartUniqueId ?? "",
+        _id: r2Lead._id,
+        _creationTime: leadData._creationTime ?? r2Lead._creationTime,
         _isR2: true,
       };
     }).filter(Boolean);
