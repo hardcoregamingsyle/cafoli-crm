@@ -4,6 +4,43 @@ import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 
+function getPublicSiteUrl() {
+  const candidates = [
+    process.env.SITE_URL?.trim(),
+    process.env.CONVEX_SITE_URL?.trim(),
+    "https://crm.skinticals.com",
+  ].filter(Boolean) as string[];
+
+  for (const candidate of candidates) {
+    try {
+      return new URL(candidate).toString();
+    } catch {
+      // try next candidate
+    }
+  }
+
+  return "https://crm.skinticals.com/";
+}
+
+function toPublicFileUrl(fileUrl: string) {
+  if (/^https?:\/\//i.test(fileUrl)) {
+    return fileUrl;
+  }
+
+  const normalizedPath = fileUrl.startsWith("/") ? fileUrl : `/${fileUrl}`;
+  return new URL(normalizedPath, getPublicSiteUrl()).toString();
+}
+
+function getFilenameFromUrl(fileUrl: string, fallback: string) {
+  try {
+    const pathname = new URL(toPublicFileUrl(fileUrl)).pathname;
+    const lastSegment = pathname.split("/").filter(Boolean).pop();
+    return lastSegment ? decodeURIComponent(lastSegment) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 // Helper function to send template message with variable substitution
 async function sendTemplateMessageHelper(
   phoneNumber: string,
@@ -62,11 +99,14 @@ async function sendTemplateMessageHelper(
         }
         // If no imageUrl provided, skip header component — WhatsApp will use template's sample
       } else if (headerComponent.format === "DOCUMENT") {
-        const docUrl = mediaUrl || variables?.headerUrl;
-        if (docUrl) {
-          // Extract filename from URL for the required filename field
-          const urlParts = docUrl.split("/");
-          const filename = urlParts[urlParts.length - 1] || "document.pdf";
+        const rawDocUrl = mediaUrl || variables?.headerUrl;
+        if (rawDocUrl) {
+          const docUrl = toPublicFileUrl(rawDocUrl);
+          const filename = getFilenameFromUrl(
+            docUrl,
+            "Master_Cafoli_MRP_List_All_11032026.pdf"
+          );
+
           components.push({
             type: "header",
             parameters: [{
@@ -539,7 +579,7 @@ export const sendWelcomeMessage = internalAction({
       args.leadId,
       ctx,
       undefined,
-      "https://crm.skinticals.com/assets/Master_Cafoli_MRP_List_All_11032026.pdf" // MRP List PDF
+      "/assets/Master_Cafoli_MRP_List_All_11032026.pdf" // MRP List PDF from project assets
     );
   },
 });
