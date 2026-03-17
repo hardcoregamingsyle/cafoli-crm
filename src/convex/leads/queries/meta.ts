@@ -48,7 +48,32 @@ export const getAllLeadsForExport = query({
           const assignedUser = await ctx.db.get(lead.assignedTo);
           assignedToName = assignedUser?.name || "";
         }
-        return { ...lead, assignedToName };
+        return {
+          name: lead.name ?? "",
+          subject: lead.subject ?? "",
+          source: lead.source ?? "",
+          mobile: lead.mobile ?? "",
+          altMobile: lead.altMobile ?? "",
+          email: lead.email ?? "",
+          altEmail: lead.altEmail ?? "",
+          agencyName: lead.agencyName ?? "",
+          pincode: lead.pincode ?? "",
+          state: lead.state ?? "",
+          district: lead.district ?? "",
+          station: lead.station ?? "",
+          message: lead.message ?? "",
+          status: lead.status ?? "",
+          type: lead.type ?? "",
+          assignedTo: lead.assignedTo ?? null,
+          assignedToName,
+          nextFollowUpDate: lead.nextFollowUpDate ?? null,
+          lastActivity: lead.lastActivity,
+          pharmavendsUid: lead.pharmavendsUid ?? "",
+          indiamartUniqueId: lead.indiamartUniqueId ?? "",
+          _id: lead._id,
+          _creationTime: lead._creationTime,
+          _isR2: false,
+        };
       })
     );
 
@@ -56,41 +81,71 @@ export const getAllLeadsForExport = query({
     const r2Leads = await ctx.db.query("r2_leads_mock").take(10000);
     
     const enrichedR2Leads = r2Leads.map((r2Lead) => {
-      // R2 lead data is stored as { lead, chats, messages, comments, followups }
-      // Extract ONLY the lead sub-object to avoid column shifting in CSV
       const rawData = r2Lead.leadData;
-      if (!rawData) return null;
+      if (!rawData || typeof rawData !== "object") return null;
 
-      // If nested format: { lead: {...}, chats: [...], ... }
-      // If flat format: the leadData IS the lead object
-      const leadData = rawData.lead ? rawData.lead : rawData;
+      // Handle nested format: { lead: {...}, chats: [...], messages: [...], ... }
+      // Handle flat format: leadData IS the lead object
+      let leadData: any;
+      if (rawData.lead && typeof rawData.lead === "object" && !Array.isArray(rawData.lead)) {
+        leadData = rawData.lead;
+      } else {
+        // Flat format — but verify it looks like a lead (has mobile or name)
+        // Exclude nested arrays that would be the chats/messages/comments/followups keys
+        leadData = rawData;
+      }
+
       if (!leadData || typeof leadData !== "object") return null;
 
-      // Build a clean lead object with only lead fields (no chats/messages/etc.)
+      // Explicitly extract only known lead scalar fields — never spread the object
+      const mobile = typeof leadData.mobile === "string" ? leadData.mobile : "";
+      const name = typeof leadData.name === "string" ? leadData.name : "";
+      const subject = typeof leadData.subject === "string" ? leadData.subject : "";
+      const source = typeof leadData.source === "string" ? leadData.source : "";
+      const altMobile = typeof leadData.altMobile === "string" ? leadData.altMobile : "";
+      const email = typeof leadData.email === "string" ? leadData.email : "";
+      const altEmail = typeof leadData.altEmail === "string" ? leadData.altEmail : "";
+      const agencyName = typeof leadData.agencyName === "string" ? leadData.agencyName : "";
+      const pincode = typeof leadData.pincode === "string" ? leadData.pincode : "";
+      const state = typeof leadData.state === "string" ? leadData.state : "";
+      const district = typeof leadData.district === "string" ? leadData.district : "";
+      const station = typeof leadData.station === "string" ? leadData.station : "";
+      const message = typeof leadData.message === "string" ? leadData.message : "";
+      const status = typeof leadData.status === "string" ? leadData.status : "";
+      const type = typeof leadData.type === "string" ? leadData.type : "";
+      const nextFollowUpDate = typeof leadData.nextFollowUpDate === "number" ? leadData.nextFollowUpDate : null;
+      const lastActivity = typeof leadData.lastActivity === "number" ? leadData.lastActivity : r2Lead._creationTime;
+      const pharmavendsUid = typeof leadData.pharmavendsUid === "string" ? leadData.pharmavendsUid : "";
+      const indiamartUniqueId = typeof leadData.indiamartUniqueId === "string" ? leadData.indiamartUniqueId : "";
+      const creationTime = typeof leadData._creationTime === "number" ? leadData._creationTime : r2Lead._creationTime;
+
+      // Skip rows that have no mobile and no name — likely corrupt/empty entries
+      if (!mobile && !name) return null;
+
       return {
-        name: leadData.name ?? "",
-        subject: leadData.subject ?? "",
-        source: leadData.source ?? "",
-        mobile: leadData.mobile ?? "",
-        altMobile: leadData.altMobile ?? "",
-        email: leadData.email ?? "",
-        altEmail: leadData.altEmail ?? "",
-        agencyName: leadData.agencyName ?? "",
-        pincode: leadData.pincode ?? "",
-        state: leadData.state ?? "",
-        district: leadData.district ?? "",
-        station: leadData.station ?? "",
-        message: leadData.message ?? "",
-        status: leadData.status ?? "",
-        type: leadData.type ?? "",
-        assignedTo: leadData.assignedTo ?? null,
+        name,
+        subject,
+        source,
+        mobile,
+        altMobile,
+        email,
+        altEmail,
+        agencyName,
+        pincode,
+        state,
+        district,
+        station,
+        message,
+        status,
+        type,
+        assignedTo: null,
         assignedToName: "",
-        nextFollowUpDate: leadData.nextFollowUpDate ?? null,
-        lastActivity: leadData.lastActivity ?? r2Lead._creationTime,
-        pharmavendsUid: leadData.pharmavendsUid ?? "",
-        indiamartUniqueId: leadData.indiamartUniqueId ?? "",
+        nextFollowUpDate,
+        lastActivity,
+        pharmavendsUid,
+        indiamartUniqueId,
         _id: r2Lead._id,
-        _creationTime: leadData._creationTime ?? r2Lead._creationTime,
+        _creationTime: creationTime,
         _isR2: true,
       };
     }).filter(Boolean);
