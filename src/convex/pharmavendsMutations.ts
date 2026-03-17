@@ -40,6 +40,20 @@ export const checkLeadExists = internalQuery({
       };
     }
 
+    // Also check R2 by mobile
+    const r2Lead = await ctx.db
+      .query("r2_leads_mock")
+      .withIndex("by_mobile", (q) => q.eq("mobile", standardizedMobile))
+      .first();
+
+    if (r2Lead) {
+      return {
+        _id: r2Lead._id,
+        type: (r2Lead.leadData?.lead?.type) || "To be Decided",
+        isR2: true,
+      };
+    }
+
     // Fallback: check by UID (for legacy data)
     const leadByUid = await ctx.db
       .query("leads")
@@ -118,10 +132,6 @@ export const mergePharmavendsLead = internalMutation({
     if (args.state) updates.state = args.state;
     if (args.district) updates.district = args.district;
     if (args.station) updates.station = args.station;
-    
-    // Don't overwrite message, but maybe we should? 
-    // Let's keep the old message in the lead but add the new message to the system comment
-    // updates.message = args.message; 
 
     // Update search text
     const merged = {
@@ -197,7 +207,9 @@ export const createPharmavendsLead = internalMutation({
       args.message
     ].filter(Boolean).join(" ");
 
-    const leadId = await ctx.db.insert("leads", {
+    // NEW LEADS GO DIRECTLY TO R2 (cold storage) to keep Convex lean
+    // They will be restored to Convex only when a user opens them or a WhatsApp message arrives
+    const leadData = {
       name: args.name,
       subject: args.subject,
       source: "Website and Pharmavends",
@@ -216,8 +228,18 @@ export const createPharmavendsLead = internalMutation({
       lastActivity: Date.now(),
       pharmavendsUid: args.uid,
       searchText,
+    };
+
+    await ctx.db.insert("r2_leads_mock", {
+      originalId: `pharmavends_${args.uid}`,
+      leadData: { lead: leadData },
+      mobile: standardizedMobile,
+      name: args.name,
+      searchText,
+      status: "Cold",
+      source: "Website and Pharmavends",
     });
-    
+
     // Send welcome email
     if (args.email) {
       try {
@@ -230,29 +252,11 @@ export const createPharmavendsLead = internalMutation({
         console.error("Failed to schedule welcome email:", error);
       }
     }
-    
-    // Send welcome WhatsApp message to primary mobile
-    try {
-      await ctx.scheduler.runAfter(0, internal.whatsappTemplates.sendWelcomeMessage, {
-        phoneNumber: standardizedMobile,
-        leadId: leadId,
-      });
-    } catch (error) {
-      console.error("Failed to schedule welcome WhatsApp template to primary mobile:", error);
-    }
-    
-    // Send welcome WhatsApp message to alternate mobile if exists
-    if (standardizedAltMobile) {
-      try {
-        await ctx.scheduler.runAfter(0, internal.whatsappTemplates.sendWelcomeMessage, {
-          phoneNumber: standardizedAltMobile,
-          leadId: leadId,
-        });
-      } catch (error) {
-        console.error("Failed to schedule welcome WhatsApp template to alternate mobile:", error);
-      }
-    }
-    
-    return leadId;
+
+    // NOTE: Welcome WhatsApp is NOT sent here because we don't have a leadId yet.
+    // When the lead replies to any future message, processWhatsAppLead will restore them from R2.
+    // If you want to send a welcome template, restore the lead first, then send.
+
+    return null; // R2 leads don't have a Convex leadId yet
   },
 });
