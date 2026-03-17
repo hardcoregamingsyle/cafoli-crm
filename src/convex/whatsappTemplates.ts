@@ -484,14 +484,14 @@ export const sendTemplateMessageByPhone = action({
 
     // 2. Check if lead already exists in Convex
     let leadId: string | null = await ctx.runQuery(
-      internalAny.whatsappTemplates.findLeadIdByPhone,
+      internalAny.whatsappTemplatesQueries.findLeadIdByPhone,
       { phone }
     );
 
     // 3. If not in Convex, check R2 and restore
     if (!leadId) {
       const r2Id: string | null = await ctx.runQuery(
-        internalAny.whatsappTemplates.findR2IdByPhone,
+        internalAny.whatsappTemplatesQueries.findR2IdByPhone,
         { phone }
       );
       if (r2Id) {
