@@ -635,6 +635,7 @@ export const sendWelcomeMessage = internalAction({
     });
 
     // Step 2: Send the welcome message template with the MRP list PDF as the document header
+    // Must use a publicly accessible URL — local asset paths cannot be fetched from Convex Node actions
     return await sendTemplateMessageHelper(
       args.phoneNumber,
       "cafoliwelcomemessage",
@@ -642,7 +643,7 @@ export const sendWelcomeMessage = internalAction({
       args.leadId,
       ctx,
       undefined,
-      "/assets/Master_Cafoli_MRP_List_All_11032026.pdf" // MRP List PDF from project assets
+      "https://crm.skinticals.com/assets/Master_Cafoli_MRP_List_All_11032026.pdf"
     );
   },
 });
