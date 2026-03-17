@@ -41,6 +41,65 @@ function getFilenameFromUrl(fileUrl: string, fallback: string) {
   }
 }
 
+async function fetchDocumentForUpload(fileUrl: string, fallbackFilename: string) {
+  const publicUrl = toPublicFileUrl(fileUrl);
+  const response = await fetch(publicUrl);
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch document for upload: ${response.status} ${response.statusText}`);
+  }
+
+  const contentType =
+    response.headers.get("content-type")?.split(";")[0]?.trim() || "application/pdf";
+  const filename = getFilenameFromUrl(publicUrl, fallbackFilename);
+  const bytes = await response.arrayBuffer();
+
+  return {
+    blob: new Blob([bytes], { type: contentType }),
+    contentType,
+    filename,
+  };
+}
+
+async function uploadDocumentToWhatsAppMedia(
+  fileUrl: string,
+  accessToken: string,
+  phoneNumberId: string,
+  fallbackFilename = "document.pdf"
+) {
+  const { blob, contentType, filename } = await fetchDocumentForUpload(
+    fileUrl,
+    fallbackFilename
+  );
+
+  const formData = new FormData();
+  formData.append("messaging_product", "whatsapp");
+  formData.append("type", contentType);
+  formData.append("file", blob, filename);
+
+  const response = await fetch(
+    `https://graph.facebook.com/v20.0/${phoneNumberId}/media`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: formData,
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok || !data?.id) {
+    throw new Error(`WhatsApp media upload failed: ${JSON.stringify(data)}`);
+  }
+
+  return {
+    id: String(data.id),
+    filename,
+  };
+}
+
 // Helper function to send template message with variable substitution
 async function sendTemplateMessageHelper(
   phoneNumber: string,
@@ -101,9 +160,10 @@ async function sendTemplateMessageHelper(
       } else if (headerComponent.format === "DOCUMENT") {
         const rawDocUrl = mediaUrl || variables?.headerUrl;
         if (rawDocUrl) {
-          const docUrl = toPublicFileUrl(rawDocUrl);
-          const filename = getFilenameFromUrl(
-            docUrl,
+          const uploadedDocument = await uploadDocumentToWhatsAppMedia(
+            rawDocUrl,
+            accessToken,
+            phoneNumberId,
             "Master_Cafoli_MRP_List_All_11032026.pdf"
           );
 
@@ -111,7 +171,10 @@ async function sendTemplateMessageHelper(
             type: "header",
             parameters: [{
               type: "document",
-              document: { link: docUrl, filename }
+              document: {
+                id: uploadedDocument.id,
+                filename: uploadedDocument.filename,
+              }
             }]
           });
         }
