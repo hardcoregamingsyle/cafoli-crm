@@ -25,19 +25,47 @@ export default function WhatsApp() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [allLeads, setAllLeads] = useState<any[]>([]);
 
   // Determine filter based on user role
   const filter = user?.role === ROLES.ADMIN ? "all" : "mine";
 
-  // Use standard query instead of paginated query to avoid loading issues
   const leadsResult = useQuery(
     api.whatsappQueries.getLeadsWithChatStatus,
-    { filter, userId: user?._id, searchQuery: searchQuery || undefined }
+    { filter, userId: user?._id, searchQuery: searchQuery || undefined, cursor: cursor, numItems: 50 }
   );
 
-  const leads = leadsResult || [];
-  const canLoadMore = false;
+  // Accumulate leads across pages
+  useEffect(() => {
+    if (leadsResult?.page) {
+      if (cursor === null) {
+        setAllLeads(leadsResult.page);
+      } else {
+        setAllLeads(prev => {
+          const existingIds = new Set(prev.map((l: any) => l._id));
+          const newLeads = leadsResult.page.filter((l: any) => !existingIds.has(l._id));
+          return [...prev, ...newLeads];
+        });
+      }
+    }
+  }, [leadsResult]);
+
+  // Reset when search changes
+  useEffect(() => {
+    setCursor(null);
+    setAllLeads([]);
+  }, [searchQuery, filter]);
+
+  const leads = allLeads;
+  const canLoadMore = !!(leadsResult?.nextCursor);
   const isLoading = leadsResult === undefined;
+
+  const handleLoadMore = () => {
+    if (leadsResult?.nextCursor) {
+      setCursor(leadsResult.nextCursor);
+    }
+  };
 
   const [selectedLeadId, setSelectedLeadId] = useState<Id<"leads"> | null>(null);
   const selectedLead = leads.find((l: any) => l._id === selectedLeadId);
@@ -160,7 +188,7 @@ export default function WhatsApp() {
                 leads={leads}
                 selectedLeadId={selectedLeadId}
                 onSelectLead={setSelectedLeadId}
-                onLoadMore={() => {}}
+                onLoadMore={handleLoadMore}
                 canLoadMore={canLoadMore}
                 isLoading={isLoading}
                 searchQuery={searchQuery}

@@ -93,13 +93,17 @@ export const getLeadsWithChatStatus = query({
     filter: v.union(v.literal("all"), v.literal("mine")),
     userId: v.optional(v.id("users")),
     searchQuery: v.optional(v.string()),
+    cursor: v.optional(v.union(v.string(), v.null())),
+    numItems: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const limit = args.numItems || 50;
+
     // Fetch leads
     let leads;
     
     if (args.searchQuery) {
-      // Use search index if query is provided - collect all results
+      // Use search index if query is provided
       if (args.filter === "mine" && args.userId) {
         leads = await ctx.db
           .query("leads")
@@ -117,22 +121,19 @@ export const getLeadsWithChatStatus = query({
           .collect();
       }
     } else {
-      // Standard list - fetch leads with limit to prevent timeout
-      const LIMIT = 100;
-
+      // Standard list
       if (args.filter === "mine" && args.userId) {
         leads = await ctx.db
           .query("leads")
           .withIndex("by_assigned_to_and_last_activity", (q) => q.eq("assignedTo", args.userId))
           .order("desc")
-          .take(LIMIT);
+          .take(500);
       } else {
-        // For all leads, prioritize those with recent activity
         leads = await ctx.db
           .query("leads")
           .withIndex("by_last_activity")
           .order("desc")
-          .take(LIMIT);
+          .take(500);
       }
     }
 
@@ -152,10 +153,23 @@ export const getLeadsWithChatStatus = query({
       })
     );
 
-    const visibleLeads = leadsWithChatStatus.filter((lead) => lead.hasChat);
+    const visibleLeads = leadsWithChatStatus
+      .filter((lead) => lead.hasChat)
+      .sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0));
 
-    return visibleLeads.sort((a, b) => {
-      return (b.lastMessageAt || 0) - (a.lastMessageAt || 0);
-    });
+    // Manual cursor-based pagination
+    const cursorIndex = args.cursor
+      ? visibleLeads.findIndex((l) => l._id === args.cursor) + 1
+      : 0;
+    const page = visibleLeads.slice(cursorIndex, cursorIndex + limit);
+    const nextCursor = cursorIndex + limit < visibleLeads.length
+      ? page[page.length - 1]?._id ?? null
+      : null;
+
+    return {
+      page,
+      nextCursor,
+      isDone: nextCursor === null,
+    };
   },
 });

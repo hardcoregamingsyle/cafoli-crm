@@ -153,13 +153,13 @@ export default function Leads() {
   const [allLoadedLeads, setAllLoadedLeads] = useState<Doc<"leads">[]>([]);
 
   // Reset loaded leads when filters change
-  useMemo(() => {
+  useEffect(() => {
     setAllLoadedLeads([]);
     setPaginationOpts({ numItems: ITEMS_PER_PAGE, cursor: null });
   }, [state.filter, state.search, state.selectedStatuses, state.selectedSources, state.selectedTags, state.selectedAssignedTo, state.sortBy, state.viewColdCallerLeads, state.viewIrrelevantLeads]);
 
   // Append new leads when pagination result changes
-  useMemo(() => {
+  useEffect(() => {
     if (paginatedResult?.page) {
       setAllLoadedLeads(prev => {
         if (paginationOpts.cursor === null) {
@@ -170,16 +170,20 @@ export default function Leads() {
         return [...prev, ...newLeads];
       });
     }
-  }, [paginatedResult, paginationOpts.cursor]);
+  }, [paginatedResult]);
 
   const { ref: loadMoreRef, inView } = useInView({
     threshold: 0,
   });
 
   // Load more when scrolling to bottom
-  useMemo(() => {
+  useEffect(() => {
     if (inView && paginatedResult && !paginatedResult.isDone && paginatedResult.continueCursor) {
-      setPaginationOpts({ numItems: ITEMS_PER_PAGE, cursor: paginatedResult.continueCursor });
+      setPaginationOpts(prev => {
+        // Avoid re-setting the same cursor
+        if (prev.cursor === paginatedResult.continueCursor) return prev;
+        return { numItems: ITEMS_PER_PAGE, cursor: paginatedResult.continueCursor };
+      });
     }
   }, [inView, paginatedResult]);
 
