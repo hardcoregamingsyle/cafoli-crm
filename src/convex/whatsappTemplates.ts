@@ -50,14 +50,17 @@ async function sendTemplateMessageHelper(
     const headerComponent = template.components?.find((c: any) => c.type === "HEADER");
     if (headerComponent) {
       if (headerComponent.format === "IMAGE") {
-        const imageUrl = mediaUrl || variables?.headerUrl || "https://placehold.co/600x400.png?text=Welcome";
-        components.push({
-          type: "header",
-          parameters: [{
-            type: "image",
-            image: { link: imageUrl }
-          }]
-        });
+        const imageUrl = mediaUrl || variables?.headerUrl;
+        if (imageUrl) {
+          components.push({
+            type: "header",
+            parameters: [{
+              type: "image",
+              image: { link: imageUrl }
+            }]
+          });
+        }
+        // If no imageUrl provided, skip header component — WhatsApp will use template's sample
       } else if (headerComponent.format === "DOCUMENT") {
         const docUrl = mediaUrl || variables?.headerUrl;
         if (docUrl) {
@@ -69,6 +72,7 @@ async function sendTemplateMessageHelper(
             }]
           });
         }
+        // If no docUrl provided, skip header component entirely to avoid format mismatch
       } else if (headerComponent.format === "VIDEO") {
         const videoUrl = mediaUrl || variables?.headerUrl;
         if (videoUrl) {
@@ -80,7 +84,9 @@ async function sendTemplateMessageHelper(
             }]
           });
         }
+        // If no videoUrl provided, skip header component entirely
       }
+      // TEXT headers don't need parameters unless they have variables
     }
 
     // 2. Handle Body Component (Variables)
