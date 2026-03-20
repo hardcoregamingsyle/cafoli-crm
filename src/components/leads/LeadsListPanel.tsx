@@ -1,6 +1,6 @@
 import { Doc, Id } from "@/convex/_generated/dataModel";
 import { LeadCard } from "@/components/LeadCard";
-import { Loader2, ArchiveRestore } from "lucide-react";
+import { Loader2, ArchiveRestore, Archive } from "lucide-react";
 import { useLeadSummaries } from "@/hooks/useLeadSummaries";
 import { useEffect } from "react";
 import { useQuery } from "convex/react";
@@ -127,7 +127,43 @@ export function LeadsListPanel({
         )}
       </div>
       <div className="flex-1 overflow-y-auto p-2 space-y-2">
-        {leads.map((lead: Doc<"leads">) => (
+        {leads.map((lead: any) => (
+          lead._isR2 ? (
+            <div key={lead._id} className="p-3 border rounded-lg bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 flex flex-col gap-2">
+              <div className="flex justify-between items-start">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-medium text-sm truncate">{lead.name || "Unknown"}</h4>
+                    <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 shrink-0">
+                      <Archive className="h-2.5 w-2.5" />
+                      Archive
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{lead.mobile}</p>
+                  {lead.subject && <p className="text-xs text-muted-foreground truncate mt-0.5">{lead.subject}</p>}
+                </div>
+                {lead.status && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground ml-2 shrink-0">
+                    {lead.status}
+                  </span>
+                )}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => onRestoreR2Lead?.(lead.r2Id)}
+                disabled={isRestoring}
+              >
+                {isRestoring ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <ArchiveRestore className="h-4 w-4 mr-2" />
+                )}
+                Restore to Active
+              </Button>
+            </div>
+          ) : (
           <LeadCard
             key={lead._id}
             lead={lead}
@@ -145,55 +181,16 @@ export function LeadsListPanel({
             aiSummaryLoading={loading[lead._id]}
             onRegenerateSummary={handleRegenerateSummary}
           />
+          )
         ))}
         {isLoadingMore && !isDone && (
           <div ref={loadMoreRef} className="flex justify-center py-4">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         )}
-        {leads.length === 0 && isDone && r2Leads.length === 0 && (
+        {leads.length === 0 && isDone && (
           <div className="p-8 text-center text-muted-foreground">
             No leads found matching your criteria.
-          </div>
-        )}
-
-        {r2Leads.length > 0 && (
-          <div className="mt-6 border-t pt-4">
-            <div className="flex items-center gap-2 mb-3 px-2 text-muted-foreground">
-              <ArchiveRestore className="h-4 w-4" />
-              <h3 className="text-sm font-medium">Found in Archive (R2 Storage)</h3>
-            </div>
-            <div className="space-y-2">
-              {r2Leads.map((r2Lead) => (
-                <div key={r2Lead._id} className="p-3 border rounded-lg bg-muted/30 flex flex-col gap-2">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h4 className="font-medium text-sm">{r2Lead.name || "Unknown"}</h4>
-                      <p className="text-xs text-muted-foreground">{r2Lead.mobile}</p>
-                    </div>
-                    {r2Lead.status && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">
-                        {r2Lead.status}
-                      </span>
-                    )}
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="w-full mt-2"
-                    onClick={() => onRestoreR2Lead?.(r2Lead._id)}
-                    disabled={isRestoring}
-                  >
-                    {isRestoring ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : (
-                      <ArchiveRestore className="h-4 w-4 mr-2" />
-                    )}
-                    Restore to Convex
-                  </Button>
-                </div>
-              ))}
-            </div>
           </div>
         )}
       </div>

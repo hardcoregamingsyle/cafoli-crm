@@ -198,18 +198,37 @@ export default function Leads() {
     }
   }, [inView, paginatedResult]);
 
-  // Determine which leads to show: semantic results or paginated
-  const filteredLeads = useMemo(() => {
-    if (state.search && semanticResults !== null) {
-      return semanticResults;
-    }
-    return allLoadedLeads;
-  }, [state.search, semanticResults, allLoadedLeads]);
-
   const r2SearchResults = useQuery(
     api.r2_cache_prototype.searchR2Leads,
     state.search ? { searchQuery: state.search } : "skip"
   );
+
+  // Determine which leads to show: semantic results or paginated
+  const filteredLeads = useMemo(() => {
+    if (state.search && semanticResults !== null) {
+      // Merge R2 results inline with semantic results
+      const r2AsLeads = (r2SearchResults || []).map((r2: any) => ({
+        ...(r2.leadData?.lead || {}),
+        _id: r2._id,
+        _creationTime: r2._creationTime,
+        _isR2: true,
+        r2Id: r2._id,
+        name: r2.name || r2.leadData?.lead?.name || "Unknown",
+        mobile: r2.mobile || r2.leadData?.lead?.mobile || "",
+        status: r2.status || r2.leadData?.lead?.status || "Cold",
+        source: r2.source || r2.leadData?.lead?.source || "IndiaMART",
+        lastActivity: r2.leadData?.lead?.lastActivity || r2._creationTime,
+        subject: r2.leadData?.lead?.subject || "",
+        message: r2.leadData?.lead?.message || "",
+        type: r2.leadData?.lead?.type || "To be Decided",
+      }));
+      // Deduplicate: don't show R2 leads that are already in Convex results
+      const convexMobiles = new Set(semanticResults.map((l: any) => l.mobile));
+      const uniqueR2 = r2AsLeads.filter((r2: any) => !convexMobiles.has(r2.mobile));
+      return [...semanticResults, ...uniqueR2] as any[];
+    }
+    return allLoadedLeads;
+  }, [state.search, semanticResults, allLoadedLeads, r2SearchResults]);
 
   const handleRestoreR2Lead = async (r2Id: Id<"r2_leads_mock">) => {
     try {
@@ -299,7 +318,7 @@ export default function Leads() {
             loadMoreRef={loadMoreRef}
             isLoadingMore={isSemanticMode ? false : (!!paginatedResult && !paginatedResult.isDone)}
             isDone={isSemanticMode ? true : (!!paginatedResult?.isDone)}
-            r2Leads={r2SearchResults || []}
+            r2Leads={[]}
             onRestoreR2Lead={handleRestoreR2Lead}
             isRestoring={isRestoring}
           />
