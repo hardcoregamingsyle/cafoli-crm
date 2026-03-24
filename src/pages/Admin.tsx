@@ -100,10 +100,7 @@ export default function Admin() {
   const [isSyncingPharmavends, setIsSyncingPharmavends] = useState(false);
   const [leadsPerStaff, setLeadsPerStaff] = useState("50");
 
-  const allLeadsForExport = useQuery(
-    api.leads.queries.getAllLeadsForExport,
-    isDownloadDialogOpen && currentUser ? { userId: currentUser._id } : "skip"
-  );
+  const exportAllLeads = useAction(api.leads.queries.exportAllLeads);
   const nextDownloadNumber = useQuery(api.leads.queries.getNextDownloadNumber);
   const logExport = useMutation(api.leads.admin.logExport);
   const bulkImportLeads = useMutation(api.leads.admin.bulkImportLeads);
@@ -207,7 +204,7 @@ export default function Admin() {
   };
 
   const handleDownloadCSV = async () => {
-    if (!currentUser || !allLeadsForExport) return;
+    if (!currentUser) return;
     if (selectedColumns.size === 0) {
       toast.error("Please select at least one column to export");
       return;
@@ -215,6 +212,9 @@ export default function Admin() {
 
     setIsDownloading(true);
     try {
+      toast.info("Fetching all leads including archived data, please wait...");
+      const allLeadsForExport = await exportAllLeads({ userId: currentUser._id });
+
       const downloadNumber = nextDownloadNumber || 1;
       const fileName = `leads_export_${downloadNumber}_${new Date().toISOString().slice(0, 10)}.csv`;
 
@@ -895,20 +895,15 @@ export default function Admin() {
                 </div>
               ))}
             </div>
-            {allLeadsForExport === undefined && (
-              <p className="text-sm text-muted-foreground text-center">Loading leads data...</p>
-            )}
-            {allLeadsForExport !== undefined && (
-              <p className="text-sm text-muted-foreground text-center">
-                {allLeadsForExport.length} leads ready to export
-              </p>
-            )}
+            <p className="text-sm text-muted-foreground text-center">
+              Click Download CSV to fetch and export all leads (including archived R2 leads).
+            </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDownloadDialogOpen(false)}>Cancel</Button>
             <Button
               onClick={handleDownloadCSV}
-              disabled={isDownloading || selectedColumns.size === 0 || !allLeadsForExport}
+              disabled={isDownloading || selectedColumns.size === 0}
             >
               {isDownloading ? (
                 <RefreshCw className="mr-2 h-4 w-4 animate-spin" />

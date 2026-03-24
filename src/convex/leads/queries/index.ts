@@ -4,3 +4,4 @@ export { getMyLeadsWithoutFollowUp, getUpcomingFollowUps } from "./followups";
 export { getLeads, getLead, getLeadsWithUnreadCounts, getLeadById } from "./basic";
 export { getComments } from "./comments";
 export { getUniqueSources, getAllLeadsForExport, getNextDownloadNumber } from "./meta";
+export { exportAllLeads } from "../exportAction";
