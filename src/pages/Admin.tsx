@@ -237,11 +237,13 @@ export default function Admin() {
             // Prefix with tab to prevent Excel from converting to scientific notation
             return "\t" + val;
           }
-          return String(val);
+          // Strip newlines and carriage returns from all string values to prevent row breaks in CSV
+          const strVal = String(val);
+          return strVal.replace(/[\r\n]+/g, " ").replace(/\t/g, " ");
         });
       });
 
-      const csv = Papa.unparse([headerRow, ...dataRows]);
+      const csv = Papa.unparse([headerRow, ...dataRows], { newline: "\r\n" });
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
