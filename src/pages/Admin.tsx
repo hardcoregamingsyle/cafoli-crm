@@ -221,24 +221,27 @@ export default function Admin() {
       // Build rows with only selected columns
       const orderedColumns = ALL_EXPORT_COLUMNS.filter(c => selectedColumns.has(c.key));
 
-      const fieldLabels = orderedColumns.map(c => c.label);
+      const phoneColumns = new Set(["mobile", "altMobile"]);
 
-      const rows = allLeadsForExport.map((lead: any) => {
-        const row: Record<string, any> = {};
-        for (const col of orderedColumns) {
+      // Use 2D array to guarantee exact column alignment
+      const headerRow = orderedColumns.map(c => c.label);
+      const dataRows = allLeadsForExport.map((lead: any) => {
+        return orderedColumns.map(col => {
           let val = lead[col.key];
           // Format dates
           if ((col.key === "nextFollowUpDate" || col.key === "lastActivity" || col.key === "_creationTime") && typeof val === "number") {
-            val = new Date(val).toLocaleString();
+            return new Date(val).toLocaleString();
           } else if (val === null || val === undefined) {
-            val = "";
+            return "";
+          } else if (phoneColumns.has(col.key) && typeof val === "string" && val.length > 0) {
+            // Prefix with tab to prevent Excel from converting to scientific notation
+            return "\t" + val;
           }
-          row[col.label] = val;
-        }
-        return row;
+          return String(val);
+        });
       });
 
-      const csv = Papa.unparse({ fields: fieldLabels, data: rows });
+      const csv = Papa.unparse([headerRow, ...dataRows]);
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
