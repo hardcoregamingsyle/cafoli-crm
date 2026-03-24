@@ -224,6 +224,9 @@ export default function Admin() {
 
       const phoneColumns = new Set(["mobile", "altMobile"]);
 
+      // Phone number validation: must be digits only (with optional leading +), 7-15 chars
+      const isValidPhone = (v: string) => /^\+?\d{7,15}$/.test(v.replace(/[\s\-().]/g, ""));
+
       // Use 2D array to guarantee exact column alignment
       const headerRow = orderedColumns.map(c => c.label);
       const dataRows = allLeadsForExport.map((lead: any) => {
@@ -234,11 +237,13 @@ export default function Admin() {
             return new Date(val).toLocaleString();
           } else if (val === null || val === undefined) {
             return "";
-          } else if (phoneColumns.has(col.key) && typeof val === "string" && val.length > 0) {
+          } else if (phoneColumns.has(col.key)) {
+            // Validate phone: must look like a phone number (digits, 7-15 chars)
+            // If it doesn't pass validation, output empty string to prevent garbage in mobile column
+            const strPhone = typeof val === "string" ? val.replace(/[\r\n\t]+/g, "").trim() : "";
+            if (!strPhone || !isValidPhone(strPhone)) return "";
             // Use Excel formula ="number" to force text display and prevent scientific notation
-            // This keeps column alignment intact (unlike \t prefix which shifts columns)
-            const cleaned = val.replace(/[\r\n\t]+/g, "");
-            return `="${cleaned}"`;
+            return `="${strPhone}"`;
           }
           // Strip newlines, carriage returns, and tabs from all string values to prevent row breaks in CSV
           const strVal = String(val);
