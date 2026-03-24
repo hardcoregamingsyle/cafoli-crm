@@ -250,6 +250,9 @@ export default function Admin() {
 
       let clearedMobileCount = 0;
 
+      // Sanitize a string value: strip all newlines, carriage returns, tabs
+      const sanitize = (s: string) => s.replace(/[\r\n\t]+/g, " ").trim();
+
       // Use 2D array to guarantee exact column alignment
       const headerRow = orderedColumns.map(c => c.label);
       const dataRows = allLeadsForExport.map((lead: any) => {
@@ -257,26 +260,36 @@ export default function Admin() {
           const val = lead[col.key];
           // Format dates
           if ((col.key === "nextFollowUpDate" || col.key === "lastActivity" || col.key === "_creationTime") && typeof val === "number") {
-            return new Date(val).toLocaleString();
+            return sanitize(new Date(val).toLocaleString());
           } else if (val === null || val === undefined || val === "") {
             return "";
           } else if (phoneColumns.has(col.key)) {
-            const strPhone = typeof val === "string" ? val.replace(/[\r\n\t]+/g, "").trim() : "";
+            const strPhone = sanitize(typeof val === "string" ? val : String(val));
             if (!strPhone || !isValidPhone(strPhone)) {
               if (strPhone) clearedMobileCount++;
               return "";
             }
-            // Excel formula to force text display and prevent scientific notation
-            return `="${strPhone}"`;
+            // Prefix with tab to force Excel to treat as text (prevents scientific notation)
+            // We use a single quote prefix which Excel recognizes as text
+            return `'${strPhone}`;
           }
-          // Strip newlines, carriage returns, and tabs to prevent row breaks in CSV
-          return String(val).replace(/[\r\n\t]+/g, " ");
+          // Strip ALL control characters from string values
+          return sanitize(String(val));
         });
       });
 
-      const csv = Papa.unparse([headerRow, ...dataRows], { newline: "\r\n", quotes: true });
+      // Build CSV manually to have full control over quoting and escaping
+      const escapeCell = (cell: string): string => {
+        // Always quote every cell to prevent misalignment
+        const escaped = cell.replace(/"/g, '""');
+        return `"${escaped}"`;
+      };
+      const csvLines = [headerRow, ...dataRows].map((row: string[]) =>
+        row.map((cell: string) => escapeCell(String(cell))).join(",")
+      );
+      const csv = csvLines.join("\r\n");
       // BOM for Excel UTF-8 compatibility
-      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+      const blob = new Blob(["\uFEFF" + csv + "\r\n"], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;

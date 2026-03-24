@@ -38,6 +38,12 @@ export const getAllLeadsForExport = query({
       throw new Error("Only admins can export all leads");
     }
 
+    // Helper: sanitize string fields — strip newlines, tabs, carriage returns
+    const clean = (v: unknown): string => {
+      if (v === null || v === undefined) return "";
+      return String(v).replace(/[\r\n\t]+/g, " ").trim();
+    };
+
     // Fetch active Convex leads (up to 10000)
     const convexLeads = await ctx.db.query("leads").withIndex("by_last_activity").order("desc").take(10000);
     
@@ -49,27 +55,27 @@ export const getAllLeadsForExport = query({
           assignedToName = assignedUser?.name || "";
         }
         return {
-          name: lead.name ?? "",
-          subject: lead.subject ?? "",
-          source: lead.source ?? "",
-          mobile: lead.mobile ?? "",
-          altMobile: lead.altMobile ?? "",
-          email: lead.email ?? "",
-          altEmail: lead.altEmail ?? "",
-          agencyName: lead.agencyName ?? "",
-          pincode: lead.pincode ?? "",
-          state: lead.state ?? "",
-          district: lead.district ?? "",
-          station: lead.station ?? "",
-          message: lead.message ?? "",
-          status: lead.status ?? "",
-          type: lead.type ?? "",
+          name: clean(lead.name),
+          subject: clean(lead.subject),
+          source: clean(lead.source),
+          mobile: clean(lead.mobile),
+          altMobile: clean(lead.altMobile),
+          email: clean(lead.email),
+          altEmail: clean(lead.altEmail),
+          agencyName: clean(lead.agencyName),
+          pincode: clean(lead.pincode),
+          state: clean(lead.state),
+          district: clean(lead.district),
+          station: clean(lead.station),
+          message: clean(lead.message),
+          status: clean(lead.status),
+          type: clean(lead.type),
           assignedTo: lead.assignedTo ?? null,
-          assignedToName,
+          assignedToName: clean(assignedToName),
           nextFollowUpDate: lead.nextFollowUpDate ?? null,
           lastActivity: lead.lastActivity,
-          pharmavendsUid: lead.pharmavendsUid ?? "",
-          indiamartUniqueId: lead.indiamartUniqueId ?? "",
+          pharmavendsUid: clean(lead.pharmavendsUid),
+          indiamartUniqueId: clean(lead.indiamartUniqueId),
           _id: lead._id,
           _creationTime: lead._creationTime,
           _isR2: false,
@@ -95,29 +101,28 @@ export const getAllLeadsForExport = query({
       if (!leadData || typeof leadData !== "object") return null;
 
       // Use top-level r2Lead.mobile as authoritative source (always correct, set at offload time)
-      // Fall back to leadData.mobile only if top-level is missing
       const topLevelMobile = typeof r2Lead.mobile === "string" ? r2Lead.mobile : "";
       const leadDataMobile = typeof leadData.mobile === "string" ? leadData.mobile : "";
-      const mobile = topLevelMobile || leadDataMobile;
+      const mobile = clean(topLevelMobile || leadDataMobile);
 
-      const name = typeof leadData.name === "string" ? leadData.name : (typeof r2Lead.name === "string" ? r2Lead.name : "");
-      const subject = typeof leadData.subject === "string" ? leadData.subject : "";
-      const source = typeof leadData.source === "string" ? leadData.source : (typeof r2Lead.source === "string" ? r2Lead.source : "");
-      const altMobile = typeof leadData.altMobile === "string" ? leadData.altMobile : "";
-      const email = typeof leadData.email === "string" ? leadData.email : "";
-      const altEmail = typeof leadData.altEmail === "string" ? leadData.altEmail : "";
-      const agencyName = typeof leadData.agencyName === "string" ? leadData.agencyName : "";
-      const pincode = typeof leadData.pincode === "string" ? leadData.pincode : "";
-      const state = typeof leadData.state === "string" ? leadData.state : "";
-      const district = typeof leadData.district === "string" ? leadData.district : "";
-      const station = typeof leadData.station === "string" ? leadData.station : "";
-      const message = typeof leadData.message === "string" ? leadData.message : "";
-      const status = typeof leadData.status === "string" ? leadData.status : (typeof r2Lead.status === "string" ? r2Lead.status : "");
-      const type = typeof leadData.type === "string" ? leadData.type : "";
+      const name = clean(leadData.name || r2Lead.name);
+      const subject = clean(leadData.subject);
+      const source = clean(leadData.source || r2Lead.source);
+      const altMobile = clean(leadData.altMobile);
+      const email = clean(leadData.email);
+      const altEmail = clean(leadData.altEmail);
+      const agencyName = clean(leadData.agencyName);
+      const pincode = clean(leadData.pincode);
+      const state = clean(leadData.state);
+      const district = clean(leadData.district);
+      const station = clean(leadData.station);
+      const message = clean(leadData.message);
+      const status = clean(leadData.status || r2Lead.status);
+      const type = clean(leadData.type);
       const nextFollowUpDate = typeof leadData.nextFollowUpDate === "number" ? leadData.nextFollowUpDate : null;
       const lastActivity = typeof leadData.lastActivity === "number" ? leadData.lastActivity : r2Lead._creationTime;
-      const pharmavendsUid = typeof leadData.pharmavendsUid === "string" ? leadData.pharmavendsUid : "";
-      const indiamartUniqueId = typeof leadData.indiamartUniqueId === "string" ? leadData.indiamartUniqueId : (typeof r2Lead.indiamartUniqueId === "string" ? r2Lead.indiamartUniqueId : "");
+      const pharmavendsUid = clean(leadData.pharmavendsUid);
+      const indiamartUniqueId = clean(leadData.indiamartUniqueId || r2Lead.indiamartUniqueId);
       const creationTime = typeof leadData._creationTime === "number" ? leadData._creationTime : r2Lead._creationTime;
 
       // Skip rows that have no mobile and no name — likely corrupt/empty entries
