@@ -234,17 +234,20 @@ export default function Admin() {
           } else if (val === null || val === undefined) {
             return "";
           } else if (phoneColumns.has(col.key) && typeof val === "string" && val.length > 0) {
-            // Prefix with tab to prevent Excel from converting to scientific notation
-            return "\t" + val;
+            // Use Excel formula ="number" to force text display and prevent scientific notation
+            // This keeps column alignment intact (unlike \t prefix which shifts columns)
+            const cleaned = val.replace(/[\r\n\t]+/g, "");
+            return `="${cleaned}"`;
           }
-          // Strip newlines and carriage returns from all string values to prevent row breaks in CSV
+          // Strip newlines, carriage returns, and tabs from all string values to prevent row breaks in CSV
           const strVal = String(val);
-          return strVal.replace(/[\r\n]+/g, " ").replace(/\t/g, " ");
+          return strVal.replace(/[\r\n\t]+/g, " ");
         });
       });
 
       const csv = Papa.unparse([headerRow, ...dataRows], { newline: "\r\n" });
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      // Add BOM for Excel UTF-8 compatibility
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
