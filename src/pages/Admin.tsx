@@ -221,6 +221,8 @@ export default function Admin() {
       // Build rows with only selected columns
       const orderedColumns = ALL_EXPORT_COLUMNS.filter(c => selectedColumns.has(c.key));
 
+      const fieldLabels = orderedColumns.map(c => c.label);
+
       const rows = allLeadsForExport.map((lead: any) => {
         const row: Record<string, any> = {};
         for (const col of orderedColumns) {
@@ -236,7 +238,7 @@ export default function Admin() {
         return row;
       });
 
-      const csv = Papa.unparse(rows);
+      const csv = Papa.unparse({ fields: fieldLabels, data: rows });
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
