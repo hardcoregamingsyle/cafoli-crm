@@ -29,7 +29,6 @@ export default function Leads() {
   const assignLead = useMutation(api.leads.standard.assignLead);
   const unassignLead = useMutation(api.leads.standard.unassignLead);
   const unassignIdle = useMutation(api.coldCallerLeads.unassignColdCallerLeadsWithoutFollowUp);
-  const restoreFromR2 = useMutation(api.r2_cache_prototype.restoreSingleFromR2);
   const semanticSearch = useAction(api.semanticSearch.semanticSearchLeads);
 
   // Semantic search state
@@ -132,7 +131,6 @@ export default function Leads() {
 
   const ITEMS_PER_PAGE = 50;
   const [paginationOpts, setPaginationOpts] = useState({ numItems: ITEMS_PER_PAGE, cursor: null as string | null });
-  const [isRestoring, setIsRestoring] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -198,11 +196,6 @@ export default function Leads() {
     }
   }, [inView, paginatedResult]);
 
-  const r2SearchResults = useQuery(
-    api.r2_cache_prototype.searchR2Leads,
-    state.search ? { searchQuery: state.search } : "skip"
-  );
-
   // Score a lead by how well the query matches its fields
   const scoreLeadRelevance = (lead: any, query: string): number => {
     if (!query) return 0;
@@ -235,52 +228,16 @@ export default function Leads() {
   // Determine which leads to show: semantic results or paginated
   const filteredLeads = useMemo(() => {
     if (state.search && semanticResults !== null) {
-      // Merge R2 results inline with semantic results
-      const r2AsLeads = (r2SearchResults || []).map((r2: any) => ({
-        ...(r2.leadData?.lead || {}),
-        _id: r2._id,
-        _creationTime: r2._creationTime,
-        _isR2: true,
-        r2Id: r2._id,
-        name: r2.name || r2.leadData?.lead?.name || "Unknown",
-        mobile: r2.mobile || r2.leadData?.lead?.mobile || "",
-        status: r2.status || r2.leadData?.lead?.status || "Cold",
-        source: r2.source || r2.leadData?.lead?.source || "IndiaMART",
-        lastActivity: r2.leadData?.lead?.lastActivity || r2._creationTime,
-        subject: r2.leadData?.lead?.subject || "",
-        message: r2.leadData?.lead?.message || "",
-        type: r2.leadData?.lead?.type || "To be Decided",
-      }));
-      // Deduplicate: don't show R2 leads that are already in Convex results
-      const convexMobiles = new Set(semanticResults.map((l: any) => l.mobile));
-      const uniqueR2 = r2AsLeads.filter((r2: any) => !convexMobiles.has(r2.mobile));
-      const merged = [...semanticResults, ...uniqueR2] as any[];
-
-      // Sort by relevance score descending; R2 leads get a small penalty
       const q = state.search.trim();
-      return merged.sort((a, b) => {
-        const scoreA = scoreLeadRelevance(a, q) - (a._isR2 ? 5 : 0);
-        const scoreB = scoreLeadRelevance(b, q) - (b._isR2 ? 5 : 0);
-        return scoreB - scoreA;
+      return [...semanticResults].sort((a, b) => {
+        return scoreLeadRelevance(b, q) - scoreLeadRelevance(a, q);
       });
     }
     return allLoadedLeads;
-  }, [state.search, semanticResults, allLoadedLeads, r2SearchResults]);
+  }, [state.search, semanticResults, allLoadedLeads]);
 
-  const handleRestoreR2Lead = async (r2Id: Id<"r2_leads_mock">) => {
-    try {
-      setIsRestoring(true);
-      const newLeadId = await restoreFromR2({ r2Id });
-      if (newLeadId) {
-        toast.success("Lead restored from Archive (R2)");
-        state.setSelectedLeadId(newLeadId as Id<"leads">);
-      }
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to restore lead from Archive");
-    } finally {
-      setIsRestoring(false);
-    }
+  const handleRestoreR2Lead = async (_r2Id: any) => {
+    // R2 system disabled — no-op
   };
 
   const handleOpenWhatsApp = (leadId: Id<"leads">) => {
@@ -357,7 +314,7 @@ export default function Leads() {
             isDone={isSemanticMode ? true : (!!paginatedResult?.isDone)}
             r2Leads={[]}
             onRestoreR2Lead={handleRestoreR2Lead}
-            isRestoring={isRestoring}
+            isRestoring={false}
           />
 
           {state.selectedLeadId ? (

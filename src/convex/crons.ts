@@ -102,12 +102,4 @@ crons.cron(
   {}
 );
 
-// Auto offload inactive leads to R2 every 10 minutes
-crons.interval(
-  "auto_offload_to_r2",
-  { minutes: 10 },
-  internal.r2_cache_prototype.autoOffloadToR2,
-  {}
-);
-
 export default crons;

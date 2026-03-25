@@ -1,11 +1,10 @@
 import { Doc, Id } from "@/convex/_generated/dataModel";
 import { LeadCard } from "@/components/LeadCard";
-import { Loader2, ArchiveRestore, Archive } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useLeadSummaries } from "@/hooks/useLeadSummaries";
 import { useEffect } from "react";
 import { useQuery } from "convex/react";
 import { getConvexApi } from "@/lib/convex-api";
-import { Button } from "@/components/ui/button";
 
 const api = getConvexApi() as any;
 
@@ -24,7 +23,7 @@ interface LeadsListPanelProps {
   isLoadingMore: boolean;
   isDone: boolean;
   r2Leads?: any[];
-  onRestoreR2Lead?: (r2Id: Id<"r2_leads_mock">) => void;
+  onRestoreR2Lead?: (r2Id: any) => void;
   isRestoring?: boolean;
 }
 
@@ -42,14 +41,11 @@ export function LeadsListPanel({
   loadMoreRef,
   isLoadingMore,
   isDone,
-  r2Leads = [],
-  onRestoreR2Lead,
-  isRestoring,
 }: LeadsListPanelProps) {
   const { summaries, loading, fetchSummary, updateSummary } = useLeadSummaries();
 
-  // Get visible lead IDs — filter out R2 leads (they have _isR2 flag and are from r2_leads_mock table)
-  const visibleLeadIds = leads.slice(0, 20).filter((l: any) => !l._isR2).map(l => l._id);
+  // Get visible lead IDs (all Convex leads now — no R2)
+  const visibleLeadIds = leads.slice(0, 20).map(l => l._id);
 
   // Load cached summaries for all visible leads
   const cachedSummaries = useQuery(
@@ -88,7 +84,6 @@ export function LeadsListPanel({
   // Poll for cached summaries for visible loading leads
   const firstLoadingLeadId = visibleLeadIds.find(id => loading[id]);
 
-  // Query one at a time to check for completion
   const cachedSummary = useQuery(
     api.aiMutations.getCachedSummary,
     firstLoadingLeadId ? { leadId: firstLoadingLeadId } : "skip"
@@ -100,7 +95,6 @@ export function LeadsListPanel({
     }
   }, [cachedSummary, firstLoadingLeadId]);
 
-  // Handle manual summary regeneration
   const handleRegenerateSummary = (leadId: Id<"leads">) => {
     const lead = leads.find(l => l._id === leadId);
     if (lead) {
@@ -112,7 +106,7 @@ export function LeadsListPanel({
         type: lead.type || "",
         message: lead.message || "",
         lastActivity: lead.lastActivity,
-      }, undefined, true); // Pass true to force regeneration
+      }, undefined, true);
     }
   };
 
@@ -128,42 +122,6 @@ export function LeadsListPanel({
       </div>
       <div className="flex-1 overflow-y-auto p-2 space-y-2">
         {leads.map((lead: any) => (
-          lead._isR2 ? (
-            <div key={lead._id} className="p-3 border rounded-lg bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 flex flex-col gap-2">
-              <div className="flex justify-between items-start">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-medium text-sm truncate">{lead.name || "Unknown"}</h4>
-                    <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 shrink-0">
-                      <Archive className="h-2.5 w-2.5" />
-                      Archive
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{lead.mobile}</p>
-                  {lead.subject && <p className="text-xs text-muted-foreground truncate mt-0.5">{lead.subject}</p>}
-                </div>
-                {lead.status && (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground ml-2 shrink-0">
-                    {lead.status}
-                  </span>
-                )}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                onClick={() => onRestoreR2Lead?.(lead.r2Id)}
-                disabled={isRestoring}
-              >
-                {isRestoring ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <ArchiveRestore className="h-4 w-4 mr-2" />
-                )}
-                Restore to Active
-              </Button>
-            </div>
-          ) : (
           <LeadCard
             key={lead._id}
             lead={lead}
@@ -181,7 +139,6 @@ export function LeadsListPanel({
             aiSummaryLoading={loading[lead._id]}
             onRegenerateSummary={handleRegenerateSummary}
           />
-          )
         ))}
         {isLoadingMore && !isDone && (
           <div ref={loadMoreRef} className="flex justify-center py-4">

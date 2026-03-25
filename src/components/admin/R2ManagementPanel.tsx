@@ -4,7 +4,7 @@ import { getConvexApi } from "@/lib/convex-api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Database, ArrowUpDown, Clock } from "lucide-react";
+import { Database, ArrowUpDown, Clock, ArchiveRestore } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const api = getConvexApi() as any;
@@ -13,10 +13,13 @@ export function R2ManagementPanel() {
   const r2Stats = useQuery(api.r2_cache_prototype.getR2Stats);
   const offloadToR2 = useMutation(api.r2_cache_prototype.offloadToR2);
   const loadFromR2 = useMutation(api.r2_cache_prototype.loadFromR2);
+  const restoreAllFromR2 = useMutation(api.r2_cache_prototype.restoreAllFromR2);
 
   const [isOffloading, setIsOffloading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRestoringAll, setIsRestoringAll] = useState(false);
   const [daysInactive, setDaysInactive] = useState("30");
+  const [restoreProgress, setRestoreProgress] = useState<{ restored: number; remaining: string } | null>(null);
 
   const handleOffload = async () => {
     setIsOffloading(true);
@@ -39,6 +42,36 @@ export function R2ManagementPanel() {
       toast.error(e.message || "Failed to load leads from R2");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleRestoreAll = async () => {
+    if (!confirm(`This will restore ALL ${r2Stats?.r2StorageCount ?? "?"} archived R2 leads back to Convex. This may take multiple runs for large datasets. Continue?`)) return;
+    
+    setIsRestoringAll(true);
+    setRestoreProgress(null);
+    let totalRestored = 0;
+    
+    try {
+      // Run in batches until done
+      let remaining = "more";
+      while (remaining === "more") {
+        const result = await restoreAllFromR2({ limit: 200 });
+        totalRestored += result.restoredCount;
+        remaining = result.remaining;
+        setRestoreProgress({ restored: totalRestored, remaining });
+        
+        if (remaining === "more") {
+          // Small delay between batches
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+      
+      toast.success(`Successfully restored ${totalRestored} leads from R2 to Convex!`);
+    } catch (e: any) {
+      toast.error(e.message || "Failed to restore all leads from R2");
+    } finally {
+      setIsRestoringAll(false);
     }
   };
 
@@ -70,12 +103,43 @@ export function R2ManagementPanel() {
         </Card>
       </div>
 
+      {/* Restore All from R2 */}
+      {(r2Stats?.r2StorageCount ?? 0) > 0 && (
+        <Card className="border-orange-200 dark:border-orange-800">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <ArchiveRestore className="h-5 w-5 text-orange-500" />
+              Restore All Leads from R2
+            </CardTitle>
+            <CardDescription>
+              Move all {r2Stats?.r2StorageCount} archived R2 leads back to Convex with zero data loss. Duplicates are automatically skipped.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Button
+              onClick={handleRestoreAll}
+              disabled={isRestoringAll}
+              className="w-full"
+              variant="default"
+            >
+              <ArchiveRestore className="h-4 w-4 mr-2" />
+              {isRestoringAll ? `Restoring... (${restoreProgress?.restored ?? 0} done)` : `Restore All ${r2Stats?.r2StorageCount} Leads from R2`}
+            </Button>
+            {restoreProgress && (
+              <p className="text-sm text-muted-foreground text-center">
+                Restored {restoreProgress.restored} leads · {restoreProgress.remaining === "done" ? "Complete!" : "Processing more..."}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Controls */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Data Tiering Controls</CardTitle>
           <CardDescription>
-            Manage hot/cold data tiering for the entire CRM. Offload inactive leads to cold storage to save database costs, and load them back when needed.
+            Manage hot/cold data tiering. Note: Auto-offload is currently disabled.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

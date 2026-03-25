@@ -406,7 +406,6 @@ export const getCombinedStats = query({
   args: {},
   handler: async (ctx) => {
     const convexLeads = await ctx.db.query("leads").take(5000);
-    const r2Leads = await ctx.db.query("r2_leads_mock").take(5000);
 
     const now = Date.now();
     const oneDayAgo = now - 86400000;
@@ -416,10 +415,12 @@ export const getCombinedStats = query({
       (l) => l.nextFollowUpDate && l.nextFollowUpDate < now
     ).length;
 
+    const r2Count = await ctx.db.query("r2_leads_mock").take(10000);
+
     return {
-      totalLeads: convexLeads.length + r2Leads.length,
+      totalLeads: convexLeads.length + r2Count.length,
       convexCount: convexLeads.length,
-      r2Count: r2Leads.length,
+      r2Count: r2Count.length,
       newLeadsToday: convexNew,
       pendingFollowUps: convexPending,
     };
@@ -449,5 +450,37 @@ export const restoreLeadForIntervention = internalMutation({
     await ctx.db.patch(args.interventionId, {
       leadId: newLeadId,
     });
+  },
+});
+
+// Restore ALL leads from R2 back to Convex in one batch (up to 200 at a time)
+export const restoreAllFromR2 = mutation({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const limit = args.limit ?? 200;
+    const r2Leads = await ctx.db.query("r2_leads_mock").take(limit);
+
+    let restoredCount = 0;
+    let skippedCount = 0;
+
+    for (const r2Lead of r2Leads) {
+      try {
+        const result = await restoreLeadFromR2Core(ctx, r2Lead._id);
+        if (result) {
+          restoredCount++;
+        } else {
+          skippedCount++;
+        }
+      } catch (err) {
+        console.error(`Failed to restore R2 lead ${r2Lead._id}:`, err);
+        skippedCount++;
+      }
+    }
+
+    return {
+      restoredCount,
+      skippedCount,
+      remaining: r2Leads.length === limit ? "more" : "done",
+    };
   },
 });

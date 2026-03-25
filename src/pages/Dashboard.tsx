@@ -1,7 +1,7 @@
 import AppLayout from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery } from "convex/react";
-import { Users, MessageSquare, BarChart3, Activity, Loader2, Database } from "lucide-react";
+import { Users, MessageSquare, BarChart3, Activity, Loader2 } from "lucide-react";
 import { useMemo, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { getConvexApi } from "@/lib/convex-api";
@@ -13,7 +13,6 @@ export default function Dashboard() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
-  const combinedStats = useQuery(api.r2_cache_prototype.getCombinedStats);
   const campaigns = useQuery(api.campaignQueries.getCampaigns, user ? { userId: user._id } : "skip") || [];
   const leads = useQuery(api.leads.queries.getLeads, user ? { filter: "all", userId: user._id } : "skip") || [];
 
@@ -22,16 +21,19 @@ export default function Dashboard() {
       navigate("/auth");
     }
   }, [authLoading, isAuthenticated, navigate]);
+
+  const now = Date.now();
+  const oneDayAgo = now - 86400000;
+  const newLeadsToday = (leads as any[]).filter((l: any) => l._creationTime > oneDayAgo).length;
+  const pendingFollowUps = (leads as any[]).filter((l: any) => l.nextFollowUpDate && l.nextFollowUpDate < now).length;
   
   const stats = useMemo(() => {
     return [
       {
         title: "Total Leads",
-        value: combinedStats ? combinedStats.totalLeads : leads.length,
+        value: leads.length,
         icon: Users,
-        description: combinedStats 
-          ? `${combinedStats.convexCount} active + ${combinedStats.r2Count} archived`
-          : "All leads in system",
+        description: "All leads in system",
       },
       {
         title: "Active Campaigns",
@@ -41,18 +43,18 @@ export default function Dashboard() {
       },
       {
         title: "New Leads Today",
-        value: combinedStats ? combinedStats.newLeadsToday : 0,
+        value: newLeadsToday,
         icon: Activity,
         description: "Last 24 hours",
       },
       {
         title: "Pending Follow-ups",
-        value: combinedStats ? combinedStats.pendingFollowUps : 0,
+        value: pendingFollowUps,
         icon: MessageSquare,
         description: "Needs attention",
       },
     ];
-  }, [leads, campaigns, combinedStats]);
+  }, [leads, campaigns, newLeadsToday, pendingFollowUps]);
 
   const recentLeads = useMemo(() => leads.slice(0, 5), [leads]);
   const recentCampaigns = useMemo(() => campaigns.slice(0, 5), [campaigns]);
@@ -74,15 +76,6 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground">Overview of your CRM performance.</p>
         </div>
-
-        {combinedStats && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/30 rounded-lg px-4 py-2">
-            <Database className="h-4 w-4" />
-            <span>
-              Storage: <strong>{combinedStats.convexCount}</strong> active leads in Convex · <strong>{combinedStats.r2Count}</strong> archived in R2
-            </span>
-          </div>
-        )}
 
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
           {stats.map((stat) => (
