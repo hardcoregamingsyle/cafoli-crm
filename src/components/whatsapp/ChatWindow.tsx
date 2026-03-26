@@ -99,7 +99,9 @@ export function ChatWindow({ selectedLeadId, selectedLead, onBack }: ChatWindowP
     
   const lastInboundTime = lastInboundMessage ? lastInboundMessage._creationTime : 0;
   const windowDuration = (23 * 60 + 30) * 60 * 1000; // 23h 30m
-  const isWithinWindow = (now - lastInboundTime) < windowDuration;
+  // Only block if there WAS an inbound message but it's older than 23.5h
+  // If no inbound message ever (lastInboundTime === 0), allow sending (new conversation via template)
+  const isWithinWindow = lastInboundTime === 0 || (now - lastInboundTime) < windowDuration;
 
   // Intersection Observer for loading older messages
   useEffect(() => {
