@@ -172,41 +172,9 @@ export const generateAndSendAiReplyInternal = internalAction({
             filesToSend.push({ storageId: product.visualaid, fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}_visualaid.pdf`, type: "pdf", label: "Visual Aid" });
           }
 
-          const useCloudflare = !!process.env.CLOUDFLARE_WORKER_URL;
-          let sentViaCloudflare = false;
-
-          if (useCloudflare && filesToSend.length > 0) {
-             logAiInfo("SEND_PRODUCT", `Using Cloudflare Worker Relay for ${filesToSend.length} files`);
-             
-             const filesWithUrls = [];
-             for (const file of filesToSend) {
-                const url = await ctx.storage.getUrl(file.storageId);
-                const metadata = await ctx.runQuery(internal.products.getStorageMetadata, { storageId: file.storageId });
-                
-                let correctMimeType = metadata?.contentType;
-                if (!correctMimeType || correctMimeType === "application/octet-stream" || correctMimeType === "text/html") {
-                  correctMimeType = file.type === "pdf" ? "application/pdf" : "image/jpeg";
-                }
-
-                if (url) {
-                  filesWithUrls.push({ url, fileName: file.fileName, mimeType: correctMimeType || "application/octet-stream" });
-                }
-             }
-
-             try {
-               await ctx.runAction(internal.whatsapp.cloudflare.sendFilesViaWorker, {
-                 phoneNumber: args.phoneNumber,
-                 files: filesWithUrls
-               });
-               logAiInfo("SEND_PRODUCT", "Cloudflare Worker successfully triggered");
-               sentViaCloudflare = true;
-             } catch (err) {
-               logAiError("SEND_PRODUCT_CLOUDFLARE", err, { fallback: true });
-             }
-          } 
-          
-          if (!sentViaCloudflare) {
-            logAiInfo("SEND_PRODUCT", `Using Direct Convex Send with MEGA storage (${filesToSend.length} files)`);
+          // Always use direct Convex send (no Cloudflare fallback to avoid double-sends)
+          if (true) {
+            logAiInfo("SEND_PRODUCT", `Sending ${filesToSend.length} files directly`);
             
             for (let i = 0; i < filesToSend.length; i++) {
               const file = filesToSend[i];

@@ -1,5 +1,6 @@
-const lead = leads.find((l: any) => l._id === leadId);
-if (!lead) {
-  toast.error("Contact not found");
-  return;
+try {
+  await ctx.runAction(internal.whatsapp.cloudflare.sendFilesViaWorker, {...});
+  sentViaCloudflare = true;
+} catch (err) {
+  logAiError("SEND_PRODUCT_CLOUDFLARE", err, { fallback: true });
 }
