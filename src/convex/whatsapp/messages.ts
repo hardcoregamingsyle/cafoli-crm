@@ -3,6 +3,7 @@
 import { action, internalAction } from "../_generated/server";
 import { v } from "convex/values";
 import { internal, api } from "../_generated/api";
+import { uploadBlobToMega } from "../lib/mega";
 
 // Helper to validate WhatsApp credentials
 function getWhatsAppCredentials(): { accessToken: string; phoneNumberId: string } {
@@ -118,8 +119,21 @@ export const sendMedia = action({
       else if (args.mimeType.startsWith("audio/")) mediaType = "audio";
       else mediaType = "document";
 
-      // Get Convex signed URL for display in chat
-      const displayUrl = await ctx.storage.getUrl(args.storageId);
+      // Fetch file blob for B2 upload and WhatsApp upload
+      const fileBlob = await ctx.storage.get(args.storageId);
+      if (!fileBlob) {
+        throw new Error(`File not found in storage: ${args.storageId}`);
+      }
+
+      // Upload to B2 for a permanent pre-signed URL; fallback to Convex signed URL
+      let displayUrl: string | null = null;
+      try {
+        displayUrl = await uploadBlobToMega(fileBlob, args.fileName);
+        console.log(`[SEND_MEDIA] Uploaded to B2 for display URL`);
+      } catch (b2Err) {
+        console.warn(`[SEND_MEDIA] B2 upload failed, using Convex URL as fallback:`, b2Err);
+        displayUrl = await ctx.storage.getUrl(args.storageId);
+      }
 
       if (mediaId) {
         console.log(`[SEND_MEDIA] Found cached media ID: ${mediaId}`);
@@ -147,11 +161,6 @@ export const sendMedia = action({
       }
 
       if (!mediaId) {
-        // Fetch file blob from Convex storage and upload to WhatsApp
-        const fileBlob = await ctx.storage.get(args.storageId);
-        if (!fileBlob) {
-          throw new Error(`File not found in storage: ${args.storageId}`);
-        }
         console.log(`[SEND_MEDIA] File size: ${fileBlob.size} bytes`);
 
         const formData = new FormData();

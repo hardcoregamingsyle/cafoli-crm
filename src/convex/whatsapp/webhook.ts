@@ -3,6 +3,7 @@
 import { internalAction } from "../_generated/server";
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
+import { uploadBlobToMega } from "../lib/mega";
 
 // Handle incoming WhatsApp messages
 export const handleIncomingMessage = internalAction({
@@ -35,7 +36,7 @@ export const handleIncomingMessage = internalAction({
       }
 
       if (leadId) {
-        // Download incoming media and store in Convex storage
+        // Download incoming media and upload to B2 for a permanent URL
         let mediaUrl: string | null = null;
         if (args.mediaId) {
           try {
@@ -54,11 +55,19 @@ export const handleIncomingMessage = internalAction({
               });
               
               const fileBlob = await fileResponse.blob();
+              const fileName = args.mediaFilename || `media_${args.messageId}`;
               
-              // Store in Convex storage and get a signed URL for display
-              const storageId = await ctx.storage.store(fileBlob);
-              mediaUrl = await ctx.storage.getUrl(storageId);
-              console.log("✅ Incoming media stored in Convex:", storageId);
+              try {
+                // Upload to B2 for a permanent pre-signed URL
+                mediaUrl = await uploadBlobToMega(fileBlob, fileName);
+                console.log("✅ Incoming media uploaded to B2:", mediaUrl.substring(0, 80));
+              } catch (b2Error) {
+                console.error("❌ B2 upload failed, falling back to Convex storage:", b2Error);
+                // Fallback: store in Convex storage
+                const storageId = await ctx.storage.store(fileBlob);
+                mediaUrl = await ctx.storage.getUrl(storageId);
+                console.log("✅ Media stored in Convex (fallback):", storageId);
+              }
             }
           } catch (error) {
             console.error("❌ Error downloading/storing incoming media:", error);
