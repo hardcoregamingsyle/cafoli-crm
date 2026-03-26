@@ -14,6 +14,7 @@
     "dist": "pnpm run build && electron-builder --win --publish never"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1017.0",
     "@convex-dev/auth": "^0.0.90",
     "@faker-js/faker": "^10.1.0",
     "@google/generative-ai": "^0.24.1",

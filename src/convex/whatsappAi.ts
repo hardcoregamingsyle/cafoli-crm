@@ -3,8 +3,6 @@ import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { internal, api } from "./_generated/api";
 import { generateWithGemini, extractJsonFromMarkdown } from "./lib/gemini";
-import { uploadBlobToMega } from "./lib/mega";
-
 // Structured error logger for whatsappAi
 function logAiError(context: string, error: unknown, extra?: Record<string, unknown>) {
   const message = error instanceof Error ? error.message : String(error);

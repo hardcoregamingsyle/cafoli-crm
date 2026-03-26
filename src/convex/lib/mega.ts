@@ -1,31 +1,57 @@
 "use node";
-import { Storage } from "megajs";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
-/**
- * Upload a file buffer to MEGA and return a permanent public link.
- * Credentials are read from MEGA_EMAIL and MEGA_PASSWORD env vars.
- */
-export async function uploadToMega(
-  buffer: Buffer,
-  fileName: string
-): Promise<string> {
-  const email = process.env.MEGA_EMAIL;
-  const password = process.env.MEGA_PASSWORD;
+function getB2Client(): S3Client {
+  const endpoint = process.env.B2_ENDPOINT;
+  const keyId = process.env.B2_KEY_ID;
+  const appKey = process.env.B2_APPLICATION_KEY;
 
-  if (!email || !password) {
-    throw new Error("MEGA_EMAIL and MEGA_PASSWORD environment variables are not set.");
+  if (!endpoint || !keyId || !appKey) {
+    throw new Error("BackBlaze B2 not configured. Set B2_ENDPOINT, B2_KEY_ID, B2_APPLICATION_KEY in environment variables.");
   }
 
-  const storage = new Storage({ email, password });
-  await storage.ready;
-
-  const uploadedFile = await storage.upload({ name: fileName }, buffer).complete;
-  const link: string = await (uploadedFile as any).link(true);
-  return link;
+  return new S3Client({
+    endpoint: `https://${endpoint}`,
+    region: "us-east-1",
+    credentials: {
+      accessKeyId: keyId,
+      secretAccessKey: appKey,
+    },
+    forcePathStyle: true,
+  });
 }
 
 /**
- * Upload a Blob to MEGA and return a permanent public link.
+ * Upload a file buffer to BackBlaze B2 and return a permanent public URL.
+ */
+export async function uploadToMega(
+  buffer: Buffer,
+  fileName: string,
+  mimeType?: string
+): Promise<string> {
+  const bucketName = process.env.B2_BUCKET_NAME;
+  const bucketUrl = process.env.B2_BUCKET_URL;
+
+  if (!bucketName || !bucketUrl) {
+    throw new Error("B2_BUCKET_NAME and B2_BUCKET_URL environment variables are not set.");
+  }
+
+  const client = getB2Client();
+  const key = `media/${Date.now()}_${fileName.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+
+  await client.send(new PutObjectCommand({
+    Bucket: bucketName,
+    Key: key,
+    Body: buffer,
+    ContentType: mimeType || "application/octet-stream",
+  }));
+
+  const baseUrl = bucketUrl.endsWith("/") ? bucketUrl.slice(0, -1) : bucketUrl;
+  return `${baseUrl}/${key}`;
+}
+
+/**
+ * Upload a Blob to BackBlaze B2 and return a permanent public URL.
  */
 export async function uploadBlobToMega(
   blob: Blob,
@@ -33,5 +59,5 @@ export async function uploadBlobToMega(
 ): Promise<string> {
   const arrayBuffer = await blob.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
-  return uploadToMega(buffer, fileName);
+  return uploadToMega(buffer, fileName, blob.type || undefined);
 }

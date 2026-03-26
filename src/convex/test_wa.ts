@@ -26,7 +26,7 @@ export const testFetch = action({
   }
 });
 
-export const testMegaIntegration = action({
+export const testB2Integration = action({
   args: {},
   handler: async (ctx) => {
     const email = process.env.MEGA_EMAIL;
