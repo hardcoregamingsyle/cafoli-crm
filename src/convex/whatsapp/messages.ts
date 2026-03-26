@@ -14,13 +14,11 @@ function getWhatsAppCredentials(): { accessToken: string; phoneNumberId: string 
     const missing = [];
     if (!accessToken) missing.push("CLOUD_API_ACCESS_TOKEN");
     if (!phoneNumberId) missing.push("WA_PHONE_NUMBER_ID");
-    
     throw new Error(
       `WhatsApp API not configured. Missing: ${missing.join(", ")}. ` +
       `Set these in Convex dashboard > Environment Variables.`
     );
   }
-  
   return { accessToken, phoneNumberId };
 }
 
@@ -50,9 +48,7 @@ export const send = action({
       };
 
       if (args.quotedMessageExternalId) {
-        payload.context = {
-          message_id: args.quotedMessageExternalId
-        };
+        payload.context = { message_id: args.quotedMessageExternalId };
       }
 
       const response = await fetch(
@@ -108,35 +104,27 @@ export const sendMedia = action({
     try {
       const { accessToken, phoneNumberId } = getWhatsAppCredentials();
       
-      // Check WhatsApp media ID cache first (avoids re-uploading same file)
+      // Check WhatsApp media ID cache first (avoids re-uploading same file to both B2 and WhatsApp)
       const cached = await ctx.runQuery(internal.whatsapp.mediaCache.get, { storageId: args.storageId });
       let mediaId = cached?.mediaId;
-      let mediaType: string;
+      let displayUrl: string | null = cached?.displayUrl || null;
 
       // Determine media type
+      let mediaType: string;
       if (args.mimeType.startsWith("image/")) mediaType = "image";
       else if (args.mimeType.startsWith("video/")) mediaType = "video";
       else if (args.mimeType.startsWith("audio/")) mediaType = "audio";
       else mediaType = "document";
 
-      // Fetch file blob for B2 upload and WhatsApp upload
-      const fileBlob = await ctx.storage.get(args.storageId);
-      if (!fileBlob) {
-        throw new Error(`File not found in storage: ${args.storageId}`);
-      }
-
-      // Upload to B2 for a permanent pre-signed URL; fallback to Convex signed URL
-      let displayUrl: string | null = null;
-      try {
-        displayUrl = await uploadBlobToMega(fileBlob, args.fileName);
-        console.log(`[SEND_MEDIA] Uploaded to B2 for display URL`);
-      } catch (b2Err) {
-        console.warn(`[SEND_MEDIA] B2 upload failed, using Convex URL as fallback:`, b2Err);
-        displayUrl = await ctx.storage.getUrl(args.storageId);
-      }
-
       if (mediaId) {
-        console.log(`[SEND_MEDIA] Found cached media ID: ${mediaId}`);
+        // Use cached media ID — no need to re-upload to WhatsApp or B2
+        console.log(`[SEND_MEDIA] Using cached media ID: ${mediaId}`);
+        
+        // If no cached displayUrl, get Convex signed URL as fallback
+        if (!displayUrl) {
+          displayUrl = await ctx.storage.getUrl(args.storageId);
+        }
+        
         try {
           const result = await sendMediaMessage(accessToken, phoneNumberId, args.phoneNumber, mediaType, mediaId, args.message, args.fileName);
           
@@ -154,66 +142,81 @@ export const sendMedia = action({
           });
           return { success: true, messageId: result.messages?.[0]?.id };
         } catch (e) {
-          console.warn(`[SEND_MEDIA] Failed to send with cached ID, retrying with upload...`, e);
+          console.warn(`[SEND_MEDIA] Cached media ID failed, retrying with fresh upload...`, e);
           await ctx.runMutation(internal.whatsapp.mediaCache.remove, { storageId: args.storageId });
           mediaId = undefined;
+          displayUrl = null;
         }
       }
 
-      if (!mediaId) {
-        console.log(`[SEND_MEDIA] File size: ${fileBlob.size} bytes`);
-
-        const formData = new FormData();
-        formData.append("file", fileBlob, args.fileName);
-        formData.append("messaging_product", "whatsapp");
-
-        const uploadResponse = await fetch(
-          `https://graph.facebook.com/v20.0/${phoneNumberId}/media`,
-          {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${accessToken}` },
-            body: formData,
-          }
-        );
-
-        const uploadData = await uploadResponse.json();
-        
-        if (!uploadResponse.ok) {
-          console.error(`[SEND_MEDIA] Upload failed:`, uploadData);
-          throw new Error(`Upload error: ${JSON.stringify(uploadData)}`);
-        }
-
-        mediaId = uploadData.id;
-        if (!mediaId) throw new Error("No media ID returned from WhatsApp");
-        
-        console.log(`[SEND_MEDIA] Uploaded to WhatsApp, media ID: ${mediaId}`);
-        
-        // Cache the WhatsApp media ID so we don't re-upload next time
-        await ctx.runMutation(internal.whatsapp.mediaCache.save, {
-          storageId: args.storageId,
-          mediaId: mediaId,
-          mimeType: args.mimeType,
-          fileName: args.fileName,
-        });
-
-        const result = await sendMediaMessage(accessToken, phoneNumberId, args.phoneNumber, mediaType, mediaId, args.message, args.fileName);
-
-        await ctx.runMutation("whatsappMutations:storeMessage" as any, {
-          leadId: args.leadId,
-          phoneNumber: args.phoneNumber,
-          content: args.message || "",
-          direction: "outbound",
-          status: "sent",
-          externalId: result.messages?.[0]?.id || "",
-          messageType: mediaType,
-          mediaUrl: displayUrl,
-          mediaName: args.fileName,
-          mediaMimeType: args.mimeType,
-        });
-
-        console.log(`[SEND_MEDIA] Success!`);
-        return { success: true, messageId: result.messages?.[0]?.id };
+      // No cache — fetch blob, upload to B2 for display URL, upload to WhatsApp for media ID
+      const fileBlob = await ctx.storage.get(args.storageId);
+      if (!fileBlob) {
+        throw new Error(`File not found in storage: ${args.storageId}`);
       }
+      console.log(`[SEND_MEDIA] File size: ${fileBlob.size} bytes`);
+
+      // Upload to B2 for permanent display URL (only done once, then cached)
+      try {
+        displayUrl = await uploadBlobToMega(fileBlob, args.fileName);
+        console.log(`[SEND_MEDIA] Uploaded to B2 for display URL`);
+      } catch (b2Err) {
+        console.warn(`[SEND_MEDIA] B2 upload failed, using Convex URL as fallback:`, b2Err);
+        displayUrl = await ctx.storage.getUrl(args.storageId);
+      }
+
+      // Upload to WhatsApp to get media ID
+      const formData = new FormData();
+      formData.append("file", fileBlob, args.fileName);
+      formData.append("messaging_product", "whatsapp");
+
+      const uploadResponse = await fetch(
+        `https://graph.facebook.com/v20.0/${phoneNumberId}/media`,
+        {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${accessToken}` },
+          body: formData,
+        }
+      );
+
+      const uploadData = await uploadResponse.json();
+      
+      if (!uploadResponse.ok) {
+        console.error(`[SEND_MEDIA] WhatsApp upload failed:`, uploadData);
+        throw new Error(`Upload error: ${JSON.stringify(uploadData)}`);
+      }
+
+      mediaId = uploadData.id;
+      if (!mediaId) throw new Error("No media ID returned from WhatsApp");
+      
+      console.log(`[SEND_MEDIA] Uploaded to WhatsApp, media ID: ${mediaId}`);
+      
+      // Cache both the WhatsApp media ID and the display URL
+      await ctx.runMutation(internal.whatsapp.mediaCache.save, {
+        storageId: args.storageId,
+        mediaId: mediaId,
+        mimeType: args.mimeType,
+        fileName: args.fileName,
+        displayUrl: displayUrl || undefined,
+      });
+
+      const result = await sendMediaMessage(accessToken, phoneNumberId, args.phoneNumber, mediaType, mediaId, args.message, args.fileName);
+
+      await ctx.runMutation("whatsappMutations:storeMessage" as any, {
+        leadId: args.leadId,
+        phoneNumber: args.phoneNumber,
+        content: args.message || "",
+        direction: "outbound",
+        status: "sent",
+        externalId: result.messages?.[0]?.id || "",
+        messageType: mediaType,
+        mediaUrl: displayUrl,
+        mediaName: args.fileName,
+        mediaMimeType: args.mimeType,
+      });
+
+      console.log(`[SEND_MEDIA] Success!`);
+      return { success: true, messageId: result.messages?.[0]?.id };
       
     } catch (error) {
       console.error("[SEND_MEDIA] ERROR:", error);
@@ -334,10 +337,6 @@ export const markMessagesAsRead = internalAction({
   },
 });
 
-/**
- * Sync messages for a lead by fetching recent messages from WhatsApp API
- * and storing any that are missing from the local database.
- */
 export const syncMessages = internalAction({
   args: {
     leadId: v.id("leads"),
@@ -352,46 +351,32 @@ export const syncMessages = internalAction({
       const { accessToken, phoneNumberId } = getWhatsAppCredentials();
       const limit = args.limit ?? 20;
 
-      console.log(`[SYNC_MESSAGES] Starting sync for lead ${args.leadId}, phone ${args.phoneNumber}, limit ${limit}`);
-
       const response = await fetch(
         `https://graph.facebook.com/v20.0/${phoneNumberId}/messages?` +
         new URLSearchParams({
           fields: "id,from,to,timestamp,type,text,status",
           limit: String(limit),
         }),
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        }
+        { headers: { Authorization: `Bearer ${accessToken}` } }
       );
 
       if (!response.ok) {
         const errData = await response.json();
-        const msg = `WhatsApp API error fetching messages: ${JSON.stringify(errData)}`;
-        console.error(`[SYNC_MESSAGES] ${msg}`);
-        errors.push(msg);
+        errors.push(`WhatsApp API error: ${JSON.stringify(errData)}`);
         return { synced, errors };
       }
 
       const data = await response.json();
       const waMessages: any[] = data.data || [];
 
-      console.log(`[SYNC_MESSAGES] Fetched ${waMessages.length} messages from WhatsApp API`);
-
-      const existingIds = await ctx.runQuery(internal.whatsappMutations.getExistingExternalIds, {
-        leadId: args.leadId,
-      });
+      const existingIds = await ctx.runQuery(internal.whatsappMutations.getExistingExternalIds, { leadId: args.leadId });
       const existingSet = new Set(existingIds);
 
       for (const msg of waMessages) {
         if (!msg.id || existingSet.has(msg.id)) continue;
-
         try {
           const isInbound = msg.from?.phone !== phoneNumberId;
           const content = msg.text?.body || `[${msg.type || "media"}]`;
-
           await ctx.runMutation(internal.whatsappMutations.storeMessage, {
             leadId: args.leadId,
             phoneNumber: args.phoneNumber,
@@ -401,30 +386,19 @@ export const syncMessages = internalAction({
             externalId: msg.id,
             messageType: msg.type !== "text" ? msg.type : undefined,
           });
-
           synced++;
-          console.log(`[SYNC_MESSAGES] Stored missing message ${msg.id}`);
         } catch (err) {
-          const errMsg = `Failed to store message ${msg.id}: ${err instanceof Error ? err.message : String(err)}`;
-          console.error(`[SYNC_MESSAGES] ${errMsg}`);
-          errors.push(errMsg);
+          errors.push(`Failed to store message ${msg.id}: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
-
-      console.log(`[SYNC_MESSAGES] Sync complete. Synced: ${synced}, Errors: ${errors.length}`);
     } catch (error) {
-      const errMsg = `Sync failed: ${error instanceof Error ? error.message : String(error)}`;
-      console.error(`[SYNC_MESSAGES] ${errMsg}`);
-      errors.push(errMsg);
+      errors.push(`Sync failed: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     return { synced, errors };
   },
 });
 
-/**
- * Public action for frontend to trigger message sync for a lead.
- */
 export const syncMessagesForLead = action({
   args: {
     leadId: v.id("leads"),

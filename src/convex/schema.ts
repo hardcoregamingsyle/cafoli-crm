@@ -324,6 +324,7 @@ export default defineSchema({
     storageId: v.id("_storage"),
     mediaId: v.string(),
     mimeType: v.optional(v.string()),
+    displayUrl: v.optional(v.string()),
   }).index("by_storageId", ["storageId"]),
 
   emailTemplates: defineTable({

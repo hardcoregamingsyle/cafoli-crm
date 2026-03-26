@@ -17,6 +17,7 @@ export const save = internalMutation({
     mediaId: v.string(),
     mimeType: v.string(),
     fileName: v.optional(v.string()),
+    displayUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -28,12 +29,14 @@ export const save = internalMutation({
       await ctx.db.patch(existing._id, {
         mediaId: args.mediaId,
         mimeType: args.mimeType,
+        displayUrl: args.displayUrl,
       });
     } else {
       await ctx.db.insert("whatsappMediaCache", {
         storageId: args.storageId,
         mediaId: args.mediaId,
         mimeType: args.mimeType,
+        displayUrl: args.displayUrl,
       });
     }
   },
