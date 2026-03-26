@@ -346,7 +346,35 @@ async function sendTemplateMessageHelper(
               : undefined,
       }));
 
-    // Store message in database with actual template content
+    // Determine media info from template header for display in chat
+    let storedMediaUrl: string | undefined;
+    let storedMessageType: string | undefined;
+    let storedMediaName: string | undefined;
+    if (headerComponent) {
+      if (headerComponent.format === "IMAGE") {
+        const imageUrl = mediaUrl || variables?.headerUrl;
+        if (imageUrl) {
+          storedMediaUrl = toPublicFileUrl(imageUrl);
+          storedMessageType = "image";
+        }
+      } else if (headerComponent.format === "DOCUMENT") {
+        const rawDocUrl = mediaUrl || variables?.headerUrl;
+        if (rawDocUrl) {
+          storedMediaUrl = toPublicFileUrl(rawDocUrl);
+          storedMessageType = "file";
+          storedMediaName = getFilenameFromUrl(storedMediaUrl, "document.pdf");
+        }
+      } else if (headerComponent.format === "VIDEO") {
+        const videoUrl = mediaUrl || variables?.headerUrl;
+        if (videoUrl) {
+          storedMediaUrl = toPublicFileUrl(videoUrl);
+          storedMessageType = "file";
+          storedMediaName = "video";
+        }
+      }
+    }
+
+    // Store message in database with actual template content and media info
     await ctx.runMutation("whatsappMutations:storeMessage" as any, {
       leadId: leadId,
       phoneNumber: phoneNumber,
@@ -356,6 +384,9 @@ async function sendTemplateMessageHelper(
       externalId: data.messages?.[0]?.id || "",
       templateName: templateName,
       templateButtons,
+      messageType: storedMessageType,
+      mediaUrl: storedMediaUrl,
+      mediaName: storedMediaName,
     });
 
     console.log(`Template message sent successfully`, {

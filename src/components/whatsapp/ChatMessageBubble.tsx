@@ -43,7 +43,15 @@ function getTemplateButtonHref(button: TemplateButtonData) {
 }
 
 function renderMessageContent(message: any) {
-  if (message.messageType === "image" && message.mediaUrl) {
+  // Image: messageType === "image" OR mediaUrl with image mime type
+  const isImage = message.messageType === "image" || 
+    (message.mediaUrl && message.mediaMimeType?.startsWith("image/"));
+  
+  // File/document: messageType === "file" OR mediaUrl with non-image mime type
+  const isFile = !isImage && (message.messageType === "file" || 
+    (message.mediaUrl && message.mediaMimeType && !message.mediaMimeType.startsWith("image/")));
+
+  if (isImage && message.mediaUrl) {
     return (
       <div className="space-y-2">
         <img
@@ -56,7 +64,7 @@ function renderMessageContent(message: any) {
     );
   }
 
-  if (message.messageType === "file" && message.mediaUrl) {
+  if (isFile && message.mediaUrl) {
     return (
       <div className="space-y-2">
         <a
@@ -67,6 +75,37 @@ function renderMessageContent(message: any) {
         >
           <Paperclip className="h-4 w-4" />
           <span className="text-sm font-medium">{message.mediaName || "File"}</span>
+        </a>
+        {message.content && <p className="text-sm text-gray-900">{message.content}</p>}
+      </div>
+    );
+  }
+
+  // Fallback: if mediaUrl exists but no messageType, try to show as file link
+  if (message.mediaUrl && !message.messageType) {
+    const isLikelyImage = /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(message.mediaUrl);
+    if (isLikelyImage) {
+      return (
+        <div className="space-y-2">
+          <img
+            src={message.mediaUrl}
+            alt={message.mediaName || "Image"}
+            className="rounded-lg max-w-full h-auto max-h-64 object-cover"
+          />
+          {message.content && <p className="text-sm text-gray-900">{message.content}</p>}
+        </div>
+      );
+    }
+    return (
+      <div className="space-y-2">
+        <a
+          href={message.mediaUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 p-2 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+        >
+          <Paperclip className="h-4 w-4" />
+          <span className="text-sm font-medium">{message.mediaName || "Attachment"}</span>
         </a>
         {message.content && <p className="text-sm text-gray-900">{message.content}</p>}
       </div>
