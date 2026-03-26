@@ -3,7 +3,6 @@
 import { internalAction } from "../_generated/server";
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
-import { uploadBlobToMega } from "../lib/mega";
 
 // Handle incoming WhatsApp messages
 export const handleIncomingMessage = internalAction({
@@ -36,8 +35,8 @@ export const handleIncomingMessage = internalAction({
       }
 
       if (leadId) {
-        // Download media if present and upload to MEGA
-        let mediaUrl = null;
+        // Download incoming media and store in Convex storage
+        let mediaUrl: string | null = null;
         if (args.mediaId) {
           try {
             const accessToken = process.env.CLOUD_API_ACCESS_TOKEN;
@@ -55,22 +54,14 @@ export const handleIncomingMessage = internalAction({
               });
               
               const fileBlob = await fileResponse.blob();
-              const fileName = args.mediaFilename || `media_${args.messageId}`;
               
-              try {
-                // Upload to MEGA for permanent storage
-                mediaUrl = await uploadBlobToMega(fileBlob, fileName);
-                console.log("✅ Media uploaded to MEGA:", mediaUrl);
-              } catch (megaError) {
-                console.error("❌ MEGA upload failed, falling back to Convex storage:", megaError);
-                // Fallback: store in Convex storage
-                const storageId = await ctx.storage.store(fileBlob);
-                mediaUrl = await ctx.storage.getUrl(storageId);
-                console.log("✅ Media stored in Convex (fallback):", mediaUrl);
-              }
+              // Store in Convex storage and get a signed URL for display
+              const storageId = await ctx.storage.store(fileBlob);
+              mediaUrl = await ctx.storage.getUrl(storageId);
+              console.log("✅ Incoming media stored in Convex:", storageId);
             }
           } catch (error) {
-            console.error("❌ Error downloading incoming media:", error);
+            console.error("❌ Error downloading/storing incoming media:", error);
           }
         }
 

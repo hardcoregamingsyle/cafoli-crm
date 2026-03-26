@@ -3,7 +3,6 @@
 import { action, internalAction } from "../_generated/server";
 import { v } from "convex/values";
 import { internal, api } from "../_generated/api";
-import { uploadBlobToMega } from "../lib/mega";
 
 // Helper to validate WhatsApp credentials
 function getWhatsAppCredentials(): { accessToken: string; phoneNumberId: string } {
@@ -108,7 +107,7 @@ export const sendMedia = action({
     try {
       const { accessToken, phoneNumberId } = getWhatsAppCredentials();
       
-      // Check cache first
+      // Check WhatsApp media ID cache first (avoids re-uploading same file)
       const cached = await ctx.runQuery(internal.whatsapp.mediaCache.get, { storageId: args.storageId });
       let mediaId = cached?.mediaId;
       let mediaType: string;
@@ -119,24 +118,8 @@ export const sendMedia = action({
       else if (args.mimeType.startsWith("audio/")) mediaType = "audio";
       else mediaType = "document";
 
-      // Fetch file blob from Convex storage (needed for both WhatsApp upload and MEGA)
-      const fileBlob = await ctx.storage.get(args.storageId);
-      if (!fileBlob) {
-        throw new Error(`File not found: ${args.storageId}`);
-      }
-      console.log(`[SEND_MEDIA] File size: ${fileBlob.size} bytes`);
-
-      // Upload to MEGA for permanent public URL
-      let megaUrl: string | null = null;
-      try {
-        megaUrl = await uploadBlobToMega(fileBlob, args.fileName);
-        console.log(`[SEND_MEDIA] Uploaded to MEGA: ${megaUrl}`);
-      } catch (megaError) {
-        console.warn(`[SEND_MEDIA] MEGA upload failed, will use Convex URL as fallback:`, megaError);
-      }
-
-      // Determine the display URL (MEGA preferred, Convex fallback)
-      const displayUrl = megaUrl || await ctx.storage.getUrl(args.storageId);
+      // Get Convex signed URL for display in chat
+      const displayUrl = await ctx.storage.getUrl(args.storageId);
 
       if (mediaId) {
         console.log(`[SEND_MEDIA] Found cached media ID: ${mediaId}`);
@@ -164,6 +147,13 @@ export const sendMedia = action({
       }
 
       if (!mediaId) {
+        // Fetch file blob from Convex storage and upload to WhatsApp
+        const fileBlob = await ctx.storage.get(args.storageId);
+        if (!fileBlob) {
+          throw new Error(`File not found in storage: ${args.storageId}`);
+        }
+        console.log(`[SEND_MEDIA] File size: ${fileBlob.size} bytes`);
+
         const formData = new FormData();
         formData.append("file", fileBlob, args.fileName);
         formData.append("messaging_product", "whatsapp");
@@ -185,10 +175,11 @@ export const sendMedia = action({
         }
 
         mediaId = uploadData.id;
-        if (!mediaId) throw new Error("No media ID returned");
+        if (!mediaId) throw new Error("No media ID returned from WhatsApp");
         
         console.log(`[SEND_MEDIA] Uploaded to WhatsApp, media ID: ${mediaId}`);
         
+        // Cache the WhatsApp media ID so we don't re-upload next time
         await ctx.runMutation(internal.whatsapp.mediaCache.save, {
           storageId: args.storageId,
           mediaId: mediaId,
@@ -246,7 +237,6 @@ export const sendMediaInternal = internalAction({
     mimeType: v.string(),
   },
   handler: async (ctx, args): Promise<{ success: boolean; messageId?: string }> => {
-    // Use string reference to avoid TypeScript type instantiation depth issue
     const result = await ctx.runAction("whatsapp/messages:sendMedia" as any, args);
     if (!result) {
       throw new Error("Failed to send media: No response from internal action");
@@ -355,7 +345,6 @@ export const syncMessages = internalAction({
 
       console.log(`[SYNC_MESSAGES] Starting sync for lead ${args.leadId}, phone ${args.phoneNumber}, limit ${limit}`);
 
-      // Fetch recent messages from WhatsApp API
       const response = await fetch(
         `https://graph.facebook.com/v20.0/${phoneNumberId}/messages?` +
         new URLSearchParams({
@@ -382,7 +371,6 @@ export const syncMessages = internalAction({
 
       console.log(`[SYNC_MESSAGES] Fetched ${waMessages.length} messages from WhatsApp API`);
 
-      // Get existing external IDs to avoid duplicates
       const existingIds = await ctx.runQuery(internal.whatsappMutations.getExistingExternalIds, {
         leadId: args.leadId,
       });
