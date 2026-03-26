@@ -100,34 +100,50 @@ export const handleIncomingMessage = internalAction({
             console.error("❌ Error sending welcome message:", error);
           }
         } else {
-            if (args.type === "text") {
-                const isChatActive = await ctx.runQuery(internal.activeChatSessions.isLeadChatActive, { leadId });
+            // Trigger AI for both text and media messages
+            const isChatActive = await ctx.runQuery(internal.activeChatSessions.isLeadChatActive, { leadId });
+            
+            if (!isChatActive) {
+                console.log(`🤖 Triggering auto-reply for lead ${leadId} (chat not active, type: ${args.type})`);
                 
-                if (!isChatActive) {
-                    console.log(`🤖 Triggering auto-reply for lead ${leadId} (chat not active)`);
-                    
-                    const allMessages = await ctx.runQuery(internal.whatsappQueries.getChatMessagesInternal, { leadId });
-                    const contextMessages = allMessages.slice(-5).map((m: any) => ({
-                        role: m.direction === "outbound" ? "assistant" : "user",
-                        content: m.content
-                    }));
+                const allMessages = await ctx.runQuery(internal.whatsappQueries.getChatMessagesInternal, { leadId });
+                const contextMessages = allMessages.slice(-5).map((m: any) => ({
+                    role: m.direction === "outbound" ? "assistant" : "user",
+                    content: m.content || (m.messageType ? `[${m.messageType}]` : "[media]")
+                }));
 
-                    const contactRequestMessage = await ctx.runQuery(internal.whatsappConfig.getContactRequestMessage);
+                const contactRequestMessage = await ctx.runQuery(internal.whatsappConfig.getContactRequestMessage);
 
-                    await ctx.runAction(internal.whatsappAi.generateAndSendAiReplyInternal, {
-                            leadId,
-                            phoneNumber: args.from,
-                            context: { 
-                                recentMessages: contextMessages,
-                                contactRequestMessage 
-                            },
-                            prompt: args.text,
-                            isAutoReply: true
-                    });
-                    console.log("✅ Auto-reply sent");
-                } else {
-                    console.log(`⏭️ Skipping auto-reply for lead ${leadId} (chat is actively being viewed)`);
+                // Build a meaningful prompt for media messages
+                let prompt = args.text;
+                if (args.type !== "text" || !args.text) {
+                    const mediaTypeLabel: Record<string, string> = {
+                        image: "an image",
+                        document: "a document",
+                        video: "a video",
+                        audio: "a voice message / audio",
+                        sticker: "a sticker",
+                    };
+                    const label = mediaTypeLabel[args.type] || "a media file";
+                    const filename = args.mediaFilename ? ` (${args.mediaFilename})` : "";
+                    prompt = args.text
+                        ? `${args.text} [User also sent ${label}${filename}]`
+                        : `[User sent ${label}${filename}]`;
                 }
+
+                await ctx.runAction(internal.whatsappAi.generateAndSendAiReplyInternal, {
+                        leadId,
+                        phoneNumber: args.from,
+                        context: { 
+                            recentMessages: contextMessages,
+                            contactRequestMessage 
+                        },
+                        prompt,
+                        isAutoReply: true
+                });
+                console.log("✅ Auto-reply sent");
+            } else {
+                console.log(`⏭️ Skipping auto-reply for lead ${leadId} (chat is actively being viewed)`);
             }
         }
 
