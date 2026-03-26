@@ -18,6 +18,7 @@ export const createProduct = mutation({
     pageLink: v.optional(v.string()),
     videoLink: v.optional(v.string()),
     categoryId: v.optional(v.id("productCategories")),
+    categories: v.optional(v.array(v.id("productCategories"))),
   },
   handler: async (ctx, args) => {
     const productId = await ctx.db.insert("products", {
@@ -35,6 +36,7 @@ export const createProduct = mutation({
       pageLink: args.pageLink,
       videoLink: args.videoLink,
       categoryId: args.categoryId,
+      categories: args.categories,
     });
     return productId;
   },
@@ -56,6 +58,7 @@ export const updateProduct = mutation({
     pageLink: v.optional(v.string()),
     videoLink: v.optional(v.string()),
     categoryId: v.optional(v.id("productCategories")),
+    categories: v.optional(v.array(v.id("productCategories"))),
     
     // Flags to remove optional files
     removeFlyer: v.optional(v.boolean()),
@@ -76,6 +79,7 @@ export const updateProduct = mutation({
       pageLink: args.pageLink,
       videoLink: args.videoLink,
       categoryId: args.categoryId,
+      categories: args.categories,
     };
 
     // Handle file updates

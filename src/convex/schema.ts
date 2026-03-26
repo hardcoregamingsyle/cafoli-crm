@@ -170,6 +170,7 @@ export default defineSchema({
     packaging: v.optional(v.string()),
     description: v.optional(v.string()),
     categoryId: v.optional(v.id("productCategories")),
+    categories: v.optional(v.array(v.id("productCategories"))),
     mainImage: v.id("_storage"),
     images: v.array(v.id("_storage")),
     flyer: v.optional(v.id("_storage")),
