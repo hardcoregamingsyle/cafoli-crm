@@ -131,7 +131,7 @@ export default function Admin() {
   const [isDeletingCatalog, setIsDeletingCatalog] = useState(false);
   const [isScraping, setIsScraping] = useState(false);
   const [scrapeStats, setScrapeStats] = useState<{ total: number; scraped: number; failed: number; offset: number } | null>(null);
-  const [webProductCount, setWebProductCount] = useState<number | null>(null);
+  const webProductCount = useQuery(api.cafoliScraperDb.getWebProductCountPublic);
 
   if (!currentUser || (currentUser.role !== "admin" && currentUser.role !== "uploader")) {
     return <div className="p-8 text-center">You do not have permission to view this page.</div>;

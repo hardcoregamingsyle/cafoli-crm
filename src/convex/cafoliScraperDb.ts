@@ -1,4 +1,4 @@
-import { internalMutation, internalQuery, mutation } from "./_generated/server";
+import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
 // Internal mutation to upsert a scraped product
@@ -59,6 +59,15 @@ export const listWebProducts = internalQuery({
   },
 });
 
+// Public query for reactive count display
+export const getWebProductCountPublic = query({
+  args: {},
+  handler: async (ctx) => {
+    const products = await ctx.db.query("cafoliWebProducts").take(10000);
+    return products.length;
+  },
+});
+
 // Clean up corrupted composition data (entries containing HTML artifacts)
 export const cleanupCorruptedCompositions = mutation({
   args: {},
@@ -87,10 +96,8 @@ export const cleanupCorruptedCompositions = mutation({
 export const deleteAllWebProducts = mutation({
   args: {},
   handler: async (ctx) => {
-    const products = await ctx.db.query("cafoliWebProducts").take(500);
-    for (const product of products) {
-      await ctx.db.delete(product._id);
-    }
+    const products = await ctx.db.query("cafoliWebProducts").take(100);
+    await Promise.all(products.map(p => ctx.db.delete(p._id)));
     const remaining = await ctx.db.query("cafoliWebProducts").take(1);
     return { deleted: products.length, hasMore: remaining.length > 0 };
   },

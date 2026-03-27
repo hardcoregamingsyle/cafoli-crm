@@ -317,19 +317,17 @@ export const createCategory = mutation({
 export const deleteAllProducts = mutation({
   args: {},
   handler: async (ctx) => {
-    const products = await ctx.db.query("products").take(100);
-    for (const product of products) {
+    const products = await ctx.db.query("products").take(50);
+    await Promise.all(products.map(async (product) => {
       const storageIds = new Set<string>();
       if (product.images) product.images.forEach(id => storageIds.add(id));
       if (product.mainImage) storageIds.add(product.mainImage);
       if (product.flyer) storageIds.add(product.flyer);
       if (product.bridgeCard) storageIds.add(product.bridgeCard);
       if (product.visualaid) storageIds.add(product.visualaid);
-      for (const storageId of storageIds) {
-        try { await ctx.storage.delete(storageId as any); } catch {}
-      }
+      await Promise.all([...storageIds].map(id => ctx.storage.delete(id as any).catch(() => {})));
       await ctx.db.delete(product._id);
-    }
+    }));
     const remaining = await ctx.db.query("products").take(1);
     return { deleted: products.length, hasMore: remaining.length > 0 };
   },
