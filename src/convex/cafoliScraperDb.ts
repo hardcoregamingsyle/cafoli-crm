@@ -82,3 +82,25 @@ export const cleanupCorruptedCompositions = mutation({
     return { cleaned };
   },
 });
+
+// Delete all cached web products
+export const deleteAllWebProducts = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const products = await ctx.db.query("cafoliWebProducts").take(5000);
+    let deleted = 0;
+    for (const product of products) {
+      await ctx.db.delete(product._id);
+      deleted++;
+    }
+    // If there are more than 5000, keep deleting in batches
+    if (products.length === 5000) {
+      const more = await ctx.db.query("cafoliWebProducts").take(5000);
+      for (const product of more) {
+        await ctx.db.delete(product._id);
+        deleted++;
+      }
+    }
+    return { deleted };
+  },
+});

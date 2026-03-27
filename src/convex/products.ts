@@ -312,3 +312,26 @@ export const createCategory = mutation({
     return await ctx.db.insert("productCategories", { name: args.name });
   },
 });
+
+// Delete ALL products and their storage files
+export const deleteAllProducts = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const products = await ctx.db.query("products").take(1000);
+    let deleted = 0;
+    for (const product of products) {
+      const storageIds = new Set<string>();
+      if (product.images) product.images.forEach(id => storageIds.add(id));
+      if (product.mainImage) storageIds.add(product.mainImage);
+      if (product.flyer) storageIds.add(product.flyer);
+      if (product.bridgeCard) storageIds.add(product.bridgeCard);
+      if (product.visualaid) storageIds.add(product.visualaid);
+      for (const storageId of storageIds) {
+        try { await ctx.storage.delete(storageId as any); } catch {}
+      }
+      await ctx.db.delete(product._id);
+      deleted++;
+    }
+    return { deleted };
+  },
+});
