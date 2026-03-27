@@ -21,6 +21,8 @@ import type * as brevo from "../brevo.js";
 import type * as brevoMutations from "../brevoMutations.js";
 import type * as brevoQueries from "../brevoQueries.js";
 import type * as bulkMessaging from "../bulkMessaging.js";
+import type * as cafoliScraper from "../cafoliScraper.js";
+import type * as cafoliScraperDb from "../cafoliScraperDb.js";
 import type * as campaignExecutor from "../campaignExecutor.js";
 import type * as campaignExecutorMutations from "../campaignExecutorMutations.js";
 import type * as campaignMutations from "../campaignMutations.js";
@@ -122,6 +124,8 @@ declare const fullApi: ApiFromModules<{
   brevoMutations: typeof brevoMutations;
   brevoQueries: typeof brevoQueries;
   bulkMessaging: typeof bulkMessaging;
+  cafoliScraper: typeof cafoliScraper;
+  cafoliScraperDb: typeof cafoliScraperDb;
   campaignExecutor: typeof campaignExecutor;
   campaignExecutorMutations: typeof campaignExecutorMutations;
   campaignMutations: typeof campaignMutations;
