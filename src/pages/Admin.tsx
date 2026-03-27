@@ -9,7 +9,7 @@ import { ProductListManager } from "@/components/products/ProductListManager";
 import { RangePdfUploadDialog } from "@/components/products/RangePdfUploadDialog";
 import { RangePdfListManager } from "@/components/products/RangePdfListManager";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Shield, Download, FileUp, Phone, UserPlus, Users, RefreshCw, Mail } from "lucide-react";
+import { Shield, Download, FileUp, Phone, UserPlus, Users, RefreshCw, Mail, Globe, Database } from "lucide-react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { getConvexApi } from "@/lib/convex-api";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
@@ -120,6 +120,12 @@ export default function Admin() {
   );
 
   const isBatchProcessing = batchProgress?.status === "queued" || batchProgress?.status === "running";
+
+  const scrapeAllProducts = useAction(api.cafoliScraper.scrapeAllCafoliProducts);
+  const getWebProductStats = useAction(api.cafoliScraper.getWebProductStats);
+  const [isScraping, setIsScraping] = useState(false);
+  const [scrapeStats, setScrapeStats] = useState<{ total: number; scraped: number; failed: number; offset: number } | null>(null);
+  const [webProductCount, setWebProductCount] = useState<number | null>(null);
 
   if (!currentUser || (currentUser.role !== "admin" && currentUser.role !== "uploader")) {
     return <div className="p-8 text-center">You do not have permission to view this page.</div>;
@@ -420,6 +426,44 @@ export default function Admin() {
     }
   };
 
+  const handleScrapeProducts = async () => {
+    setIsScraping(true);
+    setScrapeStats(null);
+    let offset = 0;
+    let totalScraped = 0;
+    let totalFailed = 0;
+    let total = 0;
+    
+    try {
+      while (true) {
+        const result = await scrapeAllProducts({ batchSize: 50, startOffset: offset });
+        total = result.total;
+        totalScraped += result.scraped;
+        totalFailed += result.failed;
+        offset = result.nextOffset;
+        setScrapeStats({ total, scraped: totalScraped, failed: totalFailed, offset });
+        
+        if (!result.hasMore) break;
+        // Small delay between batches
+        await new Promise(r => setTimeout(r, 500));
+      }
+      toast.success(`Scraped ${totalScraped} products from cafoli.in (${totalFailed} failed)`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to scrape products");
+    } finally {
+      setIsScraping(false);
+    }
+  };
+
+  const handleCheckWebProductCount = async () => {
+    try {
+      const stats = await getWebProductStats({});
+      setWebProductCount(stats.count);
+    } catch (err: any) {
+      toast.error("Failed to get stats");
+    }
+  };
+
   return (
     <AppLayout>
       <div className="container mx-auto py-8 space-y-8">
@@ -651,14 +695,62 @@ export default function Admin() {
             </TabsContent>
           )}
 
-          <TabsContent value="products">
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-semibold">Product Management</h2>
-                <ProductUploadDialog />
-              </div>
-              <ProductListManager />
+          <TabsContent value="products" className="space-y-4">
+            {/* Cafoli Website Scraper */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Globe className="h-5 w-5" />
+                  Cafoli Website Product Sync
+                </CardTitle>
+                <CardDescription>
+                  Scrape all products from cafoli.in and cache them for AI product lookups. This imports brand names, compositions, images, PDFs, and prices.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <Button
+                    onClick={handleScrapeProducts}
+                    disabled={isScraping}
+                    className="flex items-center gap-2"
+                  >
+                    <Globe className="h-4 w-4" />
+                    {isScraping ? "Scraping..." : "Sync Products from cafoli.in"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleCheckWebProductCount}
+                    className="flex items-center gap-2"
+                  >
+                    <Database className="h-4 w-4" />
+                    Check Cached Count
+                  </Button>
+                  {webProductCount !== null && (
+                    <span className="text-sm text-muted-foreground">
+                      {webProductCount} products cached
+                    </span>
+                  )}
+                </div>
+                {isScraping && scrapeStats && (
+                  <div className="text-sm text-muted-foreground">
+                    Progress: {scrapeStats.scraped} scraped, {scrapeStats.failed} failed out of {scrapeStats.total} total (offset: {scrapeStats.offset})
+                  </div>
+                )}
+                {!isScraping && scrapeStats && (
+                  <Alert>
+                    <CheckCircle2 className="h-4 w-4" />
+                    <AlertDescription>
+                      Sync complete: {scrapeStats.scraped} products scraped, {scrapeStats.failed} failed out of {scrapeStats.total} total.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </CardContent>
+            </Card>
+
+            <div className="flex justify-end">
+              <ProductUploadDialog />
             </div>
+            <ProductListManager />
           </TabsContent>
 
           <TabsContent value="ranges">

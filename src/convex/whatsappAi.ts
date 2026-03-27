@@ -38,7 +38,21 @@ async function fetchCafoliSitemap(): Promise<string[]> {
   }
 }
 
-// Extract product details directly from HTML using regex patterns specific to cafoli.in
+// Fetch text content from a URL (returns raw HTML)
+async function fetchPageHtml(url: string): Promise<string> {
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; CafoliBot/1.0)" },
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!res.ok) return "";
+    return await res.text();
+  } catch {
+    return "";
+  }
+}
+
+// Extract product details directly from cafoli.in product page HTML using regex
 function extractProductDetailsFromHtml(html: string, pageUrl: string): {
   name: string | null;
   molecule: string | null;
@@ -49,53 +63,50 @@ function extractProductDetailsFromHtml(html: string, pageUrl: string): {
   pdfUrl: string | null;
   pageLink: string;
 } {
-  // Extract product name - look for h2 with product name pattern
-  let name: string | null = null;
-  const nameMatch = html.match(/<h2[^>]*>\s*([^<]{5,80})\s*<\/h2>/i);
-  if (nameMatch) name = nameMatch[1].trim();
-  // Also try strong tags near "Composition"
-  if (!name) {
-    const h1Match = html.match(/<h1[^>]*>\s*([^<]{5,100})\s*<\/h1>/i);
-    if (h1Match) name = h1Match[1].trim();
-  }
+  // Extract product name from <h2> tag
+  const h2Match = html.match(/<h2[^>]*>\s*([^<]{3,100})\s*<\/h2>/i);
+  const name = h2Match ? h2Match[1].trim() : null;
 
-  // Extract composition/molecule - look for "Composition :" pattern
-  let molecule: string | null = null;
-  const compMatch = html.match(/Composition\s*:?\s*<\/strong>\s*([^<]{5,200})/i) ||
-    html.match(/Composition\s*:\s*([^\n<]{5,200})/i);
-  if (compMatch) molecule = compMatch[1].trim().replace(/&amp;/g, "&").replace(/\s+/g, " ");
+  // Extract composition/molecule from "Composition :" pattern
+  const compMatch = html.match(/Composition\s*[:\-]\s*<\/strong>\s*([^<\n]+)/i) ||
+                    html.match(/Composition\s*[:\-]\s*([^\n<]{5,200})/i);
+  const molecule = compMatch ? compMatch[1].replace(/<[^>]+>/g, "").trim() : null;
 
-  // Extract MRP/Price - look for "Price :" or "₹" pattern
-  let mrp: string | null = null;
-  const priceMatch = html.match(/Price\s*:?\s*<\/strong>\s*₹?\s*(\d+(?:\.\d+)?)/i) ||
-    html.match(/₹\s*(\d+(?:\.\d+)?)\s*\/-/i) ||
-    html.match(/Price\s*:\s*₹?\s*(\d+(?:\.\d+)?)/i);
-  if (priceMatch) mrp = priceMatch[1];
+  // Extract MRP: look for ₹ followed by number
+  const mrpMatch = html.match(/[₹Rs\.]\s*(\d+(?:\.\d+)?)\s*\/-/i) ||
+                   html.match(/Price\s*:\s*[₹Rs\.]*\s*(\d+)/i);
+  const mrp = mrpMatch ? mrpMatch[1] : null;
 
-  // Extract packaging - look for "Packaging :" pattern
-  let packaging: string | null = null;
-  const packMatch = html.match(/Packaging\s*:?\s*<\/strong>\s*([^<]{2,50})/i) ||
-    html.match(/Packaging\s*:\s*([^\n<]{2,50})/i);
-  if (packMatch) packaging = packMatch[1].trim();
+  // Extract packaging
+  const packagingMatch = html.match(/Packaging\s*:\s*<\/strong>\s*([^<\n]+)/i) ||
+                         html.match(/Packaging\s*:\s*([^\n<]+)/i);
+  const packaging = packagingMatch ? packagingMatch[1].replace(/<[^>]+>/g, "").trim() : null;
 
-  // Extract description - look for the main product description paragraph
+  // Extract best image URL from cafoli.in static images
+  const imageMatches = [...html.matchAll(/https:\/\/cafoli\.in\/Static\/V1\/OtherPageImages\/([^"'\s]+\.webp)/gi)];
+  // Filter out empty filenames and prefer images with timestamps (longer filenames)
+  const validImages = imageMatches
+    .map(m => `https://cafoli.in/Static/V1/OtherPageImages/${m[1]}`)
+    .filter(url => {
+      const filename = url.split("/").pop() || "";
+      return filename.length > 10 && !filename.endsWith("/");
+    });
+  // Pick the second image if available (usually the cleaner product shot), else first
+  const imageUrl = validImages[1] || validImages[0] || null;
+
+  // Extract PDF URL
+  const pdfMatches = [...html.matchAll(/https:\/\/cafoli\.in\/Static\/V1\/OtherPagepdf\/([^"'\s]+\.pdf)/gi)];
+  const pdfUrl = pdfMatches.length > 0 ? `https://cafoli.in/Static/V1/OtherPagepdf/${pdfMatches[0][1]}` : null;
+
+  // Extract description (text after product name)
+  const descMatch = html.match(/Lubicom|Eye Drop|Tablet|Capsule|Syrup|Injection|Cream|Gel|Ointment|Drops/i);
   let description: string | null = null;
-  const descMatch = html.match(/<p[^>]*>\s*(Lubicom|[A-Z][^<]{50,500}Eye Drop[^<]{0,200})\s*<\/p>/i);
-  if (descMatch) description = descMatch[1].replace(/<[^>]+>/g, "").trim().substring(0, 300);
-
-  // Extract image URL - look for OtherPageImages pattern (cafoli.in specific)
-  let imageUrl: string | null = null;
-  const imgMatches = html.match(/https:\/\/cafoli\.in\/Static\/V1\/OtherPageImages\/[^"'\s>]+\.(?:webp|jpg|jpeg|png)/gi);
-  if (imgMatches && imgMatches.length > 0) {
-    // Pick the first non-empty image URL
-    imageUrl = imgMatches.find(u => !u.endsWith("/")) || imgMatches[0];
-  }
-
-  // Extract PDF URL - look for OtherPagepdf pattern (cafoli.in specific)
-  let pdfUrl: string | null = null;
-  const pdfMatches = html.match(/https:\/\/cafoli\.in\/Static\/V1\/OtherPagepdf\/[^"'\s>]+\.pdf/gi);
-  if (pdfMatches && pdfMatches.length > 0) {
-    pdfUrl = pdfMatches[0];
+  if (name) {
+    // Find a paragraph with substantial text
+    const paraMatches = [...html.matchAll(/<p[^>]*>([^<]{100,600})<\/p>/gi)];
+    if (paraMatches.length > 0) {
+      description = paraMatches[0][1].replace(/<[^>]+>/g, "").trim().substring(0, 400);
+    }
   }
 
   return { name, molecule, mrp, packaging, description, imageUrl, pdfUrl, pageLink: pageUrl };
@@ -104,33 +115,27 @@ function extractProductDetailsFromHtml(html: string, pageUrl: string): {
 // Use Gemini to find the best matching product URL from the sitemap
 async function findBestProductUrl(ctx: any, userMessage: string, sitemapUrls: string[]): Promise<string | null> {
   try {
-    // Filter to likely product URLs only (exclude category pages, home, etc.)
     const productUrls = sitemapUrls.filter(u =>
       !u.includes("sitemap") && !u.includes(".xml") &&
       u !== "https://cafoli.in/" &&
       !u.endsWith("/allproducts.aspx") &&
       !u.endsWith("/allproduct.aspx") &&
-      !u.endsWith("/alldivisions.aspx") &&
-      !u.endsWith("/alltherapeutics.aspx") &&
-      !u.endsWith("/AllNotification.aspx") &&
-      !u.includes("/index") &&
-      // Product URLs typically have hyphens and molecule names
-      u.split("/").pop()!.includes("-")
+      !u.includes("alltherapeutic") &&
+      !u.includes("alldivision") &&
+      !u.includes("SearchProducts") &&
+      !u.includes("Static/")
     ).slice(0, 300);
 
     if (productUrls.length === 0) return null;
 
     const urlList = productUrls.join("\n");
     const systemPrompt = `You are a pharmaceutical expert. Given a user's product query and a list of product page URLs from cafoli.in, find the single best matching URL.
-The URL slugs contain the molecule/product name in hyphenated form.
-Return ONLY a JSON object: { "url": "https://cafoli.in/..." } or { "url": null } if no match found.
-
-Matching rules:
-- Match by molecule name in the URL slug (e.g., "carboxymethylcellulose" for Lubricel/Lubicom)
-- Match by product name keywords
-- For competitor brands, identify the molecule first, then match that molecule in the URL
-- Return null ONLY if truly no match exists
-
+Return ONLY a JSON object: { "url": "https://cafoli.in/..." } or { "url": null } if no match.
+The URL slugs contain the molecule/product name. Match by molecule, brand name, or product name.
+Examples:
+- "Lubricel Eye Drop" → look for carboxymethylcellulose in URL slugs
+- "Lubicom Plus" → look for carboxymethylcellulose in URL slugs
+- "sodium-carboxymethylcellulose" → match that molecule
 Return ONLY the JSON object.`;
 
     const { text } = await generateWithGemini(ctx, systemPrompt,
@@ -144,6 +149,33 @@ Return ONLY the JSON object.`;
     logAiError("FIND_PRODUCT_URL", e);
     return null;
   }
+}
+
+// Find best matching product from the cafoliWebProducts DB cache
+function findWebProductByQuery(webProducts: any[], query: string): any | null {
+  if (!webProducts || webProducts.length === 0) return null;
+  const q = query.toLowerCase();
+  
+  // Exact brand name match
+  let match = webProducts.find((p: any) => p.brandName?.toLowerCase() === q);
+  if (match) return match;
+  
+  // Partial brand name match
+  match = webProducts.find((p: any) =>
+    p.brandName?.toLowerCase().includes(q) || q.includes(p.brandName?.toLowerCase() || "")
+  );
+  if (match) return match;
+  
+  // Composition/molecule match
+  match = webProducts.find((p: any) =>
+    p.composition && (
+      p.composition.toLowerCase().includes(q) ||
+      q.includes(p.composition.toLowerCase().substring(0, 20))
+    )
+  );
+  if (match) return match;
+  
+  return null;
 }
 
 // Send a website-sourced product to the lead
@@ -177,7 +209,7 @@ async function sendWebsiteProductToLead(ctx: any, productDetails: {
       await ctx.runAction(internal.whatsapp.messages.sendMediaFromUrl, {
         leadId: args.leadId,
         phoneNumber: args.phoneNumber,
-        url: imgUrl,
+        url: productDetails.imageUrl,
         fileName: `${safeName}.${ext}`,
         mimeType,
       });
@@ -205,9 +237,8 @@ async function sendWebsiteProductToLead(ctx: any, productDetails: {
   }
 
   // Send product details text
-  const displayName = productDetails.name || "Product";
   const detailsMessage = [
-    `*${displayName}*`,
+    productDetails.name ? `*${productDetails.name}*` : null,
     productDetails.molecule ? `Composition: ${productDetails.molecule}` : null,
     productDetails.mrp ? `MRP: ₹${productDetails.mrp}` : null,
     productDetails.packaging ? `Packaging: ${productDetails.packaging}` : null,
@@ -357,28 +388,44 @@ export const generateAndSendAiReplyInternal = internalAction({
       const rangePdfs = await ctx.runQuery(internal.rangePdfs.listRangePdfsInternal);
       const pdfNames = rangePdfs.map((p: any) => p.name).join(", ");
 
+      // Load cached web products for fast matching
+      const webProducts = await ctx.runQuery("cafoliScraper:listWebProducts" as any);
+      const webProductCount = webProducts.length;
+
+      // Build product list for AI context (use web products if available, else internal catalog)
+      let productContextStr = "";
+      if (webProductCount > 0) {
+        // Show first 100 products as sample for AI context
+        const sample = webProducts.slice(0, 100);
+        productContextStr = sample.map((p: any) =>
+          `- ${p.brandName}${p.composition ? ` (${p.composition.substring(0, 60)})` : ""}`
+        ).join("\n");
+        productContextStr += webProductCount > 100 ? `\n... and ${webProductCount - 100} more products` : "";
+      }
+
       const systemPrompt = `You are a helpful CRM assistant for Cafoli Lifecare, a pharmaceutical company (website: https://cafoli.in).
 You are chatting with a lead on WhatsApp.
+
+${webProductCount > 0 ? `Cafoli has ${webProductCount} products. Sample:\n${productContextStr}` : "Cafoli has a large product range at https://cafoli.in"}
 
 Available Range PDFs: ${pdfNames}
 
 Your goal is to assist the lead, answer questions, and provide product information.
 
-PRODUCT QUERIES: When the user asks about any product (Cafoli brand, competitor brand, or molecule), use the "send_product" action. The system will automatically look up the product on cafoli.in website.
+PRODUCT QUERIES: When the user asks about any product (Cafoli brand or competitor brand), use the "send_product" action. The system will automatically look up the product on cafoli.in website.
 
 You can perform the following actions by returning a JSON object:
 1. Reply with text: { "action": "reply", "text": "your message" }
-2. Send a product (any product query): { "action": "send_product", "text": "optional intro message", "resource_name": "the product name or molecule the user asked about" }
+2. Send a product (any product query - Cafoli or competitor): { "action": "send_product", "text": "optional intro message", "resource_name": "the product name or molecule the user asked about" }
 3. Send a PDF: { "action": "send_pdf", "text": "optional caption", "resource_name": "exact pdf name from list above" }
 4. Send full catalogue (link + all PDFs): { "action": "send_full_catalogue", "text": "optional message" }
 5. Request human intervention (if you can't help): { "action": "intervention_request", "text": "I will connect you with an agent.", "reason": "reason" }
 6. Request contact (if they want a meeting/call): { "action": "contact_request", "text": "I've noted your request.", "reason": "reason" }
 
 RULES:
-- For send_product, resource_name should be the product name or molecule the user mentioned (can be competitor brand name, molecule name, or Cafoli product name).
+- For send_product, resource_name should be the product name or molecule the user mentioned.
 - When the user asks for "full catalogue", "complete catalogue", "all products", use send_full_catalogue.
 - For general questions not about products, use reply.
-- Do NOT say you cannot find a product — use send_product and the system will handle the lookup.
 
 Always return ONLY the JSON object. Do not include other text.`;
 
@@ -408,46 +455,56 @@ Always return ONLY the JSON object. Do not include other text.`;
         });
 
       } else if (aiAction.action === "send_product") {
-        logAiInfo("SEND_PRODUCT", `Looking up product on cafoli.in: "${aiAction.resource_name}"`, { leadId: args.leadId });
+        logAiInfo("SEND_PRODUCT", `Looking up product: "${aiAction.resource_name}"`, { leadId: args.leadId });
 
         let productSent = false;
 
-        // Step 1: Fetch cafoli.in sitemap
-        const sitemapUrls = await fetchCafoliSitemap();
-        logAiInfo("SEND_PRODUCT", `Fetched ${sitemapUrls.length} URLs from sitemap`, { leadId: args.leadId });
+        // Step 1: Try to find in cached web products DB (fast, no network)
+        const webMatch = findWebProductByQuery(webProducts, aiAction.resource_name || args.prompt);
+        if (webMatch) {
+          logAiInfo("SEND_PRODUCT", `Found in web products DB: ${webMatch.brandName}`, { leadId: args.leadId });
+          
+          // Fetch the product page for full details (image, PDF, price)
+          const html = await fetchPageHtml(webMatch.pageUrl);
+          let details = extractProductDetailsFromHtml(html, webMatch.pageUrl);
+          
+          // Use cached data as fallback
+          if (!details.imageUrl && webMatch.imageUrl) details = { ...details, imageUrl: webMatch.imageUrl };
+          if (!details.pdfUrl && webMatch.pdfUrl) details = { ...details, pdfUrl: webMatch.pdfUrl };
+          if (!details.mrp && webMatch.mrp) details = { ...details, mrp: webMatch.mrp };
+          if (!details.packaging && webMatch.packaging) details = { ...details, packaging: webMatch.packaging };
+          if (!details.name) details = { ...details, name: webMatch.brandName };
+          if (!details.molecule && webMatch.composition) details = { ...details, molecule: webMatch.composition };
+          
+          await sendWebsiteProductToLead(ctx, details, { leadId: args.leadId, phoneNumber: args.phoneNumber }, aiAction.text);
+          productSent = true;
+        }
 
-        if (sitemapUrls.length > 0) {
-          // Step 2: Find best matching product URL using Gemini
-          const productUrl = await findBestProductUrl(ctx, `${aiAction.resource_name} ${args.prompt}`, sitemapUrls);
-          logAiInfo("SEND_PRODUCT", `Best matching URL: ${productUrl}`, { leadId: args.leadId });
-
-          if (productUrl) {
-            // Step 3: Fetch the product page HTML
-            try {
-              const res = await fetch(productUrl, {
-                headers: { "User-Agent": "Mozilla/5.0 (compatible; CafoliBot/1.0)" },
-                signal: AbortSignal.timeout(12000),
-              });
-              if (res.ok) {
-                const html = await res.text();
-                // Step 4: Extract product details directly from HTML using regex (no Gemini needed)
-                const productDetails = extractProductDetailsFromHtml(html, productUrl);
-                logAiInfo("SEND_PRODUCT", `Extracted: name=${productDetails.name}, img=${productDetails.imageUrl ? "yes" : "no"}, pdf=${productDetails.pdfUrl ? "yes" : "no"}`, { leadId: args.leadId });
-
-                if (productDetails.name || productDetails.imageUrl || productDetails.pdfUrl) {
-                  await sendWebsiteProductToLead(ctx, productDetails, { leadId: args.leadId, phoneNumber: args.phoneNumber }, aiAction.text);
+        // Step 2: If not in DB, try live sitemap lookup
+        if (!productSent) {
+          logAiInfo("SEND_PRODUCT", `Not in DB, trying live sitemap lookup`, { leadId: args.leadId });
+          const sitemapUrls = await fetchCafoliSitemap();
+          
+          if (sitemapUrls.length > 0) {
+            const productUrl = await findBestProductUrl(ctx, `${aiAction.resource_name} ${args.prompt}`, sitemapUrls);
+            
+            if (productUrl) {
+              const html = await fetchPageHtml(productUrl);
+              if (html) {
+                const details = extractProductDetailsFromHtml(html, productUrl);
+                if (details.name || details.imageUrl) {
+                  logAiInfo("SEND_PRODUCT", `Found via sitemap: ${details.name}`, { leadId: args.leadId });
+                  await sendWebsiteProductToLead(ctx, details, { leadId: args.leadId, phoneNumber: args.phoneNumber }, aiAction.text);
                   productSent = true;
                 }
               }
-            } catch (fetchErr) {
-              logAiError("FETCH_PRODUCT_PAGE", fetchErr, { url: productUrl });
             }
           }
         }
 
-        // Fallback: try internal catalog if website lookup failed
+        // Step 3: Fallback to internal catalog
         if (!productSent) {
-          logAiInfo("SEND_PRODUCT", `Website lookup failed, trying internal catalog`, { leadId: args.leadId });
+          logAiInfo("SEND_PRODUCT", `Trying internal catalog fallback`, { leadId: args.leadId });
           const products = await ctx.runQuery(internal.products.listProductsInternal);
           const resourceLower = (aiAction.resource_name || "").toLowerCase();
           const promptLower = args.prompt.toLowerCase();
@@ -458,7 +515,7 @@ Always return ONLY the JSON object. Do not include other text.`;
           if (!product) product = products.find((p: any) => p.molecule && (p.molecule.toLowerCase().includes(promptLower) || promptLower.includes(p.molecule.toLowerCase())));
 
           if (product) {
-            logAiInfo("SEND_PRODUCT", `Found in catalog: ${product.name}`, { leadId: args.leadId });
+            logAiInfo("SEND_PRODUCT", `Found in internal catalog: ${product.name}`, { leadId: args.leadId });
             await sendCatalogProductToLead(ctx, product, { leadId: args.leadId, phoneNumber: args.phoneNumber }, aiAction.text);
             productSent = true;
           }
@@ -478,7 +535,7 @@ Always return ONLY the JSON object. Do not include other text.`;
             assignedTo: (lead && lead.assignedTo && !lead.isColdCallerLead) ? lead.assignedTo : undefined,
             requestedProduct: aiAction.resource_name,
             customerMessage: args.prompt,
-            aiDraftedMessage: `Customer asked for "${aiAction.resource_name}" but no matching product was found on cafoli.in or in the catalog. Please assist.`,
+            aiDraftedMessage: `Customer asked for "${aiAction.resource_name}" but no matching product was found. Please assist.`,
           });
         }
 

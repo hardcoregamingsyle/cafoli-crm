@@ -183,6 +183,21 @@ export default defineSchema({
     externalPdfUrl: v.optional(v.string()),
   }).index("by_name", ["name"]),
 
+  cafoliWebProducts: defineTable({
+    brandName: v.string(),
+    composition: v.optional(v.string()),
+    dosageForm: v.optional(v.string()),
+    pageUrl: v.string(),
+    imageUrl: v.optional(v.string()),
+    pdfUrl: v.optional(v.string()),
+    literaturePdfUrl: v.optional(v.string()),
+    mrp: v.optional(v.string()),
+    packaging: v.optional(v.string()),
+    description: v.optional(v.string()),
+    scrapedAt: v.number(),
+  }).index("by_brandName", ["brandName"])
+    .index("by_pageUrl", ["pageUrl"]),
+
   whatsappTemplates: defineTable({
     name: v.string(),
     content: v.string(),

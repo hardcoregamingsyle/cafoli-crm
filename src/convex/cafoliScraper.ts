@@ -1,0 +1,278 @@
+"use node";
+import { action, internalAction, internalMutation, internalQuery } from "./_generated/server";
+import { v } from "convex/values";
+
+// Parse the allproduct.aspx HTML to extract product rows
+function parseProductListHtml(html: string): Array<{ brandName: string; composition: string; pageUrl: string; imageUrl: string; dosageForm: string }> {
+  const products: Array<{ brandName: string; composition: string; pageUrl: string; imageUrl: string; dosageForm: string }> = [];
+  
+  const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  let rowMatch;
+  
+  while ((rowMatch = rowRegex.exec(html)) !== null) {
+    const row = rowMatch[1];
+    
+    const hrefMatch = row.match(/href="(\/[^"]+)"/);
+    if (!hrefMatch) continue;
+    
+    const pageUrl = `https://cafoli.in${hrefMatch[1]}`;
+    
+    if (pageUrl.includes("allproduct") || pageUrl.includes("alltherapeutic") || pageUrl.includes("alldivision") || pageUrl.includes("SearchProducts")) continue;
+    
+    const brandMatch = row.match(/<a[^>]+href="\/[^"]+">([^<]+)<\/a>/);
+    if (!brandMatch) continue;
+    const brandName = brandMatch[1].trim();
+    if (!brandName || brandName.length < 2) continue;
+    
+    const tdMatches = [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)];
+    let composition = "";
+    let dosageForm = "";
+    if (tdMatches.length >= 2) {
+      composition = tdMatches[1][1].replace(/<[^>]+>/g, "").trim();
+    }
+    if (tdMatches.length >= 3) {
+      dosageForm = tdMatches[2][1].replace(/<[^>]+>/g, "").trim();
+    }
+    
+    const imgMatch = row.match(/src="(https:\/\/cafoli\.in\/Static\/V1\/OtherPageImages\/[^"]+\.webp)"/i);
+    const imageUrl = imgMatch ? imgMatch[1] : "";
+    
+    products.push({ brandName, composition, pageUrl, imageUrl, dosageForm });
+  }
+  
+  return products;
+}
+
+// Extract product details from a product page HTML
+function extractProductPageDetails(html: string): {
+  mrp: string | null;
+  packaging: string | null;
+  description: string | null;
+  imageUrl: string | null;
+  pdfUrl: string | null;
+  literaturePdfUrl: string | null;
+} {
+  const imageMatches = [...html.matchAll(/https:\/\/cafoli\.in\/Static\/V1\/OtherPageImages\/([^"'\s]+\.webp)/gi)];
+  const validImages = imageMatches
+    .map(m => `https://cafoli.in/Static/V1/OtherPageImages/${m[1]}`)
+    .filter(url => {
+      const filename = url.split("/").pop() || "";
+      return filename.length > 10;
+    });
+  const imageUrl = validImages[1] || validImages[0] || null;
+  
+  const pdfMatches = [...html.matchAll(/https:\/\/cafoli\.in\/Static\/V1\/OtherPagepdf\/([^"'\s]+\.pdf)/gi)];
+  const pdfUrls = pdfMatches.map(m => `https://cafoli.in/Static/V1/OtherPagepdf/${m[1]}`);
+  const pdfUrl = pdfUrls[0] || null;
+  const literaturePdfUrl = pdfUrls[1] || null;
+  
+  const mrpMatch = html.match(/[₹Rs\.]\s*(\d+(?:\.\d+)?)\s*\/-/i) ||
+                   html.match(/Price\s*:\s*[₹Rs\.]*\s*(\d+)/i);
+  const mrp = mrpMatch ? mrpMatch[1] : null;
+  
+  const packagingMatch = html.match(/Packaging\s*:\s*<\/strong>\s*([^<\n]+)/i) ||
+                         html.match(/Packaging\s*:\s*([^\n<]+)/i);
+  const packaging = packagingMatch ? packagingMatch[1].replace(/<[^>]+>/g, "").trim() : null;
+  
+  const paraMatches = [...html.matchAll(/<p[^>]*>([^<]{100,600})<\/p>/gi)];
+  const description = paraMatches.length > 0 ? paraMatches[0][1].replace(/<[^>]+>/g, "").trim().substring(0, 400) : null;
+  
+  return { mrp, packaging, description, imageUrl, pdfUrl, literaturePdfUrl };
+}
+
+// Internal mutation to upsert a scraped product
+export const upsertWebProduct = internalMutation({
+  args: {
+    brandName: v.string(),
+    composition: v.optional(v.string()),
+    dosageForm: v.optional(v.string()),
+    pageUrl: v.string(),
+    imageUrl: v.optional(v.string()),
+    pdfUrl: v.optional(v.string()),
+    literaturePdfUrl: v.optional(v.string()),
+    mrp: v.optional(v.string()),
+    packaging: v.optional(v.string()),
+    description: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("cafoliWebProducts")
+      .withIndex("by_pageUrl", q => q.eq("pageUrl", args.pageUrl))
+      .first();
+    
+    const data = {
+      brandName: args.brandName,
+      composition: args.composition,
+      dosageForm: args.dosageForm,
+      pageUrl: args.pageUrl,
+      imageUrl: args.imageUrl,
+      pdfUrl: args.pdfUrl,
+      literaturePdfUrl: args.literaturePdfUrl,
+      mrp: args.mrp,
+      packaging: args.packaging,
+      description: args.description,
+      scrapedAt: Date.now(),
+    };
+    
+    if (existing) {
+      await ctx.db.patch(existing._id, data);
+      return existing._id;
+    } else {
+      return await ctx.db.insert("cafoliWebProducts", data);
+    }
+  },
+});
+
+export const getWebProductCount = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const products = await ctx.db.query("cafoliWebProducts").take(10000);
+    return products.length;
+  },
+});
+
+export const listWebProducts = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query("cafoliWebProducts").take(2000);
+  },
+});
+
+export const listWebProductsPublic = action({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.runQuery("cafoliScraper:listWebProducts" as any);
+  },
+});
+
+// Scrape a batch of product detail pages
+export const scrapeProductDetailsBatch = internalAction({
+  args: {
+    products: v.array(v.object({
+      brandName: v.string(),
+      composition: v.optional(v.string()),
+      dosageForm: v.optional(v.string()),
+      pageUrl: v.string(),
+      imageUrl: v.optional(v.string()),
+    })),
+  },
+  handler: async (ctx, args) => {
+    let scraped = 0;
+    let failed = 0;
+    
+    for (const product of args.products) {
+      try {
+        const res = await fetch(product.pageUrl, {
+          headers: { "User-Agent": "Mozilla/5.0 (compatible; CafoliBot/1.0)" },
+          signal: AbortSignal.timeout(15000),
+        });
+        
+        let details = { mrp: null as string | null, packaging: null as string | null, description: null as string | null, imageUrl: product.imageUrl || null, pdfUrl: null as string | null, literaturePdfUrl: null as string | null };
+        
+        if (res.ok) {
+          const html = await res.text();
+          details = extractProductPageDetails(html);
+          if (!details.imageUrl && product.imageUrl) {
+            details.imageUrl = product.imageUrl;
+          }
+        }
+        
+        await ctx.runMutation("cafoliScraper:upsertWebProduct" as any, {
+          brandName: product.brandName,
+          composition: product.composition,
+          dosageForm: product.dosageForm,
+          pageUrl: product.pageUrl,
+          imageUrl: details.imageUrl || undefined,
+          pdfUrl: details.pdfUrl || undefined,
+          literaturePdfUrl: details.literaturePdfUrl || undefined,
+          mrp: details.mrp || undefined,
+          packaging: details.packaging || undefined,
+          description: details.description || undefined,
+        });
+        
+        scraped++;
+        await new Promise(r => setTimeout(r, 200));
+      } catch (err) {
+        console.error(`[SCRAPER] Failed to scrape ${product.pageUrl}:`, err);
+        try {
+          await ctx.runMutation("cafoliScraper:upsertWebProduct" as any, {
+            brandName: product.brandName,
+            composition: product.composition,
+            dosageForm: product.dosageForm,
+            pageUrl: product.pageUrl,
+            imageUrl: product.imageUrl || undefined,
+          });
+          scraped++;
+        } catch (e) {
+          failed++;
+        }
+      }
+    }
+    
+    return { scraped, failed };
+  },
+});
+
+// Main scraper action: fetch all products from allproduct.aspx and scrape details
+export const scrapeAllCafoliProducts = action({
+  args: {
+    batchSize: v.optional(v.number()),
+    startOffset: v.optional(v.number()),
+  },
+  handler: async (ctx, args): Promise<{ total: number; scraped: number; failed: number; hasMore: boolean; nextOffset: number }> => {
+    const batchSize = args.batchSize || 50;
+    const startOffset = args.startOffset || 0;
+    
+    console.log(`[SCRAPER] Fetching product list from cafoli.in/allproduct.aspx`);
+    
+    const res = await fetch("https://cafoli.in/allproduct.aspx", {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; CafoliBot/1.0)" },
+      signal: AbortSignal.timeout(30000),
+    });
+    
+    if (!res.ok) {
+      throw new Error(`Failed to fetch product list: ${res.status}`);
+    }
+    
+    const html = await res.text();
+    const allProducts = parseProductListHtml(html);
+    
+    console.log(`[SCRAPER] Found ${allProducts.length} products in list`);
+    
+    const batch = allProducts.slice(startOffset, startOffset + batchSize);
+    const hasMore = startOffset + batchSize < allProducts.length;
+    const nextOffset = startOffset + batchSize;
+    
+    if (batch.length === 0) {
+      return { total: allProducts.length, scraped: 0, failed: 0, hasMore: false, nextOffset };
+    }
+    
+    const result = await ctx.runAction("cafoliScraper:scrapeProductDetailsBatch" as any, {
+      products: batch.map(p => ({
+        brandName: p.brandName,
+        composition: p.composition || undefined,
+        dosageForm: p.dosageForm || undefined,
+        pageUrl: p.pageUrl,
+        imageUrl: p.imageUrl || undefined,
+      })),
+    });
+    
+    console.log(`[SCRAPER] Batch complete: ${(result as any).scraped} scraped, ${(result as any).failed} failed`);
+    
+    return {
+      total: allProducts.length,
+      scraped: (result as any).scraped,
+      failed: (result as any).failed,
+      hasMore,
+      nextOffset,
+    };
+  },
+});
+
+export const getWebProductStats = action({
+  args: {},
+  handler: async (ctx): Promise<{ count: number }> => {
+    const count = await ctx.runQuery("cafoliScraper:getWebProductCount" as any);
+    return { count };
+  },
+});
