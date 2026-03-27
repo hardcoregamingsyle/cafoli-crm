@@ -1,9 +1,9 @@
 "use node";
 import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
-import { internal, api } from "./_generated/api";
+import { internal } from "./_generated/api";
 import { generateWithGemini, extractJsonFromMarkdown } from "./lib/gemini";
-// Structured error logger for whatsappAi
+
 function logAiError(context: string, error: unknown, extra?: Record<string, unknown>) {
   const message = error instanceof Error ? error.message : String(error);
   const stack = error instanceof Error ? error.stack : undefined;
@@ -17,6 +17,100 @@ function logAiInfo(context: string, message: string, extra?: Record<string, unkn
   console.log(`[WHATSAPP_AI][${context}] ${message}`, extra ? JSON.stringify(extra) : "");
 }
 
+// Fetch and parse the cafoli.in sitemap to get all product URLs
+async function fetchSitemapUrls(): Promise<string[]> {
+  try {
+    const response = await fetch("https://cafoli.in/sitemap.xml", {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; CafoliBot/1.0)" },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) return [];
+    const xml = await response.text();
+    const matches = xml.match(/<loc>(.*?)<\/loc>/g) || [];
+    return matches.map(m => m.replace(/<\/?loc>/g, "").trim());
+  } catch (e) {
+    console.warn("[SITEMAP] Failed to fetch sitemap:", e);
+    return [];
+  }
+}
+
+// Fetch a product page and extract its plain text content
+async function fetchPageText(url: string): Promise<string> {
+  try {
+    const response = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; CafoliBot/1.0)" },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) return "";
+    const html = await response.text();
+    const text = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .substring(0, 3000);
+    return text;
+  } catch (e) {
+    console.warn(`[PAGE_FETCH] Failed to fetch ${url}:`, e);
+    return "";
+  }
+}
+
+// Use AI to find the best matching product URL from sitemap and extract enriched details
+async function fetchProductDetailsFromSite(
+  ctx: any,
+  productName: string,
+  productDbInfo: any
+): Promise<{ pageText: string; pageUrl: string } | null> {
+  try {
+    const urls = await fetchSitemapUrls();
+    if (urls.length === 0) {
+      logAiInfo("SITEMAP", "No URLs found in sitemap, skipping web enrichment");
+      return null;
+    }
+
+    // Filter to product-like URLs
+    const productUrls = urls.filter(url =>
+      url.includes("cafoli.in") &&
+      !url.endsWith("cafoli.in/") &&
+      !url.includes("contact") &&
+      !url.includes("about") &&
+      !url.includes("sitemap") &&
+      !url.includes("allproducts")
+    );
+
+    logAiInfo("SITEMAP", `Found ${productUrls.length} product URLs in sitemap`);
+    if (productUrls.length === 0) return null;
+
+    // Use AI to pick the best matching URL for this product
+    const urlList = productUrls.slice(0, 150).join("\n");
+    const matchPrompt = `Given the pharmaceutical product name "${productName}" (molecule/composition: ${productDbInfo.molecule || "unknown"}, brand: ${productDbInfo.brandName || productName}), which of these URLs is most likely the product page for it? Return ONLY the exact URL, nothing else. If none match, return "none".\n\nURLs:\n${urlList}`;
+
+    const { text: matchedUrl } = await generateWithGemini(
+      ctx,
+      "You are a URL matcher for a pharmaceutical website. Return only the single best matching URL or 'none'.",
+      matchPrompt
+    );
+    const cleanUrl = matchedUrl.trim().replace(/['"<>\s]/g, "");
+
+    if (!cleanUrl || cleanUrl === "none" || !cleanUrl.startsWith("http")) {
+      logAiInfo("SITEMAP", `No matching URL found for product: ${productName}`);
+      return null;
+    }
+
+    logAiInfo("SITEMAP", `Matched URL for ${productName}: ${cleanUrl}`);
+
+    const pageText = await fetchPageText(cleanUrl);
+    if (!pageText) return null;
+
+    return { pageText, pageUrl: cleanUrl };
+  } catch (e) {
+    logAiError("SITEMAP_MATCH", e, { productName });
+    return null;
+  }
+}
+
 export const generateChatSummary = action({
   args: {
     leadId: v.id("leads"),
@@ -24,23 +118,17 @@ export const generateChatSummary = action({
   handler: async (ctx, args) => {
     const chats = await ctx.runQuery(internal.whatsappQueries.getChatsByLeadId, { leadId: args.leadId });
     if (!chats || chats.length === 0) return "No chat history found.";
-    
     const messages = chats[0].messages || [];
     if (messages.length === 0) return "No messages to summarize.";
-
-    // Take last 100 messages to avoid token limits
     const recentMessages = messages.slice(-100);
     const formattedMessages = recentMessages.map((m: any) => `${m.direction === 'inbound' ? 'Lead' : 'Agent'}: ${m.content || 'Media/File'}`).join('\n');
-
     const systemPrompt = `You are a helpful CRM assistant. Summarize the following WhatsApp conversation between an agent and a lead. Keep it concise and highlight key points, requested products, and any pending actions.`;
     const userPrompt = `Conversation:\n${formattedMessages}`;
-
     const { text } = await generateWithGemini(ctx, systemPrompt, userPrompt);
     return text;
   }
 });
 
-// Public wrapper for frontend to call
 export const generateAndSendAiReply = action({
   args: {
     prompt: v.string(),
@@ -62,7 +150,6 @@ export const generateAndSendAiReply = action({
   },
 });
 
-// Internal action that does the actual work
 export const generateAndSendAiReplyInternal = internalAction({
   args: {
     leadId: v.id("leads"),
@@ -75,8 +162,6 @@ export const generateAndSendAiReplyInternal = internalAction({
     isAutoReply: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const logCtx = `lead=${args.leadId} phone=${args.phoneNumber} auto=${args.isAutoReply ?? false}`;
-
     try {
       logAiInfo("REPLY", "Starting AI reply generation", { leadId: args.leadId, prompt: args.prompt.substring(0, 80) });
 
@@ -112,7 +197,7 @@ export const generateAndSendAiReplyInternal = internalAction({
       const userPrompt = `Context: ${chatContext}\n\nUser Message: ${args.prompt}`;
 
       const { text } = await generateWithGemini(ctx, systemPrompt, userPrompt, { jsonMode: true });
-      
+
       const jsonStr = extractJsonFromMarkdown(text);
       let aiAction;
       try {
@@ -132,11 +217,12 @@ export const generateAndSendAiReplyInternal = internalAction({
           quotedMessageId: args.replyingToMessageId,
           quotedMessageExternalId: args.replyingToExternalId,
         });
+
       } else if (aiAction.action === "send_product") {
         const product = products.find((p: any) => p.name === aiAction.resource_name);
         if (product) {
           logAiInfo("SEND_PRODUCT", `Found product: ${product.name}`, { leadId: args.leadId });
-          
+
           if (aiAction.text) {
             await ctx.runAction(internal.whatsapp.internal.sendMessage, {
               leadId: args.leadId,
@@ -145,15 +231,15 @@ export const generateAndSendAiReplyInternal = internalAction({
             });
             await new Promise(resolve => setTimeout(resolve, 300));
           }
-          
-          const filesToSend = [];
-          
+
+          const filesToSend: Array<{ storageId: string; fileName: string; type: string; label: string }> = [];
+
           const getExtension = async (storageId: string) => {
-             const meta = await ctx.runQuery(internal.products.getStorageMetadata, { storageId: storageId as any });
-             if (meta?.contentType === "image/png") return "png";
-             if (meta?.contentType === "image/jpeg" || meta?.contentType === "image/jpg") return "jpg";
-             if (meta?.contentType === "application/pdf") return "pdf";
-             return "jpg";
+            const meta = await ctx.runQuery(internal.products.getStorageMetadata, { storageId: storageId as any });
+            if (meta?.contentType === "image/png") return "png";
+            if (meta?.contentType === "image/jpeg" || meta?.contentType === "image/jpg") return "jpg";
+            if (meta?.contentType === "application/pdf") return "pdf";
+            return "jpg";
           };
 
           if (product.mainImage) {
@@ -172,56 +258,70 @@ export const generateAndSendAiReplyInternal = internalAction({
             filesToSend.push({ storageId: product.visualaid, fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}_visualaid.pdf`, type: "pdf", label: "Visual Aid" });
           }
 
-          // Always use direct Convex send (no Cloudflare fallback to avoid double-sends)
-          if (true) {
-            logAiInfo("SEND_PRODUCT", `Sending ${filesToSend.length} files directly`);
-            
-            for (let i = 0; i < filesToSend.length; i++) {
-              const file = filesToSend[i];
-              try {
-                const metadata = await ctx.runQuery(internal.products.getStorageMetadata, { storageId: file.storageId });
-                
-                if (!metadata) {
-                  logAiError("SEND_PRODUCT_FILE", new Error(`No metadata for ${file.label}`), { storageId: file.storageId });
-                  continue;
-                }
-
-                let correctMimeType = metadata?.contentType;
-                if (!correctMimeType || correctMimeType === "application/octet-stream" || correctMimeType === "text/html") {
-                  correctMimeType = file.type === "pdf" ? "application/pdf" : "image/jpeg";
-                }
-
-                await ctx.runAction("whatsapp/messages:sendMedia" as any, {
-                  leadId: args.leadId,
-                  phoneNumber: args.phoneNumber,
-                  storageId: file.storageId,
-                  fileName: file.fileName,
-                  mimeType: correctMimeType,
-                  message: undefined
-                });
-                
-                await new Promise(resolve => setTimeout(resolve, 1000));
-              } catch (fileError) {
-                logAiError("SEND_PRODUCT_FILE", fileError, { label: file.label, storageId: file.storageId });
+          // Send all files directly
+          logAiInfo("SEND_PRODUCT", `Sending ${filesToSend.length} files directly`);
+          for (const file of filesToSend) {
+            try {
+              const metadata = await ctx.runQuery(internal.products.getStorageMetadata, { storageId: file.storageId as any });
+              if (!metadata) {
+                logAiError("SEND_PRODUCT_FILE", new Error(`No metadata for ${file.label}`), { storageId: file.storageId });
+                continue;
               }
+              let correctMimeType = metadata?.contentType;
+              if (!correctMimeType || correctMimeType === "application/octet-stream" || correctMimeType === "text/html") {
+                correctMimeType = file.type === "pdf" ? "application/pdf" : "image/jpeg";
+              }
+              await ctx.runAction("whatsapp/messages:sendMedia" as any, {
+                leadId: args.leadId,
+                phoneNumber: args.phoneNumber,
+                storageId: file.storageId,
+                fileName: file.fileName,
+                mimeType: correctMimeType,
+                message: undefined
+              });
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            } catch (fileError) {
+              logAiError("SEND_PRODUCT_FILE", fileError, { label: file.label, storageId: file.storageId });
             }
           }
 
-          // Send product details text
-          const detailsMessage = [
-            `*${product.name}*`,
-            product.molecule ? `Molecule: ${product.molecule}` : null,
-            product.mrp ? `MRP: ₹${product.mrp}` : null,
-            product.packaging ? `Packaging: ${product.packaging}` : null,
-            product.description ? `\n${product.description}` : null,
-            product.pageLink ? `\nMore info: ${product.pageLink}` : null,
-          ].filter(Boolean).join("\n");
-          
+          // Try to enrich product details from cafoli.in website via sitemap
+          let detailsMessage: string;
+          try {
+            const siteData = await fetchProductDetailsFromSite(ctx, product.name, product);
+            if (siteData) {
+              const extractPrompt = `From this pharmaceutical product page content, extract key product information (product name, molecule/composition, indications/uses, dosage, packaging, MRP, key features/benefits). Format it as a clean, concise WhatsApp message using *bold* for headers. Max 200 words.\n\nPage content:\n${siteData.pageText}`;
+              const { text: extracted } = await generateWithGemini(
+                ctx,
+                "You are a pharmaceutical product information extractor. Extract and format product details for WhatsApp.",
+                extractPrompt
+              );
+              detailsMessage = extracted.trim();
+              if (product.pageLink) {
+                detailsMessage += `\n\nMore info: ${product.pageLink}`;
+              }
+              logAiInfo("SEND_PRODUCT", `Used web-enriched details for ${product.name}`);
+            } else {
+              throw new Error("No site data");
+            }
+          } catch (_webErr) {
+            // Fall back to DB details
+            detailsMessage = [
+              `*${product.name}*`,
+              product.molecule ? `Molecule: ${product.molecule}` : null,
+              product.mrp ? `MRP: ₹${product.mrp}` : null,
+              product.packaging ? `Packaging: ${product.packaging}` : null,
+              product.description ? `\n${product.description}` : null,
+              product.pageLink ? `\nMore info: ${product.pageLink}` : null,
+            ].filter(Boolean).join("\n");
+          }
+
           await ctx.runAction(internal.whatsapp.internal.sendMessage, {
             leadId: args.leadId,
             phoneNumber: args.phoneNumber,
             message: detailsMessage,
           });
+
         } else {
           logAiError("SEND_PRODUCT", new Error(`Product not found: ${aiAction.resource_name}`), { availableCount: products.length });
           await ctx.runAction(internal.whatsapp.internal.sendMessage, {
@@ -230,98 +330,95 @@ export const generateAndSendAiReplyInternal = internalAction({
             message: `I couldn't find the product "${aiAction.resource_name}". Please check the product name and try again.`,
           });
         }
-      } else if (aiAction.action === "send_pdf") {
-         const pdf = rangePdfs.find((p: any) => p.name === aiAction.resource_name);
-         if (pdf) {
-           logAiInfo("SEND_PDF", `Sending PDF: ${pdf.name}`, { leadId: args.leadId });
-           const metadata = await ctx.runQuery(internal.products.getStorageMetadata, { storageId: pdf.storageId });
-           
-           await ctx.runAction("whatsapp/messages:sendMedia" as any, {
-             leadId: args.leadId,
-             phoneNumber: args.phoneNumber,
-             storageId: pdf.storageId,
-             fileName: `${pdf.name}.pdf`,
-             mimeType: metadata?.contentType || "application/pdf",
-             message: aiAction.text
-           });
-         } else {
-           logAiError("SEND_PDF", new Error(`PDF not found: ${aiAction.resource_name}`), { availableCount: rangePdfs.length });
-           await ctx.runAction(internal.whatsapp.internal.sendMessage, {
-             leadId: args.leadId,
-             phoneNumber: args.phoneNumber,
-             message: `I couldn't find the PDF for ${aiAction.resource_name}. ${aiAction.text}`,
-           });
-         }
-      } else if (aiAction.action === "send_full_catalogue") {
-          logAiInfo("SEND_CATALOGUE", `Sending full catalogue with ${rangePdfs.length} PDFs`, { leadId: args.leadId });
-          const catalogueMessage = aiAction.text || "Here is our complete product catalogue:";
-          await ctx.runAction(internal.whatsapp.internal.sendMessage, {
-            leadId: args.leadId,
-            phoneNumber: args.phoneNumber,
-            message: `${catalogueMessage}\n\nhttps://cafoli.in/allproducts.aspx`,
-          });
 
-          for (const pdf of rangePdfs) {
-            try {
-              const metadata = await ctx.runQuery(internal.products.getStorageMetadata, { storageId: pdf.storageId });
-              
-              await ctx.runAction("whatsapp/messages:sendMedia" as any, {
-                leadId: args.leadId,
-                phoneNumber: args.phoneNumber,
-                storageId: pdf.storageId,
-                fileName: `${pdf.name}.pdf`,
-                mimeType: metadata?.contentType || "application/pdf",
-                message: pdf.name
-              });
-              
-              await new Promise(resolve => setTimeout(resolve, 500));
-            } catch (error) {
-              logAiError("SEND_CATALOGUE_PDF", error, { pdfName: pdf.name });
-            }
+      } else if (aiAction.action === "send_pdf") {
+        const pdf = rangePdfs.find((p: any) => p.name === aiAction.resource_name);
+        if (pdf) {
+          logAiInfo("SEND_PDF", `Sending PDF: ${pdf.name}`, { leadId: args.leadId });
+          const metadata = await ctx.runQuery(internal.products.getStorageMetadata, { storageId: pdf.storageId });
+          await ctx.runAction("whatsapp/messages:sendMedia" as any, {
+            leadId: args.leadId,
+            phoneNumber: args.phoneNumber,
+            storageId: pdf.storageId,
+            fileName: `${pdf.name}.pdf`,
+            mimeType: metadata?.contentType || "application/pdf",
+            message: aiAction.text
+          });
+        } else {
+          logAiError("SEND_PDF", new Error(`PDF not found: ${aiAction.resource_name}`), { availableCount: rangePdfs.length });
+          await ctx.runAction(internal.whatsapp.internal.sendMessage, {
+            leadId: args.leadId,
+            phoneNumber: args.phoneNumber,
+            message: `I couldn't find the PDF for ${aiAction.resource_name}. ${aiAction.text}`,
+          });
+        }
+
+      } else if (aiAction.action === "send_full_catalogue") {
+        logAiInfo("SEND_CATALOGUE", `Sending full catalogue with ${rangePdfs.length} PDFs`, { leadId: args.leadId });
+        const catalogueMessage = aiAction.text || "Here is our complete product catalogue:";
+        await ctx.runAction(internal.whatsapp.internal.sendMessage, {
+          leadId: args.leadId,
+          phoneNumber: args.phoneNumber,
+          message: `${catalogueMessage}\n\nhttps://cafoli.in/allproducts.aspx`,
+        });
+        for (const pdf of rangePdfs) {
+          try {
+            const metadata = await ctx.runQuery(internal.products.getStorageMetadata, { storageId: pdf.storageId });
+            await ctx.runAction("whatsapp/messages:sendMedia" as any, {
+              leadId: args.leadId,
+              phoneNumber: args.phoneNumber,
+              storageId: pdf.storageId,
+              fileName: `${pdf.name}.pdf`,
+              mimeType: metadata?.contentType || "application/pdf",
+              message: pdf.name
+            });
+            await new Promise(resolve => setTimeout(resolve, 500));
+          } catch (error) {
+            logAiError("SEND_CATALOGUE_PDF", error, { pdfName: pdf.name });
           }
+        }
+
       } else if (aiAction.action === "intervention_request") {
-          logAiInfo("INTERVENTION", `Creating intervention request`, { leadId: args.leadId, reason: aiAction.reason });
-          await ctx.runAction(internal.whatsapp.internal.sendMessage, {
-            leadId: args.leadId,
-            phoneNumber: args.phoneNumber,
-            message: aiAction.text,
-          });
-          
-          const lead = await ctx.runQuery(internal.leads.queries.basic.getLeadByIdInternal, { leadId: args.leadId });
-          
-          await ctx.runMutation(internal.interventionRequests.createInterventionRequestInternal, { 
-            leadId: args.leadId,
-            assignedTo: (lead && lead.assignedTo && !lead.isColdCallerLead) ? lead.assignedTo : undefined,
-            requestedProduct: aiAction.resource_name,
-            customerMessage: args.prompt,
-            aiDraftedMessage: aiAction.reason || "Customer needs human assistance with their inquiry.",
-          });
+        logAiInfo("INTERVENTION", `Creating intervention request`, { leadId: args.leadId, reason: aiAction.reason });
+        await ctx.runAction(internal.whatsapp.internal.sendMessage, {
+          leadId: args.leadId,
+          phoneNumber: args.phoneNumber,
+          message: aiAction.text,
+        });
+        const lead = await ctx.runQuery(internal.leads.queries.basic.getLeadByIdInternal, { leadId: args.leadId });
+        await ctx.runMutation(internal.interventionRequests.createInterventionRequestInternal, {
+          leadId: args.leadId,
+          assignedTo: (lead && lead.assignedTo && !lead.isColdCallerLead) ? lead.assignedTo : undefined,
+          requestedProduct: aiAction.resource_name,
+          customerMessage: args.prompt,
+          aiDraftedMessage: aiAction.reason || "Customer needs human assistance with their inquiry.",
+        });
+
       } else if (aiAction.action === "contact_request") {
-          logAiInfo("CONTACT_REQUEST", `Creating contact request`, { leadId: args.leadId });
-          await ctx.runAction(internal.whatsapp.internal.sendMessage, {
+        logAiInfo("CONTACT_REQUEST", `Creating contact request`, { leadId: args.leadId });
+        await ctx.runAction(internal.whatsapp.internal.sendMessage, {
+          leadId: args.leadId,
+          phoneNumber: args.phoneNumber,
+          message: aiAction.text,
+        });
+        const lead = await ctx.runQuery(internal.leads.queries.basic.getLeadByIdInternal, { leadId: args.leadId });
+        if (lead && lead.assignedTo) {
+          await ctx.runMutation(internal.contactRequests.createContactRequestInternal, {
             leadId: args.leadId,
-            phoneNumber: args.phoneNumber,
-            message: aiAction.text,
+            assignedTo: lead.assignedTo,
+            customerMessage: args.prompt,
           });
-          
-          const lead = await ctx.runQuery(internal.leads.queries.basic.getLeadByIdInternal, { leadId: args.leadId });
-          
-          if (lead && lead.assignedTo) {
-            await ctx.runMutation(internal.contactRequests.createContactRequestInternal, { 
-              leadId: args.leadId,
-              assignedTo: lead.assignedTo,
-              customerMessage: args.prompt,
-            });
-          } else {
-            logAiInfo("CONTACT_REQUEST", "Lead has no assigned user, creating intervention request instead", { leadId: args.leadId });
-            await ctx.runMutation(internal.interventionRequests.createInterventionRequestInternal, { 
-              leadId: args.leadId,
-              assignedTo: undefined,
-              requestedProduct: undefined,
-              customerMessage: args.prompt,
-              aiDraftedMessage: `Contact request from unassigned lead: ${aiAction.reason || "Customer wants to be contacted."}`,
-            });
-          }
+        } else {
+          logAiInfo("CONTACT_REQUEST", "Lead has no assigned user, creating intervention request instead", { leadId: args.leadId });
+          await ctx.runMutation(internal.interventionRequests.createInterventionRequestInternal, {
+            leadId: args.leadId,
+            assignedTo: undefined,
+            requestedProduct: undefined,
+            customerMessage: args.prompt,
+            aiDraftedMessage: `Contact request from unassigned lead: ${aiAction.reason || "Customer wants to be contacted."}`,
+          });
+        }
+
       } else {
         logAiError("UNKNOWN_ACTION", new Error(`Unknown AI action: ${aiAction.action}`), { aiAction });
       }
@@ -332,9 +429,9 @@ export const generateAndSendAiReplyInternal = internalAction({
       logAiError("GENERATE_REPLY", error, { leadId: args.leadId, phoneNumber: args.phoneNumber, prompt: args.prompt.substring(0, 100) });
       try {
         await ctx.runAction(internal.whatsapp.internal.sendMessage, {
-            leadId: args.leadId,
-            phoneNumber: args.phoneNumber,
-            message: "I'm having trouble processing your request right now. Please try again later.",
+          leadId: args.leadId,
+          phoneNumber: args.phoneNumber,
+          message: "I'm having trouble processing your request right now. Please try again later.",
         });
       } catch (sendErr) {
         logAiError("FALLBACK_SEND", sendErr, { leadId: args.leadId });
