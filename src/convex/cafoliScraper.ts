@@ -8,7 +8,7 @@ import { internal } from "./_generated/api";
 function parseProductListHtml(html: string): Array<{ brandName: string; composition: string; pageUrl: string; imageUrl: string; dosageForm: string }> {
   const products: Array<{ brandName: string; composition: string; pageUrl: string; imageUrl: string; dosageForm: string }> = [];
   
-  // Match table rows
+  // Match table rows - use a tighter pattern to avoid matching navigation rows
   const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
   let rowMatch;
   
@@ -17,6 +17,8 @@ function parseProductListHtml(html: string): Array<{ brandName: string; composit
     
     // Must have "first-all-p" class to be a product row
     if (!row.includes("first-all-p")) continue;
+    // Must also have "last-all-p" to be a complete product row (not navigation)
+    if (!row.includes("last-all-p")) continue;
     
     // Extract slug from first-all-p td: <a href='slug'>Brand Name</a>
     const slugMatch = row.match(/class="first-all-p[^"]*"[^>]*>[\s\S]*?<a\s+href='([^']+)'>([^<]+)<\/a>/i);
@@ -28,12 +30,12 @@ function parseProductListHtml(html: string): Array<{ brandName: string; composit
     
     const pageUrl = `https://cafoli.in/${slug}`;
     
-    // Extract composition from fixed-len class: <a href='slug' class="fixed-len">Composition</a>
-    const compMatch = row.match(/class="fixed-len">([^<]+)<\/a>/i);
-    const composition = compMatch ? compMatch[1].trim() : "";
+    // Extract composition from fixed-len class within the second td only
+    // The second td does NOT have first-all-p or last-all-p class
+    const secondTdMatch = row.match(/<td[^>]*class="text-center[^"]*"[^>]*>[\s\S]*?class="fixed-len">([^<]+)<\/a>/i);
+    const composition = secondTdMatch ? secondTdMatch[1].trim() : "";
     
     // Extract dosage form from third td (after composition)
-    // Find all <td> contents
     const tdMatches = [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)];
     let dosageForm = "";
     if (tdMatches.length >= 3) {
@@ -52,6 +54,7 @@ function parseProductListHtml(html: string): Array<{ brandName: string; composit
 
 // Extract product details from a product page HTML
 function extractProductPageDetails(html: string): {
+  composition: string | null;
   mrp: string | null;
   packaging: string | null;
   description: string | null;
@@ -73,18 +76,27 @@ function extractProductPageDetails(html: string): {
   const pdfUrl = pdfUrls[0] || null;
   const literaturePdfUrl = pdfUrls[1] || null;
   
+  // Extract composition from product page: <p class="com-name"><b class="c-name">Composition : </b>...</p>
+  const compositionMatch = html.match(/<p[^>]*class="com-name"[^>]*>[\s\S]*?<b[^>]*class="c-name"[^>]*>Composition\s*:\s*<\/b>\s*([^<]+)/i) ||
+                           html.match(/Composition\s*:\s*<\/b>\s*([^<\n]{5,300})/i) ||
+                           html.match(/<b[^>]*>Composition\s*:\s*<\/b>\s*([^<\n]{5,300})/i);
+  const composition = compositionMatch ? compositionMatch[1].replace(/<[^>]+>/g, "").trim() : null;
+  
   const mrpMatch = html.match(/[₹Rs\.]\s*(\d+(?:\.\d+)?)\s*\/-/i) ||
                    html.match(/Price\s*:\s*[₹Rs\.]*\s*(\d+)/i);
   const mrp = mrpMatch ? mrpMatch[1] : null;
   
-  const packagingMatch = html.match(/Packaging\s*:\s*<\/strong>\s*([^<\n]+)/i) ||
-                         html.match(/Packaging\s*:\s*([^\n<]+)/i);
+  // Extract packaging: <p><b>Packaging : </b>10ml</p>
+  const packagingMatch = html.match(/<b[^>]*>Packaging\s*:\s*<\/b>\s*([^<\n]{1,100})/i) ||
+                         html.match(/Packaging\s*:\s*<\/strong>\s*([^<\n]+)/i) ||
+                         html.match(/Packaging\s*:\s*([^\n<]{1,100})/i);
   const packaging = packagingMatch ? packagingMatch[1].replace(/<[^>]+>/g, "").trim() : null;
   
+  // Extract description from substantial paragraphs
   const paraMatches = [...html.matchAll(/<p[^>]*>([^<]{100,600})<\/p>/gi)];
   const description = paraMatches.length > 0 ? paraMatches[0][1].replace(/<[^>]+>/g, "").trim().substring(0, 400) : null;
   
-  return { mrp, packaging, description, imageUrl, pdfUrl, literaturePdfUrl };
+  return { composition, mrp, packaging, description, imageUrl, pdfUrl, literaturePdfUrl };
 }
 
 export const listWebProductsPublic = action({
@@ -116,7 +128,7 @@ export const scrapeProductDetailsBatch = internalAction({
           signal: AbortSignal.timeout(15000),
         });
         
-        let details = { mrp: null as string | null, packaging: null as string | null, description: null as string | null, imageUrl: product.imageUrl || null, pdfUrl: null as string | null, literaturePdfUrl: null as string | null };
+        let details = { composition: null as string | null, mrp: null as string | null, packaging: null as string | null, description: null as string | null, imageUrl: product.imageUrl || null, pdfUrl: null as string | null, literaturePdfUrl: null as string | null };
         
         if (res.ok) {
           const html = await res.text();
@@ -126,9 +138,12 @@ export const scrapeProductDetailsBatch = internalAction({
           }
         }
         
+        // Use page-extracted composition if available, else fall back to list composition
+        const finalComposition = details.composition || product.composition;
+        
         await ctx.runMutation(internal.cafoliScraperDb.upsertWebProduct, {
           brandName: product.brandName,
-          composition: product.composition,
+          composition: finalComposition,
           dosageForm: product.dosageForm,
           pageUrl: product.pageUrl,
           imageUrl: details.imageUrl || undefined,

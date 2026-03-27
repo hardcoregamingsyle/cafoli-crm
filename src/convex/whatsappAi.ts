@@ -154,25 +154,56 @@ Return ONLY the JSON object.`;
 // Find best matching product from the cafoliWebProducts DB cache
 function findWebProductByQuery(webProducts: any[], query: string): any | null {
   if (!webProducts || webProducts.length === 0) return null;
-  const q = query.toLowerCase();
+  const q = query.toLowerCase().trim();
   
-  // Exact brand name match
+  // Exact brand name match (case-insensitive)
   let match = webProducts.find((p: any) => p.brandName?.toLowerCase() === q);
   if (match) return match;
   
-  // Partial brand name match
-  match = webProducts.find((p: any) =>
-    p.brandName?.toLowerCase().includes(q) || q.includes(p.brandName?.toLowerCase() || "")
-  );
+  // Brand name starts with query
+  match = webProducts.find((p: any) => p.brandName?.toLowerCase().startsWith(q));
   if (match) return match;
   
-  // Composition/molecule match
-  match = webProducts.find((p: any) =>
-    p.composition && (
-      p.composition.toLowerCase().includes(q) ||
-      q.includes(p.composition.toLowerCase().substring(0, 20))
-    )
-  );
+  // Query starts with brand name (e.g. "Lubicom Eye Drop" matches "Lubicom")
+  match = webProducts.find((p: any) => {
+    const bn = p.brandName?.toLowerCase() || "";
+    return bn.length > 3 && q.startsWith(bn);
+  });
+  if (match) return match;
+  
+  // Brand name contains query
+  match = webProducts.find((p: any) => p.brandName?.toLowerCase().includes(q));
+  if (match) return match;
+  
+  // Query contains brand name
+  match = webProducts.find((p: any) => {
+    const bn = p.brandName?.toLowerCase() || "";
+    return bn.length > 3 && q.includes(bn);
+  });
+  if (match) return match;
+  
+  // Composition/molecule exact match
+  match = webProducts.find((p: any) => {
+    const comp = p.composition?.toLowerCase() || "";
+    return comp && comp === q;
+  });
+  if (match) return match;
+  
+  // Composition contains query (molecule search)
+  match = webProducts.find((p: any) => {
+    const comp = p.composition?.toLowerCase() || "";
+    return comp && comp.includes(q) && q.length > 5;
+  });
+  if (match) return match;
+  
+  // Query contains key part of composition
+  match = webProducts.find((p: any) => {
+    const comp = p.composition?.toLowerCase() || "";
+    if (!comp || comp.length < 5) return false;
+    // Extract first molecule name (before + or ,)
+    const firstMolecule = comp.split(/[+,]/)[0].trim();
+    return firstMolecule.length > 5 && q.includes(firstMolecule);
+  });
   if (match) return match;
   
   return null;
@@ -392,38 +423,37 @@ export const generateAndSendAiReplyInternal = internalAction({
       const webProducts = await ctx.runQuery("cafoliScraperDb:listWebProducts" as any);
       const webProductCount = webProducts.length;
 
-      // Build product list for AI context (use web products if available, else internal catalog)
+      // Build product list for AI context - include all products with brand + composition
       let productContextStr = "";
       if (webProductCount > 0) {
-        // Show first 100 products as sample for AI context
-        const sample = webProducts.slice(0, 100);
-        productContextStr = sample.map((p: any) =>
-          `- ${p.brandName}${p.composition ? ` (${p.composition.substring(0, 60)})` : ""}`
+        productContextStr = webProducts.map((p: any) =>
+          `${p.brandName}${p.composition ? ` | ${p.composition.substring(0, 80)}` : ""}`
         ).join("\n");
-        productContextStr += webProductCount > 100 ? `\n... and ${webProductCount - 100} more products` : "";
       }
 
       const systemPrompt = `You are a helpful CRM assistant for Cafoli Lifecare, a pharmaceutical company (website: https://cafoli.in).
 You are chatting with a lead on WhatsApp.
 
-${webProductCount > 0 ? `Cafoli has ${webProductCount} products. Sample:\n${productContextStr}` : "Cafoli has a large product range at https://cafoli.in"}
+${webProductCount > 0 ? `Cafoli has ${webProductCount} products in their catalog. Full product list (BrandName | Composition):\n${productContextStr}` : "Cafoli has a large product range at https://cafoli.in"}
 
 Available Range PDFs: ${pdfNames}
 
 Your goal is to assist the lead, answer questions, and provide product information.
 
-PRODUCT QUERIES: When the user asks about any product (Cafoli brand or competitor brand), use the "send_product" action. The system will automatically look up the product on cafoli.in website.
+PRODUCT QUERIES: When the user asks about any product (by brand name, molecule/composition, or competitor brand), use the "send_product" action with the EXACT Cafoli brand name from the product list above that best matches what the user is asking for.
 
 You can perform the following actions by returning a JSON object:
 1. Reply with text: { "action": "reply", "text": "your message" }
-2. Send a product (any product query - Cafoli or competitor): { "action": "send_product", "text": "optional intro message", "resource_name": "the product name or molecule the user asked about" }
+2. Send a product: { "action": "send_product", "text": "optional intro message", "resource_name": "EXACT Cafoli brand name from the product list above" }
 3. Send a PDF: { "action": "send_pdf", "text": "optional caption", "resource_name": "exact pdf name from list above" }
 4. Send full catalogue (link + all PDFs): { "action": "send_full_catalogue", "text": "optional message" }
-5. Request human intervention (if you can't help): { "action": "intervention_request", "text": "I will connect you with an agent.", "reason": "reason" }
+5. Request human intervention (if you can't help or product not found): { "action": "intervention_request", "text": "I will connect you with an agent.", "reason": "reason" }
 6. Request contact (if they want a meeting/call): { "action": "contact_request", "text": "I've noted your request.", "reason": "reason" }
 
 RULES:
-- For send_product, resource_name should be the product name or molecule the user mentioned.
+- For send_product, resource_name MUST be the exact Cafoli brand name from the product list (e.g., "Lubicom Eye Drop", not "carboxymethylcellulose").
+- If the user asks about a competitor product, find the Cafoli equivalent by matching the molecule/composition.
+- If no matching product exists in the list, use intervention_request.
 - When the user asks for "full catalogue", "complete catalogue", "all products", use send_full_catalogue.
 - For general questions not about products, use reply.
 

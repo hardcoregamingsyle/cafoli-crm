@@ -1,4 +1,4 @@
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalMutation, internalQuery, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
 // Internal mutation to upsert a scraped product
@@ -55,6 +55,30 @@ export const getWebProductCount = internalQuery({
 export const listWebProducts = internalQuery({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db.query("cafoliWebProducts").take(2000);
+    return await ctx.db.query("cafoliWebProducts").take(5000);
+  },
+});
+
+// Clean up corrupted composition data (entries containing HTML artifacts)
+export const cleanupCorruptedCompositions = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const products = await ctx.db.query("cafoliWebProducts").take(5000);
+    let cleaned = 0;
+    
+    for (const product of products) {
+      if (product.composition && (
+        product.composition.includes("guide-in-pcd-franchise") ||
+        product.composition.includes("'>") ||
+        product.composition.includes("</a>") ||
+        product.composition.includes("dropdown-item") ||
+        product.composition.length > 500
+      )) {
+        await ctx.db.patch(product._id, { composition: undefined });
+        cleaned++;
+      }
+    }
+    
+    return { cleaned };
   },
 });
