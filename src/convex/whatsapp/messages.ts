@@ -260,6 +260,77 @@ export const sendMediaInternal = internalAction({
   },
 });
 
+// Send media from an external URL (e.g. cafoli.in product images/PDFs)
+export const sendMediaFromUrl = internalAction({
+  args: {
+    phoneNumber: v.string(),
+    message: v.optional(v.string()),
+    leadId: v.id("leads"),
+    url: v.string(),
+    fileName: v.string(),
+    mimeType: v.string(),
+  },
+  handler: async (ctx, args) => {
+    try {
+      const { accessToken, phoneNumberId } = getWhatsAppCredentials();
+
+      console.log(`[SEND_MEDIA_URL] Downloading ${args.url}`);
+      const fileResponse = await fetch(args.url, {
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; CafoliBot/1.0)" },
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!fileResponse.ok) throw new Error(`Failed to download: ${fileResponse.status}`);
+      const fileBlob = await fileResponse.blob();
+
+      let mediaType: string;
+      if (args.mimeType.startsWith("image/")) mediaType = "image";
+      else if (args.mimeType.startsWith("video/")) mediaType = "video";
+      else if (args.mimeType.startsWith("audio/")) mediaType = "audio";
+      else mediaType = "document";
+
+      // Upload to WhatsApp
+      const formData = new FormData();
+      formData.append("file", fileBlob, args.fileName);
+      formData.append("messaging_product", "whatsapp");
+
+      const uploadResponse = await fetch(
+        `https://graph.facebook.com/v20.0/${phoneNumberId}/media`,
+        {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${accessToken}` },
+          body: formData,
+        }
+      );
+      const uploadData = await uploadResponse.json();
+      if (!uploadResponse.ok) throw new Error(`WA upload error: ${JSON.stringify(uploadData)}`);
+
+      const mediaId = uploadData.id;
+      if (!mediaId) throw new Error("No media ID returned");
+
+      const result = await sendMediaMessage(accessToken, phoneNumberId, args.phoneNumber, mediaType, mediaId, args.message, args.fileName);
+
+      await ctx.runMutation("whatsappMutations:storeMessage" as any, {
+        leadId: args.leadId,
+        phoneNumber: args.phoneNumber,
+        content: args.message || "",
+        direction: "outbound",
+        status: "sent",
+        externalId: result.messages?.[0]?.id || "",
+        messageType: mediaType,
+        mediaUrl: args.url,
+        mediaName: args.fileName,
+        mediaMimeType: args.mimeType,
+      });
+
+      console.log(`[SEND_MEDIA_URL] Success for ${args.fileName}`);
+      return { success: true, messageId: result.messages?.[0]?.id };
+    } catch (error) {
+      console.error("[SEND_MEDIA_URL] ERROR:", error);
+      throw error;
+    }
+  },
+});
+
 // Helper function to send the media message
 async function sendMediaMessage(accessToken: string, phoneNumberId: string, to: string, type: string, mediaId: string, caption?: string, filename?: string) {
   const messagePayload: any = {

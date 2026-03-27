@@ -8,17 +8,17 @@ export const createProduct = mutation({
     molecule: v.optional(v.string()),
     mrp: v.string(),
     packaging: v.string(),
-    // images: v.array(v.id("_storage")), // Deprecated in input
     mainImage: v.id("_storage"),
     flyer: v.optional(v.id("_storage")),
     bridgeCard: v.optional(v.id("_storage")),
     visualaid: v.optional(v.id("_storage")),
-    
     description: v.optional(v.string()),
     pageLink: v.optional(v.string()),
     videoLink: v.optional(v.string()),
     categoryId: v.optional(v.id("productCategories")),
     categories: v.optional(v.array(v.id("productCategories"))),
+    externalImageUrl: v.optional(v.string()),
+    externalPdfUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const productId = await ctx.db.insert("products", {
@@ -27,7 +27,7 @@ export const createProduct = mutation({
       molecule: args.molecule,
       mrp: args.mrp,
       packaging: args.packaging,
-      images: [args.mainImage], // Backward compatibility
+      images: [args.mainImage],
       mainImage: args.mainImage,
       flyer: args.flyer,
       bridgeCard: args.bridgeCard,
@@ -37,6 +37,8 @@ export const createProduct = mutation({
       videoLink: args.videoLink,
       categoryId: args.categoryId,
       categories: args.categories,
+      externalImageUrl: args.externalImageUrl,
+      externalPdfUrl: args.externalPdfUrl,
     });
     return productId;
   },
@@ -59,11 +61,11 @@ export const updateProduct = mutation({
     videoLink: v.optional(v.string()),
     categoryId: v.optional(v.id("productCategories")),
     categories: v.optional(v.array(v.id("productCategories"))),
-    
-    // Flags to remove optional files
     removeFlyer: v.optional(v.boolean()),
     removeBridgeCard: v.optional(v.boolean()),
     removeVisualaid: v.optional(v.boolean()),
+    externalImageUrl: v.optional(v.string()),
+    externalPdfUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const product = await ctx.db.get(args.id);
@@ -80,38 +82,21 @@ export const updateProduct = mutation({
       videoLink: args.videoLink,
       categoryId: args.categoryId,
       categories: args.categories,
+      externalImageUrl: args.externalImageUrl,
+      externalPdfUrl: args.externalPdfUrl,
     };
 
-    // Handle file updates
     if (args.mainImage) {
-      // Delete old main image if it exists and is different
-      if (product.mainImage && product.mainImage !== args.mainImage) {
-        // We don't delete immediately in case of race conditions or if it's used elsewhere, 
-        // but for this app we can probably delete it or let a cron job clean up.
-        // For now, let's just update the reference.
-        // Ideally: await ctx.storage.delete(product.mainImage);
-      }
       updates.mainImage = args.mainImage;
-      updates.images = [args.mainImage]; // Keep backward compatibility
+      updates.images = [args.mainImage];
     }
-
     if (args.flyer) updates.flyer = args.flyer;
     if (args.bridgeCard) updates.bridgeCard = args.bridgeCard;
     if (args.visualaid) updates.visualaid = args.visualaid;
 
-    // Handle removals
-    if (args.removeFlyer && product.flyer) {
-      // await ctx.storage.delete(product.flyer);
-      updates.flyer = undefined;
-    }
-    if (args.removeBridgeCard && product.bridgeCard) {
-      // await ctx.storage.delete(product.bridgeCard);
-      updates.bridgeCard = undefined;
-    }
-    if (args.removeVisualaid && product.visualaid) {
-      // await ctx.storage.delete(product.visualaid);
-      updates.visualaid = undefined;
-    }
+    if (args.removeFlyer && product.flyer) updates.flyer = undefined;
+    if (args.removeBridgeCard && product.bridgeCard) updates.bridgeCard = undefined;
+    if (args.removeVisualaid && product.visualaid) updates.visualaid = undefined;
 
     await ctx.db.patch(args.id, updates);
   },
@@ -142,6 +127,8 @@ export const listProductsInternal = internalQuery({
       flyer: p.flyer,
       bridgeCard: p.bridgeCard,
       visualaid: p.visualaid,
+      externalImageUrl: (p as any).externalImageUrl,
+      externalPdfUrl: (p as any).externalPdfUrl,
     }));
   },
 });

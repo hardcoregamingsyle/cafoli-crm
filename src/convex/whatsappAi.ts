@@ -87,12 +87,14 @@ export const generateAndSendAiReplyInternal = internalAction({
       
       You can perform the following actions by returning a JSON object:
       1. Reply with text: { "action": "reply", "text": "your message" }
-      2. Send a product with image and details: { "action": "send_product", "text": "optional intro message", "resource_name": "exact product name" }
+      2. Send a product with image and details: { "action": "send_product", "text": "optional intro message", "resource_name": "exact product name from the list above" }
       3. Send a PDF: { "action": "send_pdf", "text": "optional caption", "resource_name": "exact pdf name" }
       4. Send full catalogue (link + all PDFs): { "action": "send_full_catalogue", "text": "optional message" }
       5. Request human intervention (if you can't help): { "action": "intervention_request", "text": "I will connect you with an agent.", "reason": "reason" }
       6. Request contact (if they want a meeting/call): { "action": "contact_request", "text": "I've noted your request.", "reason": "reason" }
       
+      IMPORTANT: When using send_product, you MUST use the EXACT product name from the Available Products list above.
+      Do fuzzy matching yourself - if the user asks for "Lubicom Plus" and the list has "Lubicom Eye Drop", use "Lubicom Eye Drop".
       When the user asks for product details, images, or information about a specific product, use "send_product" action.
       When the user asks for "full catalogue", "complete catalogue", "all products", or similar requests, use the "send_full_catalogue" action.
       
@@ -125,28 +127,16 @@ export const generateAndSendAiReplyInternal = internalAction({
         });
 
       } else if (aiAction.action === "send_product") {
-        // Fuzzy product matching: exact → case-insensitive → partial → molecule/brandName
-        const resourceName: string = (aiAction.resource_name || "").toLowerCase().trim();
+        // Fuzzy match: exact first, then case-insensitive, then partial
         let product = products.find((p: any) => p.name === aiAction.resource_name);
         if (!product) {
-          product = products.find((p: any) => (p.name || "").toLowerCase() === resourceName);
+          const lower = (aiAction.resource_name || "").toLowerCase();
+          product = products.find((p: any) => p.name?.toLowerCase() === lower);
         }
         if (!product) {
+          const lower = (aiAction.resource_name || "").toLowerCase();
           product = products.find((p: any) =>
-            (p.name || "").toLowerCase().includes(resourceName) ||
-            resourceName.includes((p.name || "").toLowerCase())
-          );
-        }
-        if (!product) {
-          product = products.find((p: any) =>
-            (p.brandName || "").toLowerCase().includes(resourceName) ||
-            resourceName.includes((p.brandName || "").toLowerCase())
-          );
-        }
-        if (!product) {
-          product = products.find((p: any) =>
-            (p.molecule || "").toLowerCase().includes(resourceName) ||
-            resourceName.includes((p.molecule || "").toLowerCase())
+            p.name?.toLowerCase().includes(lower) || lower.includes(p.name?.toLowerCase() || "")
           );
         }
 
@@ -162,56 +152,86 @@ export const generateAndSendAiReplyInternal = internalAction({
             await new Promise(resolve => setTimeout(resolve, 300));
           }
 
-          const filesToSend: Array<{ storageId: string; fileName: string; type: string; label: string }> = [];
-
-          const getExtension = async (storageId: string) => {
-            const meta = await ctx.runQuery(internal.products.getStorageMetadata, { storageId: storageId as any });
-            if (meta?.contentType === "image/png") return "png";
-            if (meta?.contentType === "image/jpeg" || meta?.contentType === "image/jpg") return "jpg";
-            if (meta?.contentType === "application/pdf") return "pdf";
-            return "jpg";
-          };
-
-          if (product.mainImage) {
-            const ext = await getExtension(product.mainImage);
-            filesToSend.push({ storageId: product.mainImage, fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}_main.${ext}`, type: "image", label: "Main Image" });
-          }
-          if (product.flyer) {
-            const ext = await getExtension(product.flyer);
-            filesToSend.push({ storageId: product.flyer, fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}_flyer.${ext}`, type: "image", label: "Flyer" });
-          }
-          if (product.bridgeCard) {
-            const ext = await getExtension(product.bridgeCard);
-            filesToSend.push({ storageId: product.bridgeCard, fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}_bridge_card.${ext}`, type: "image", label: "Bridge Card" });
-          }
-          if (product.visualaid) {
-            filesToSend.push({ storageId: product.visualaid, fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}_visualaid.pdf`, type: "pdf", label: "Visual Aid" });
-          }
-
-          // Send all files directly
-          logAiInfo("SEND_PRODUCT", `Sending ${filesToSend.length} files directly`);
-          for (const file of filesToSend) {
+          // Try to send image from externalImageUrl first, then fall back to Convex storage
+          if (product.externalImageUrl) {
             try {
-              const metadata = await ctx.runQuery(internal.products.getStorageMetadata, { storageId: file.storageId as any });
-              if (!metadata) {
-                logAiError("SEND_PRODUCT_FILE", new Error(`No metadata for ${file.label}`), { storageId: file.storageId });
-                continue;
-              }
-              let correctMimeType = metadata?.contentType;
-              if (!correctMimeType || correctMimeType === "application/octet-stream" || correctMimeType === "text/html") {
-                correctMimeType = file.type === "pdf" ? "application/pdf" : "image/jpeg";
-              }
-              await ctx.runAction("whatsapp/messages:sendMedia" as any, {
+              const ext = product.externalImageUrl.toLowerCase();
+              const mimeType = ext.endsWith(".webp") ? "image/webp" : ext.endsWith(".png") ? "image/png" : "image/jpeg";
+              await ctx.runAction(internal.whatsapp.messages.sendMediaFromUrl, {
                 leadId: args.leadId,
                 phoneNumber: args.phoneNumber,
-                storageId: file.storageId,
-                fileName: file.fileName,
-                mimeType: correctMimeType,
-                message: undefined
+                url: product.externalImageUrl,
+                fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}.${ext.split(".").pop() || "jpg"}`,
+                mimeType,
               });
-              await new Promise(resolve => setTimeout(resolve, 1000));
-            } catch (fileError) {
-              logAiError("SEND_PRODUCT_FILE", fileError, { label: file.label, storageId: file.storageId });
+              await new Promise(resolve => setTimeout(resolve, 800));
+            } catch (imgErr) {
+              logAiError("SEND_PRODUCT_EXT_IMG", imgErr, { url: product.externalImageUrl });
+            }
+          } else {
+            // Send from Convex storage
+            const filesToSend: Array<{ storageId: string; fileName: string; type: string; label: string }> = [];
+
+            const getExtension = async (storageId: string) => {
+              const meta = await ctx.runQuery(internal.products.getStorageMetadata, { storageId: storageId as any });
+              if (meta?.contentType === "image/png") return "png";
+              if (meta?.contentType === "image/jpeg" || meta?.contentType === "image/jpg") return "jpg";
+              if (meta?.contentType === "application/pdf") return "pdf";
+              return "jpg";
+            };
+
+            if (product.mainImage) {
+              const ext = await getExtension(product.mainImage);
+              filesToSend.push({ storageId: product.mainImage, fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}_main.${ext}`, type: "image", label: "Main Image" });
+            }
+            if (product.flyer) {
+              const ext = await getExtension(product.flyer);
+              filesToSend.push({ storageId: product.flyer, fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}_flyer.${ext}`, type: "image", label: "Flyer" });
+            }
+            if (product.bridgeCard) {
+              const ext = await getExtension(product.bridgeCard);
+              filesToSend.push({ storageId: product.bridgeCard, fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}_bridge_card.${ext}`, type: "image", label: "Bridge Card" });
+            }
+            if (product.visualaid) {
+              filesToSend.push({ storageId: product.visualaid, fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}_visualaid.pdf`, type: "pdf", label: "Visual Aid" });
+            }
+
+            for (const file of filesToSend) {
+              try {
+                const metadata = await ctx.runQuery(internal.products.getStorageMetadata, { storageId: file.storageId as any });
+                if (!metadata) continue;
+                let correctMimeType = metadata?.contentType;
+                if (!correctMimeType || correctMimeType === "application/octet-stream" || correctMimeType === "text/html") {
+                  correctMimeType = file.type === "pdf" ? "application/pdf" : "image/jpeg";
+                }
+                await ctx.runAction("whatsapp/messages:sendMedia" as any, {
+                  leadId: args.leadId,
+                  phoneNumber: args.phoneNumber,
+                  storageId: file.storageId,
+                  fileName: file.fileName,
+                  mimeType: correctMimeType,
+                  message: undefined
+                });
+                await new Promise(resolve => setTimeout(resolve, 1000));
+              } catch (fileError) {
+                logAiError("SEND_PRODUCT_FILE", fileError, { label: file.label, storageId: file.storageId });
+              }
+            }
+          }
+
+          // Try to send PDF from externalPdfUrl
+          if (product.externalPdfUrl) {
+            try {
+              await ctx.runAction(internal.whatsapp.messages.sendMediaFromUrl, {
+                leadId: args.leadId,
+                phoneNumber: args.phoneNumber,
+                url: product.externalPdfUrl,
+                fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`,
+                mimeType: "application/pdf",
+              });
+              await new Promise(resolve => setTimeout(resolve, 800));
+            } catch (pdfErr) {
+              logAiError("SEND_PRODUCT_EXT_PDF", pdfErr, { url: product.externalPdfUrl });
             }
           }
 
@@ -236,7 +256,7 @@ export const generateAndSendAiReplyInternal = internalAction({
           await ctx.runAction(internal.whatsapp.internal.sendMessage, {
             leadId: args.leadId,
             phoneNumber: args.phoneNumber,
-            message: `I couldn't find the product "${aiAction.resource_name}" in our database. Please contact our team for more information.`,
+            message: `I couldn't find the product "${aiAction.resource_name}". Please check the product name and try again.`,
           });
         }
 
