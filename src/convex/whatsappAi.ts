@@ -17,69 +17,127 @@ function logAiInfo(context: string, message: string, extra?: Record<string, unkn
   console.log(`[WHATSAPP_AI][${context}] ${message}`, extra ? JSON.stringify(extra) : "");
 }
 
-// Step 1: Identify molecule from competitor brand name or URL
-async function identifyMoleculeFromCompetitor(ctx: any, userMessage: string): Promise<string | null> {
+// Fetch cafoli.in sitemap and return all product URLs
+async function fetchCafoliSitemap(): Promise<string[]> {
   try {
-    const systemPrompt = `You are a pharmaceutical expert. Given a competitor brand name or product URL, identify the active molecule/ingredient.
-Return ONLY a JSON object: { "molecule": "molecule name" } or { "molecule": null } if unknown.
+    const res = await fetch("https://cafoli.in/sitemap.xml", {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; CafoliBot/1.0)" },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return [];
+    const xml = await res.text();
+    const urls: string[] = [];
+    const regex = /<loc>(https?:\/\/cafoli\.in\/[^<]+)<\/loc>/g;
+    let match;
+    while ((match = regex.exec(xml)) !== null) {
+      urls.push(match[1]);
+    }
+    return urls;
+  } catch {
+    return [];
+  }
+}
+
+// Fetch text content from a URL
+async function fetchPageText(url: string): Promise<string> {
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; CafoliBot/1.0)" },
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!res.ok) return "";
+    const html = await res.text();
+    // Strip HTML tags and return plain text (truncated)
+    return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().substring(0, 4000);
+  } catch {
+    return "";
+  }
+}
+
+// Use Gemini to find the best matching product URL from the sitemap
+async function findBestProductUrl(ctx: any, userMessage: string, sitemapUrls: string[]): Promise<string | null> {
+  try {
+    // Filter to likely product URLs only
+    const productUrls = sitemapUrls.filter(u =>
+      !u.includes("sitemap") && !u.includes(".xml") &&
+      u !== "https://cafoli.in/" &&
+      !u.endsWith("/allproducts.aspx")
+    ).slice(0, 200); // limit to 200 URLs
+
+    if (productUrls.length === 0) return null;
+
+    const urlList = productUrls.join("\n");
+    const systemPrompt = `You are a pharmaceutical expert. Given a user's product query and a list of product page URLs from cafoli.in, find the single best matching URL.
+Return ONLY a JSON object: { "url": "https://cafoli.in/..." } or { "url": null } if no match.
+The URL slugs contain the molecule/product name. Match by molecule, brand name, or product name.
 Examples:
-- "Lubricel Eye Drop" → { "molecule": "Sodium Carboxymethylcellulose" }
-- "Lubicom Plus" → { "molecule": "Carboxymethylcellulose" }
-- "https://www.fibovil.com/sodium-carboxymethylcellulose-oxychloro-sterile" → { "molecule": "Sodium Carboxymethylcellulose" }
-- "Dolo 650" → { "molecule": "Paracetamol" }
+- "Lubricel Eye Drop" → look for carboxymethylcellulose in URL slugs
+- "Lubicom Plus" → look for carboxymethylcellulose in URL slugs
+- "sodium-carboxymethylcellulose" → match that molecule
 Return ONLY the JSON object.`;
-    const { text } = await generateWithGemini(ctx, systemPrompt, `Identify molecule for: ${userMessage}`, { jsonMode: true });
+
+    const { text } = await generateWithGemini(ctx, systemPrompt,
+      `User query: "${userMessage}"\n\nAvailable URLs:\n${urlList}`,
+      { jsonMode: true }
+    );
     const jsonStr = extractJsonFromMarkdown(text);
     const parsed = JSON.parse(jsonStr);
-    return parsed.molecule || null;
+    return parsed.url || null;
   } catch (e) {
+    logAiError("FIND_PRODUCT_URL", e);
     return null;
   }
 }
 
-// Find best matching Cafoli product by molecule
-function findProductByMolecule(products: any[], molecule: string): any | null {
-  if (!molecule) return null;
-  const molLower = molecule.toLowerCase();
-  // Exact molecule match
-  let match = products.find((p: any) => p.molecule?.toLowerCase() === molLower);
-  if (match) return match;
-  // Partial molecule match (molecule contains or is contained in)
-  match = products.find((p: any) =>
-    p.molecule && (
-      p.molecule.toLowerCase().includes(molLower) ||
-      molLower.includes(p.molecule.toLowerCase())
-    )
-  );
-  return match || null;
+// Use Gemini to extract product details from a page's text content
+async function extractProductDetailsFromPage(ctx: any, pageText: string, pageUrl: string): Promise<{
+  name: string;
+  molecule: string | null;
+  mrp: string | null;
+  packaging: string | null;
+  description: string | null;
+  imageUrl: string | null;
+  pdfUrl: string | null;
+  pageLink: string;
+} | null> {
+  try {
+    const systemPrompt = `You are a pharmaceutical data extractor. Extract product details from the given webpage text.
+Return ONLY a JSON object with these fields:
+{
+  "name": "product name",
+  "molecule": "active ingredient/molecule or null",
+  "mrp": "MRP price as string or null",
+  "packaging": "packaging info or null",
+  "description": "brief description or null",
+  "imageUrl": "direct image URL if found in text or null",
+  "pdfUrl": "direct PDF URL if found in text or null"
+}
+Return ONLY the JSON object.`;
+
+    const { text } = await generateWithGemini(ctx, systemPrompt,
+      `Page URL: ${pageUrl}\n\nPage content:\n${pageText}`,
+      { jsonMode: true }
+    );
+    const jsonStr = extractJsonFromMarkdown(text);
+    const parsed = JSON.parse(jsonStr);
+    return { ...parsed, pageLink: pageUrl };
+  } catch (e) {
+    logAiError("EXTRACT_PRODUCT_DETAILS", e);
+    return null;
+  }
 }
 
-// Multi-level fuzzy product matching by name
-function findProductByName(products: any[], resourceName: string): any | null {
-  if (!resourceName) return null;
-  // Exact match
-  let product = products.find((p: any) => p.name === resourceName);
-  if (product) return product;
-  // Case-insensitive exact
-  const lower = resourceName.toLowerCase();
-  product = products.find((p: any) => p.name?.toLowerCase() === lower);
-  if (product) return product;
-  // Partial name match
-  product = products.find((p: any) =>
-    p.name?.toLowerCase().includes(lower) || lower.includes(p.name?.toLowerCase() || "")
-  );
-  if (product) return product;
-  // Brand name match
-  product = products.find((p: any) =>
-    p.brandName && (
-      p.brandName.toLowerCase().includes(lower) ||
-      lower.includes(p.brandName.toLowerCase())
-    )
-  );
-  return product || null;
-}
-
-async function sendProductToLead(ctx: any, product: any, args: { leadId: any; phoneNumber: string }, introText?: string) {
+// Send a website-sourced product to the lead
+async function sendWebsiteProductToLead(ctx: any, productDetails: {
+  name: string;
+  molecule: string | null;
+  mrp: string | null;
+  packaging: string | null;
+  description: string | null;
+  imageUrl: string | null;
+  pdfUrl: string | null;
+  pageLink: string;
+}, args: { leadId: any; phoneNumber: string }, introText?: string) {
   if (introText) {
     await ctx.runAction(internal.whatsapp.internal.sendMessage, {
       leadId: args.leadId,
@@ -89,7 +147,71 @@ async function sendProductToLead(ctx: any, product: any, args: { leadId: any; ph
     await new Promise(resolve => setTimeout(resolve, 300));
   }
 
-  // Send image: external URL first, then Convex storage
+  // Send image if available
+  if (productDetails.imageUrl) {
+    try {
+      const imgUrl = productDetails.imageUrl.toLowerCase();
+      const mimeType = imgUrl.endsWith(".webp") ? "image/webp" : imgUrl.endsWith(".png") ? "image/png" : "image/jpeg";
+      const safeName = productDetails.name.replace(/[^a-zA-Z0-9]/g, "_");
+      const ext = imgUrl.split(".").pop()?.split("?")[0] || "jpg";
+      await ctx.runAction(internal.whatsapp.messages.sendMediaFromUrl, {
+        leadId: args.leadId,
+        phoneNumber: args.phoneNumber,
+        url: productDetails.imageUrl,
+        fileName: `${safeName}.${ext}`,
+        mimeType,
+      });
+      await new Promise(resolve => setTimeout(resolve, 800));
+    } catch (imgErr) {
+      logAiError("SEND_WEBSITE_PRODUCT_IMG", imgErr, { url: productDetails.imageUrl });
+    }
+  }
+
+  // Send PDF if available
+  if (productDetails.pdfUrl) {
+    try {
+      const safeName = productDetails.name.replace(/[^a-zA-Z0-9]/g, "_");
+      await ctx.runAction(internal.whatsapp.messages.sendMediaFromUrl, {
+        leadId: args.leadId,
+        phoneNumber: args.phoneNumber,
+        url: productDetails.pdfUrl,
+        fileName: `${safeName}.pdf`,
+        mimeType: "application/pdf",
+      });
+      await new Promise(resolve => setTimeout(resolve, 800));
+    } catch (pdfErr) {
+      logAiError("SEND_WEBSITE_PRODUCT_PDF", pdfErr, { url: productDetails.pdfUrl });
+    }
+  }
+
+  // Send product details text
+  const detailsMessage = [
+    `*${productDetails.name}*`,
+    productDetails.molecule ? `Molecule: ${productDetails.molecule}` : null,
+    productDetails.mrp ? `MRP: ₹${productDetails.mrp}` : null,
+    productDetails.packaging ? `Packaging: ${productDetails.packaging}` : null,
+    productDetails.description ? `\n${productDetails.description}` : null,
+    `\nMore info: ${productDetails.pageLink}`,
+  ].filter(Boolean).join("\n");
+
+  await ctx.runAction(internal.whatsapp.internal.sendMessage, {
+    leadId: args.leadId,
+    phoneNumber: args.phoneNumber,
+    message: detailsMessage,
+  });
+}
+
+// Fallback: send product from internal catalog (for PDFs and when website fails)
+async function sendCatalogProductToLead(ctx: any, product: any, args: { leadId: any; phoneNumber: string }, introText?: string) {
+  if (introText) {
+    await ctx.runAction(internal.whatsapp.internal.sendMessage, {
+      leadId: args.leadId,
+      phoneNumber: args.phoneNumber,
+      message: introText,
+    });
+    await new Promise(resolve => setTimeout(resolve, 300));
+  }
+
   if (product.externalImageUrl) {
     try {
       const extUrl = product.externalImageUrl.toLowerCase();
@@ -103,56 +225,29 @@ async function sendProductToLead(ctx: any, product: any, args: { leadId: any; ph
       });
       await new Promise(resolve => setTimeout(resolve, 800));
     } catch (imgErr) {
-      logAiError("SEND_PRODUCT_EXT_IMG", imgErr, { url: product.externalImageUrl });
+      logAiError("SEND_CATALOG_EXT_IMG", imgErr);
     }
-  } else {
-    const filesToSend: Array<{ storageId: string; fileName: string; type: string; label: string }> = [];
-    const getExtension = async (storageId: string) => {
-      const meta = await ctx.runQuery(internal.products.getStorageMetadata, { storageId: storageId as any });
-      if (meta?.contentType === "image/png") return "png";
-      if (meta?.contentType === "image/jpeg" || meta?.contentType === "image/jpg") return "jpg";
-      if (meta?.contentType === "application/pdf") return "pdf";
-      return "jpg";
-    };
-    if (product.mainImage) {
-      const ext = await getExtension(product.mainImage);
-      filesToSend.push({ storageId: product.mainImage, fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}_main.${ext}`, type: "image", label: "Main Image" });
-    }
-    if (product.flyer) {
-      const ext = await getExtension(product.flyer);
-      filesToSend.push({ storageId: product.flyer, fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}_flyer.${ext}`, type: "image", label: "Flyer" });
-    }
-    if (product.bridgeCard) {
-      const ext = await getExtension(product.bridgeCard);
-      filesToSend.push({ storageId: product.bridgeCard, fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}_bridge_card.${ext}`, type: "image", label: "Bridge Card" });
-    }
-    if (product.visualaid) {
-      filesToSend.push({ storageId: product.visualaid, fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}_visualaid.pdf`, type: "pdf", label: "Visual Aid" });
-    }
-    for (const file of filesToSend) {
-      try {
-        const metadata = await ctx.runQuery(internal.products.getStorageMetadata, { storageId: file.storageId as any });
-        if (!metadata) continue;
-        let correctMimeType = metadata?.contentType;
-        if (!correctMimeType || correctMimeType === "application/octet-stream" || correctMimeType === "text/html") {
-          correctMimeType = file.type === "pdf" ? "application/pdf" : "image/jpeg";
-        }
+  } else if (product.mainImage) {
+    try {
+      const meta = await ctx.runQuery(internal.products.getStorageMetadata, { storageId: product.mainImage as any });
+      if (meta) {
+        let mimeType = meta.contentType || "image/jpeg";
+        if (!mimeType || mimeType === "application/octet-stream") mimeType = "image/jpeg";
         await ctx.runAction("whatsapp/messages:sendMedia" as any, {
           leadId: args.leadId,
           phoneNumber: args.phoneNumber,
-          storageId: file.storageId,
-          fileName: file.fileName,
-          mimeType: correctMimeType,
-          message: undefined
+          storageId: product.mainImage,
+          fileName: `${product.name.replace(/[^a-zA-Z0-9]/g, "_")}_main.jpg`,
+          mimeType,
+          message: undefined,
         });
         await new Promise(resolve => setTimeout(resolve, 1000));
-      } catch (fileError) {
-        logAiError("SEND_PRODUCT_FILE", fileError, { label: file.label, storageId: file.storageId });
       }
+    } catch (e) {
+      logAiError("SEND_CATALOG_IMG", e);
     }
   }
 
-  // Send external PDF if available
   if (product.externalPdfUrl) {
     try {
       await ctx.runAction(internal.whatsapp.messages.sendMediaFromUrl, {
@@ -164,11 +259,10 @@ async function sendProductToLead(ctx: any, product: any, args: { leadId: any; ph
       });
       await new Promise(resolve => setTimeout(resolve, 800));
     } catch (pdfErr) {
-      logAiError("SEND_PRODUCT_EXT_PDF", pdfErr, { url: product.externalPdfUrl });
+      logAiError("SEND_CATALOG_EXT_PDF", pdfErr);
     }
   }
 
-  // Send product details text
   const detailsMessage = [
     `*${product.name}*`,
     product.molecule ? `Molecule: ${product.molecule}` : null,
@@ -239,40 +333,30 @@ export const generateAndSendAiReplyInternal = internalAction({
     try {
       logAiInfo("REPLY", "Starting AI reply generation", { leadId: args.leadId, prompt: args.prompt.substring(0, 80) });
 
-      const products = await ctx.runQuery(internal.products.listProductsInternal);
       const rangePdfs = await ctx.runQuery(internal.rangePdfs.listRangePdfsInternal);
-
-      // Include molecule info so AI can match competitor brands by molecule
-      const productList = products.map((p: any) =>
-        `- ${p.name}${p.molecule ? ` (Molecule: ${p.molecule})` : ""}${p.brandName && p.brandName !== p.name ? ` [Brand: ${p.brandName}]` : ""}`
-      ).join("\n");
       const pdfNames = rangePdfs.map((p: any) => p.name).join(", ");
 
-      const systemPrompt = `You are a helpful CRM assistant for Cafoli Lifecare, a pharmaceutical company.
+      const systemPrompt = `You are a helpful CRM assistant for Cafoli Lifecare, a pharmaceutical company (website: https://cafoli.in).
 You are chatting with a lead on WhatsApp.
-
-Available Cafoli Products (with molecules):
-${productList}
 
 Available Range PDFs: ${pdfNames}
 
 Your goal is to assist the lead, answer questions, and provide product information.
 
-IMPORTANT RULES:
-- If the user asks for a product by name (Cafoli or competitor brand), use send_product.
-- For send_product, resource_name should be the EXACT Cafoli product name from the list above.
-- If the user asks for a competitor brand, try to find the Cafoli equivalent by molecule and use that name.
-- If you cannot identify a matching Cafoli product, use intervention_request.
-- When the user asks for "full catalogue", "complete catalogue", "all products", use send_full_catalogue.
-- Do NOT randomly pick unrelated products. If unsure, use intervention_request.
+PRODUCT QUERIES: When the user asks about any product (Cafoli brand or competitor brand), use the "send_product" action. The system will automatically look up the product on cafoli.in website.
 
 You can perform the following actions by returning a JSON object:
 1. Reply with text: { "action": "reply", "text": "your message" }
-2. Send a product: { "action": "send_product", "text": "optional intro", "resource_name": "EXACT Cafoli product name" }
-3. Send a PDF: { "action": "send_pdf", "text": "optional caption", "resource_name": "exact pdf name" }
-4. Send full catalogue: { "action": "send_full_catalogue", "text": "optional message" }
-5. Request human intervention: { "action": "intervention_request", "text": "I will connect you with an agent.", "reason": "reason" }
-6. Request contact: { "action": "contact_request", "text": "I've noted your request.", "reason": "reason" }
+2. Send a product (any product query - Cafoli or competitor): { "action": "send_product", "text": "optional intro message", "resource_name": "the product name or molecule the user asked about" }
+3. Send a PDF: { "action": "send_pdf", "text": "optional caption", "resource_name": "exact pdf name from list above" }
+4. Send full catalogue (link + all PDFs): { "action": "send_full_catalogue", "text": "optional message" }
+5. Request human intervention (if you can't help): { "action": "intervention_request", "text": "I will connect you with an agent.", "reason": "reason" }
+6. Request contact (if they want a meeting/call): { "action": "contact_request", "text": "I've noted your request.", "reason": "reason" }
+
+RULES:
+- For send_product, resource_name should be the product name or molecule the user mentioned (can be competitor brand name, molecule name, or Cafoli product name).
+- When the user asks for "full catalogue", "complete catalogue", "all products", use send_full_catalogue.
+- For general questions not about products, use reply.
 
 Always return ONLY the JSON object. Do not include other text.`;
 
@@ -302,36 +386,59 @@ Always return ONLY the JSON object. Do not include other text.`;
         });
 
       } else if (aiAction.action === "send_product") {
-        // Step 1: Try direct name-based fuzzy match
-        let product = findProductByName(products, aiAction.resource_name);
+        logAiInfo("SEND_PRODUCT", `Looking up product on cafoli.in: "${aiAction.resource_name}"`, { leadId: args.leadId });
 
-        // Step 2: If no match, try molecule-based lookup via a separate Gemini call
-        if (!product) {
-          logAiInfo("SEND_PRODUCT", `No direct match for "${aiAction.resource_name}", trying molecule lookup`, { leadId: args.leadId });
-          const molecule = await identifyMoleculeFromCompetitor(ctx, args.prompt);
-          if (molecule) {
-            logAiInfo("SEND_PRODUCT", `Identified molecule: ${molecule}`, { leadId: args.leadId });
-            product = findProductByMolecule(products, molecule);
-            if (product) {
-              logAiInfo("SEND_PRODUCT", `Matched by molecule to: ${product.name}`, { leadId: args.leadId });
-              // Update intro text to mention it's the Cafoli equivalent
-              if (!aiAction.text) {
-                aiAction.text = `We have Cafoli's equivalent product with the same active ingredient (${molecule}):`;
+        let productSent = false;
+
+        // Step 1: Fetch cafoli.in sitemap
+        const sitemapUrls = await fetchCafoliSitemap();
+        logAiInfo("SEND_PRODUCT", `Fetched ${sitemapUrls.length} URLs from sitemap`, { leadId: args.leadId });
+
+        if (sitemapUrls.length > 0) {
+          // Step 2: Find best matching product URL using Gemini
+          const productUrl = await findBestProductUrl(ctx, `${aiAction.resource_name} ${args.prompt}`, sitemapUrls);
+          logAiInfo("SEND_PRODUCT", `Best matching URL: ${productUrl}`, { leadId: args.leadId });
+
+          if (productUrl) {
+            // Step 3: Fetch the product page and extract details
+            const pageText = await fetchPageText(productUrl);
+            if (pageText) {
+              const productDetails = await extractProductDetailsFromPage(ctx, pageText, productUrl);
+              if (productDetails && productDetails.name) {
+                logAiInfo("SEND_PRODUCT", `Extracted product: ${productDetails.name}`, { leadId: args.leadId });
+                await sendWebsiteProductToLead(ctx, productDetails, { leadId: args.leadId, phoneNumber: args.phoneNumber }, aiAction.text);
+                productSent = true;
               }
             }
           }
         }
 
-        if (product) {
-          logAiInfo("SEND_PRODUCT", `Sending product: ${product.name}`, { leadId: args.leadId });
-          await sendProductToLead(ctx, product, { leadId: args.leadId, phoneNumber: args.phoneNumber }, aiAction.text);
-        } else {
-          // No match found — escalate to intervention instead of sending wrong product
-          logAiInfo("SEND_PRODUCT", `No product match found for "${aiAction.resource_name}", escalating to intervention`, { leadId: args.leadId });
+        // Fallback: try internal catalog if website lookup failed
+        if (!productSent) {
+          logAiInfo("SEND_PRODUCT", `Website lookup failed, trying internal catalog`, { leadId: args.leadId });
+          const products = await ctx.runQuery(internal.products.listProductsInternal);
+          const resourceLower = (aiAction.resource_name || "").toLowerCase();
+          const promptLower = args.prompt.toLowerCase();
+
+          let product = products.find((p: any) => p.name?.toLowerCase() === resourceLower);
+          if (!product) product = products.find((p: any) => p.name?.toLowerCase().includes(resourceLower) || resourceLower.includes(p.name?.toLowerCase() || ""));
+          if (!product) product = products.find((p: any) => p.molecule && (p.molecule.toLowerCase().includes(resourceLower) || resourceLower.includes(p.molecule.toLowerCase())));
+          if (!product) product = products.find((p: any) => p.molecule && (p.molecule.toLowerCase().includes(promptLower) || promptLower.includes(p.molecule.toLowerCase())));
+
+          if (product) {
+            logAiInfo("SEND_PRODUCT", `Found in catalog: ${product.name}`, { leadId: args.leadId });
+            await sendCatalogProductToLead(ctx, product, { leadId: args.leadId, phoneNumber: args.phoneNumber }, aiAction.text);
+            productSent = true;
+          }
+        }
+
+        // Final fallback: escalate to intervention
+        if (!productSent) {
+          logAiInfo("SEND_PRODUCT", `No product found anywhere, escalating`, { leadId: args.leadId });
           await ctx.runAction(internal.whatsapp.internal.sendMessage, {
             leadId: args.leadId,
             phoneNumber: args.phoneNumber,
-            message: `I wasn't able to find an exact match for "${aiAction.resource_name}" in our catalog. Let me connect you with our team who can help you better.`,
+            message: `I wasn't able to find "${aiAction.resource_name}" in our catalog right now. Let me connect you with our team who can help you better.`,
           });
           const lead = await ctx.runQuery(internal.leads.queries.basic.getLeadByIdInternal, { leadId: args.leadId });
           await ctx.runMutation(internal.interventionRequests.createInterventionRequestInternal, {
@@ -339,7 +446,7 @@ Always return ONLY the JSON object. Do not include other text.`;
             assignedTo: (lead && lead.assignedTo && !lead.isColdCallerLead) ? lead.assignedTo : undefined,
             requestedProduct: aiAction.resource_name,
             customerMessage: args.prompt,
-            aiDraftedMessage: `Customer asked for "${aiAction.resource_name}" but no matching Cafoli product was found. Please assist.`,
+            aiDraftedMessage: `Customer asked for "${aiAction.resource_name}" but no matching product was found on cafoli.in or in the catalog. Please assist.`,
           });
         }
 
