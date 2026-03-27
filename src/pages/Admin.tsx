@@ -124,7 +124,6 @@ export default function Admin() {
   const isBatchProcessing = batchProgress?.status === "queued" || batchProgress?.status === "running";
 
   const scrapeAllProducts = useAction(api.cafoliScraper.scrapeAllCafoliProducts);
-  const getWebProductStats = useAction(api.cafoliScraper.getWebProductStats);
   const deleteAllWebProducts = useMutation(api.cafoliScraperDb.deleteAllWebProducts);
   const deleteAllCatalogProducts = useMutation(api.products.deleteAllProducts);
   const [isDeletingCache, setIsDeletingCache] = useState(false);
@@ -474,15 +473,6 @@ export default function Admin() {
     }
   };
 
-  const handleCheckWebProductCount = async () => {
-    try {
-      const stats = await getWebProductStats({});
-      setWebProductCount(stats.count);
-    } catch (err: any) {
-      toast.error("Failed to get stats");
-    }
-  };
-
   const handleDeleteAllWebProducts = async () => {
     setIsDeletingCache(true);
     try {
@@ -493,7 +483,6 @@ export default function Admin() {
         totalDeleted += result.deleted;
         hasMore = result.hasMore;
       }
-      setWebProductCount(0);
       toast.success(`Deleted ${totalDeleted} cached web products`);
     } catch (err: any) {
       toast.error(err.message || "Failed to delete cache");
@@ -774,14 +763,6 @@ export default function Admin() {
                     {isScraping ? "Scraping..." : "Sync Products from cafoli.in"}
                   </Button>
                   <Button
-                    variant="outline"
-                    onClick={handleCheckWebProductCount}
-                    className="flex items-center gap-2"
-                  >
-                    <Database className="h-4 w-4" />
-                    Check Cached Count
-                  </Button>
-                  <Button
                     variant="destructive"
                     onClick={handleDeleteAllWebProducts}
                     disabled={isDeletingCache}
@@ -790,11 +771,9 @@ export default function Admin() {
                     <Trash2 className="h-4 w-4" />
                     {isDeletingCache ? "Deleting..." : "Delete All Cache"}
                   </Button>
-                  {webProductCount !== null && (
-                    <span className="text-sm text-muted-foreground">
-                      {webProductCount} products cached
-                    </span>
-                  )}
+                  <span className="text-sm text-muted-foreground">
+                    {webProductCount ?? 0} products cached
+                  </span>
                 </div>
                 {isScraping && scrapeStats && (
                   <div className="text-sm text-muted-foreground">
