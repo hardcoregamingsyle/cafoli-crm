@@ -4,37 +4,43 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 
 // Parse the allproduct.aspx HTML to extract product rows
+// Structure: <tr><td class="first-all-p"><a href='slug'>Brand Name</a></td><td><a href='slug' class="fixed-len">Composition</a></td><td><a href='slug'>Dosage</a></td><td class="last-all-p"><a href='slug'><img src="...webp"/></a></td></tr>
 function parseProductListHtml(html: string): Array<{ brandName: string; composition: string; pageUrl: string; imageUrl: string; dosageForm: string }> {
   const products: Array<{ brandName: string; composition: string; pageUrl: string; imageUrl: string; dosageForm: string }> = [];
   
+  // Match table rows
   const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
   let rowMatch;
   
   while ((rowMatch = rowRegex.exec(html)) !== null) {
     const row = rowMatch[1];
     
-    const hrefMatch = row.match(/href="(\/[^"]+)"/);
-    if (!hrefMatch) continue;
+    // Must have "first-all-p" class to be a product row
+    if (!row.includes("first-all-p")) continue;
     
-    const pageUrl = `https://cafoli.in${hrefMatch[1]}`;
+    // Extract slug from first-all-p td: <a href='slug'>Brand Name</a>
+    const slugMatch = row.match(/class="first-all-p[^"]*"[^>]*>[\s\S]*?<a\s+href='([^']+)'>([^<]+)<\/a>/i);
+    if (!slugMatch) continue;
     
-    if (pageUrl.includes("allproduct") || pageUrl.includes("alltherapeutic") || pageUrl.includes("alldivision") || pageUrl.includes("SearchProducts")) continue;
+    const slug = slugMatch[1].trim();
+    const brandName = slugMatch[2].trim();
+    if (!brandName || brandName.length < 2 || !slug) continue;
     
-    const brandMatch = row.match(/<a[^>]+href="\/[^"]+">([^<]+)<\/a>/);
-    if (!brandMatch) continue;
-    const brandName = brandMatch[1].trim();
-    if (!brandName || brandName.length < 2) continue;
+    const pageUrl = `https://cafoli.in/${slug}`;
     
+    // Extract composition from fixed-len class: <a href='slug' class="fixed-len">Composition</a>
+    const compMatch = row.match(/class="fixed-len">([^<]+)<\/a>/i);
+    const composition = compMatch ? compMatch[1].trim() : "";
+    
+    // Extract dosage form from third td (after composition)
+    // Find all <td> contents
     const tdMatches = [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)];
-    let composition = "";
     let dosageForm = "";
-    if (tdMatches.length >= 2) {
-      composition = tdMatches[1][1].replace(/<[^>]+>/g, "").trim();
-    }
     if (tdMatches.length >= 3) {
       dosageForm = tdMatches[2][1].replace(/<[^>]+>/g, "").trim();
     }
     
+    // Extract image URL from last-all-p td
     const imgMatch = row.match(/src="(https:\/\/cafoli\.in\/Static\/V1\/OtherPageImages\/[^"]+\.webp)"/i);
     const imageUrl = imgMatch ? imgMatch[1] : "";
     
