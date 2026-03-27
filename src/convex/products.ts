@@ -313,11 +313,11 @@ export const createCategory = mutation({
   },
 });
 
-// Delete ALL products and their storage files
+// Delete ALL products and their storage files - returns hasMore so caller can loop
 export const deleteAllProducts = mutation({
   args: {},
   handler: async (ctx) => {
-    const products = await ctx.db.query("products").take(1000);
+    const products = await ctx.db.query("products").take(100);
     let deleted = 0;
     for (const product of products) {
       const storageIds = new Set<string>();
@@ -332,6 +332,7 @@ export const deleteAllProducts = mutation({
       await ctx.db.delete(product._id);
       deleted++;
     }
-    return { deleted };
+    const remaining = await ctx.db.query("products").take(1);
+    return { deleted, hasMore: remaining.length > 0 };
   },
 });
