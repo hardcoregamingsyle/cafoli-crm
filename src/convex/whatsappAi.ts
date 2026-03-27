@@ -389,7 +389,7 @@ export const generateAndSendAiReplyInternal = internalAction({
       const pdfNames = rangePdfs.map((p: any) => p.name).join(", ");
 
       // Load cached web products for fast matching
-      const webProducts = await ctx.runQuery("cafoliScraper:listWebProducts" as any);
+      const webProducts = await ctx.runQuery("cafoliScraperDb:listWebProducts" as any);
       const webProductCount = webProducts.length;
 
       // Build product list for AI context (use web products if available, else internal catalog)
