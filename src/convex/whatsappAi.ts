@@ -53,6 +53,7 @@ async function fetchPageHtml(url: string): Promise<string> {
 }
 
 // Extract product details directly from cafoli.in product page HTML using regex
+// Uses correct patterns matching actual cafoli.in HTML structure
 function extractProductDetailsFromHtml(html: string, pageUrl: string): {
   name: string | null;
   molecule: string | null;
@@ -63,51 +64,79 @@ function extractProductDetailsFromHtml(html: string, pageUrl: string): {
   pdfUrl: string | null;
   pageLink: string;
 } {
-  // Extract product name from <h2> tag
-  const h2Match = html.match(/<h2[^>]*>\s*([^<]{3,100})\s*<\/h2>/i);
-  const name = h2Match ? h2Match[1].trim() : null;
+  // Brand name: <div class="med-name">...<h2 class="w-100" style="...">BRAND NAME</h2>
+  const brandNameMatch = html.match(/<div[^>]*class="med-name"[^>]*>[\s\S]{0,300}?<h2[^>]*>([^<]+)<\/h2>/i);
+  const name = brandNameMatch ? brandNameMatch[1].trim() : null;
 
-  // Extract composition/molecule from "Composition :" pattern
-  const compMatch = html.match(/Composition\s*[:\-]\s*<\/strong>\s*([^<\n]+)/i) ||
-                    html.match(/Composition\s*[:\-]\s*([^\n<]{5,200})/i);
-  const molecule = compMatch ? compMatch[1].replace(/<[^>]+>/g, "").trim() : null;
+  // Composition: <p class="com-name" id="more_paragraph"><b class="c-name">Composition : </b>TEXT</p>
+  const compositionMatch =
+    html.match(/<p[^>]*class="com-name"[^>]*>[\s\S]*?<b[^>]*class="c-name"[^>]*>Composition\s*:\s*<\/b>\s*([^<]+)/i) ||
+    html.match(/Composition\s*:\s*<\/b>\s*([^<\n]{5,300})/i) ||
+    html.match(/<b[^>]*>Composition\s*:\s*<\/b>\s*([^<\n]{5,300})/i);
+  const molecule = compositionMatch ? compositionMatch[1].replace(/<[^>]+>/g, "").trim() : null;
 
-  // Extract MRP: look for ₹ followed by number
-  const mrpMatch = html.match(/[₹Rs\.]\s*(\d+(?:\.\d+)?)\s*\/-/i) ||
-                   html.match(/Price\s*:\s*[₹Rs\.]*\s*(\d+)/i);
+  // MRP: <p><b>Price : </b><span style="font-weight: bold;">₹655/-</span></p>
+  const mrpMatch =
+    html.match(/Price\s*:\s*<\/b>\s*<span[^>]*>[\s]*[₹Rs\.]*\s*(\d+(?:\.\d+)?)\s*\/-/i) ||
+    html.match(/[₹]\s*(\d+(?:\.\d+)?)\s*\/-/i) ||
+    html.match(/Price\s*:\s*[₹Rs\.]*\s*(\d+)/i);
   const mrp = mrpMatch ? mrpMatch[1] : null;
 
-  // Extract packaging
-  const packagingMatch = html.match(/Packaging\s*:\s*<\/strong>\s*([^<\n]+)/i) ||
-                         html.match(/Packaging\s*:\s*([^\n<]+)/i);
+  // Packaging (size): <p><b>Packaging : </b>10x1x10</p> — must NOT match "Packaging Type"
+  const packagingMatches = [...html.matchAll(/<b[^>]*>Packaging\s*:\s*<\/b>\s*([^<\n]{1,100})/gi)];
+  const packagingMatch = packagingMatches.find(m => !m[0].toLowerCase().includes("type"));
   const packaging = packagingMatch ? packagingMatch[1].replace(/<[^>]+>/g, "").trim() : null;
 
-  // Extract best image URL from cafoli.in static images
-  const imageMatches = [...html.matchAll(/https:\/\/cafoli\.in\/Static\/V1\/OtherPageImages\/([^"'\s]+\.webp)/gi)];
-  // Filter out empty filenames and prefer images with timestamps (longer filenames)
-  const validImages = imageMatches
-    .map(m => `https://cafoli.in/Static/V1/OtherPageImages/${m[1]}`)
-    .filter(url => {
-      const filename = url.split("/").pop() || "";
-      return filename.length > 10 && !filename.endsWith("/");
-    });
-  // Pick the second image if available (usually the cleaner product shot), else first
-  const imageUrl = validImages[1] || validImages[0] || null;
-
-  // Extract PDF URL
-  const pdfMatches = [...html.matchAll(/https:\/\/cafoli\.in\/Static\/V1\/OtherPagepdf\/([^"'\s]+\.pdf)/gi)];
-  const pdfUrl = pdfMatches.length > 0 ? `https://cafoli.in/Static/V1/OtherPagepdf/${pdfMatches[0][1]}` : null;
-
-  // Extract description (text after product name)
-  const descMatch = html.match(/Lubicom|Eye Drop|Tablet|Capsule|Syrup|Injection|Cream|Gel|Ointment|Drops/i);
+  // Description: from <div class="panel"> accordion content
   let description: string | null = null;
-  if (name) {
-    // Find a paragraph with substantial text
-    const paraMatches = [...html.matchAll(/<p[^>]*>([^<]{100,600})<\/p>/gi)];
+  const panelIdx = html.indexOf('<div class="panel">');
+  if (panelIdx >= 0) {
+    const panelContent = html.substring(panelIdx + '<div class="panel">'.length, panelIdx + 5000);
+    const plainText = panelContent.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    if (plainText.length > 20) description = plainText.substring(0, 500);
+  }
+  if (!description) {
+    const paraMatches = [...html.matchAll(/<p[^>]*style="[^"]*text-align:\s*justify[^"]*"[^>]*>([\s\S]*?)<\/p>/gi)];
     if (paraMatches.length > 0) {
-      description = paraMatches[0][1].replace(/<[^>]+>/g, "").trim().substring(0, 400);
+      description = paraMatches[0][1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().substring(0, 500);
     }
   }
+
+  // Images: handles relative paths like ../../Static/V1/OtherPageImages/NAME WITH SPACES.webp
+  const imageRegex = /src="((?:https:\/\/cafoli\.in\/)?(?:\.\.\/)*Static\/V1\/OtherPageImages\/[^"]+?\.webp)"/gi;
+  const imageMatches = [...html.matchAll(imageRegex)];
+  const allImages = imageMatches
+    .map(m => {
+      const src = m[1];
+      if (src.startsWith("http")) return src;
+      const idx = src.indexOf("Static/V1/OtherPageImages/");
+      return idx >= 0 ? `https://cafoli.in/${src.substring(idx)}` : null;
+    })
+    .filter((url): url is string => !!url && url.includes("OtherPageImages"));
+  const seenImages = new Set<string>();
+  const uniqueImages: string[] = [];
+  for (const img of allImages) {
+    if (!seenImages.has(img)) { seenImages.add(img); uniqueImages.push(img); }
+  }
+  const imageUrl = uniqueImages[0] || null;
+
+  // PDFs: handles relative paths like ../Static/V1/OtherPagepdf/NAME WITH SPACES.pdf
+  const pdfRegex = /href="((?:https:\/\/cafoli\.in\/)?(?:\.\.\/)*Static\/V1\/OtherPagepdf\/[^"]+?\.pdf)"/gi;
+  const pdfMatches = [...html.matchAll(pdfRegex)];
+  const allPdfs = pdfMatches
+    .map(m => {
+      const src = m[1];
+      if (src.startsWith("http")) return src;
+      const idx = src.indexOf("Static/V1/OtherPagepdf/");
+      return idx >= 0 ? `https://cafoli.in/${src.substring(idx)}` : null;
+    })
+    .filter((url): url is string => !!url && url.includes("OtherPagepdf"));
+  const seenPdfs = new Set<string>();
+  const uniquePdfs: string[] = [];
+  for (const pdf of allPdfs) {
+    if (!seenPdfs.has(pdf)) { seenPdfs.add(pdf); uniquePdfs.push(pdf); }
+  }
+  const pdfUrl = uniquePdfs[0] || null;
 
   return { name, molecule, mrp, packaging, description, imageUrl, pdfUrl, pageLink: pageUrl };
 }
@@ -459,28 +488,21 @@ RULES:
 
 Always return ONLY the JSON object. Do not include other text.`;
 
-      const chatContext = JSON.stringify(args.context);
-      const userPrompt = `Context: ${chatContext}\n\nUser Message: ${args.prompt}`;
+      const chatContext = JSON.stringify(args.context || {});
+      const userPrompt = `${chatContext}\n\nLatest message: "${args.prompt}"`;
 
-      const { text } = await generateWithGemini(ctx, systemPrompt, userPrompt, { jsonMode: true });
+      const { text: rawText } = await generateWithGemini(ctx, systemPrompt, userPrompt, { jsonMode: true });
+      logAiInfo("REPLY", "Raw AI response", { rawText: rawText.substring(0, 200) });
 
-      const jsonStr = extractJsonFromMarkdown(text);
-      let aiAction;
-      try {
-        aiAction = JSON.parse(jsonStr);
-      } catch (e) {
-        logAiError("PARSE_JSON", e, { rawText: text.substring(0, 200) });
-        aiAction = { action: "reply", text: text };
-      }
-
-      logAiInfo("ACTION", `Executing AI action: ${aiAction.action}`, { resource: aiAction.resource_name });
+      const jsonStr = extractJsonFromMarkdown(rawText);
+      const aiAction = JSON.parse(jsonStr);
+      logAiInfo("REPLY", "Parsed AI action", { action: aiAction.action, resource: aiAction.resource_name });
 
       if (aiAction.action === "reply") {
         await ctx.runAction(internal.whatsapp.internal.sendMessage, {
           leadId: args.leadId,
           phoneNumber: args.phoneNumber,
           message: aiAction.text,
-          quotedMessageId: args.replyingToMessageId,
           quotedMessageExternalId: args.replyingToExternalId,
         });
 
@@ -493,19 +515,20 @@ Always return ONLY the JSON object. Do not include other text.`;
         const webMatch = findWebProductByQuery(webProducts, aiAction.resource_name || args.prompt);
         if (webMatch) {
           logAiInfo("SEND_PRODUCT", `Found in web products DB: ${webMatch.brandName}`, { leadId: args.leadId });
-          
-          // Fetch the product page for full details (image, PDF, price)
-          const html = await fetchPageHtml(webMatch.pageUrl);
-          let details = extractProductDetailsFromHtml(html, webMatch.pageUrl);
-          
-          // Use cached data as fallback
-          if (!details.imageUrl && webMatch.imageUrl) details = { ...details, imageUrl: webMatch.imageUrl };
-          if (!details.pdfUrl && webMatch.pdfUrl) details = { ...details, pdfUrl: webMatch.pdfUrl };
-          if (!details.mrp && webMatch.mrp) details = { ...details, mrp: webMatch.mrp };
-          if (!details.packaging && webMatch.packaging) details = { ...details, packaging: webMatch.packaging };
-          if (!details.name) details = { ...details, name: webMatch.brandName };
-          if (!details.molecule && webMatch.composition) details = { ...details, molecule: webMatch.composition };
-          
+
+          // Use DB data directly — no need to re-fetch the page
+          // DB has correctly scraped imageUrl, imageUrls, pdfUrl, composition, mrp, packaging
+          const details = {
+            name: webMatch.brandName,
+            molecule: webMatch.composition || null,
+            mrp: webMatch.mrp || null,
+            packaging: webMatch.packaging || null,
+            description: webMatch.description || null,
+            imageUrl: webMatch.imageUrl || (webMatch.imageUrls && webMatch.imageUrls[0]) || null,
+            pdfUrl: webMatch.pdfUrl || null,
+            pageLink: webMatch.pageUrl,
+          };
+
           await sendWebsiteProductToLead(ctx, details, { leadId: args.leadId, phoneNumber: args.phoneNumber }, aiAction.text);
           productSent = true;
         }
