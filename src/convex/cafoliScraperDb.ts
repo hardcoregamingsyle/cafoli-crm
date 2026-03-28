@@ -68,7 +68,7 @@ export const getWebProductCountPublic = query({
   },
 });
 
-// Clean up corrupted composition data (entries containing HTML artifacts)
+// Clean up corrupted composition data (entries containing HTML artifacts or navigation text)
 export const cleanupCorruptedCompositions = mutation({
   args: {},
   handler: async (ctx) => {
@@ -81,6 +81,10 @@ export const cleanupCorruptedCompositions = mutation({
         product.composition.includes("'>") ||
         product.composition.includes("</a>") ||
         product.composition.includes("dropdown-item") ||
+        product.composition.toLowerCase().includes("guide") ||
+        product.composition.toLowerCase().includes("franchise") ||
+        product.composition.toLowerCase().includes("pcd pharma") ||
+        product.composition.toLowerCase().includes("business") ||
         product.composition.length > 500
       )) {
         await ctx.db.patch(product._id, { composition: undefined });

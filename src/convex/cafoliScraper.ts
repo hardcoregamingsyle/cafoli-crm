@@ -8,7 +8,6 @@ import { internal } from "./_generated/api";
 function parseProductListHtml(html: string): Array<{ brandName: string; composition: string; pageUrl: string; imageUrl: string; dosageForm: string }> {
   const products: Array<{ brandName: string; composition: string; pageUrl: string; imageUrl: string; dosageForm: string }> = [];
   
-  // Match table rows - use a tighter pattern to avoid matching navigation rows
   const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
   let rowMatch;
   
@@ -19,6 +18,8 @@ function parseProductListHtml(html: string): Array<{ brandName: string; composit
     if (!row.includes("first-all-p")) continue;
     // Must also have "last-all-p" to be a complete product row (not navigation)
     if (!row.includes("last-all-p")) continue;
+    // Skip navigation rows that contain dropdown items
+    if (row.includes("dropdown-item")) continue;
     
     // Extract slug from first-all-p td: <a href='slug'>Brand Name</a>
     const slugMatch = row.match(/class="first-all-p[^"]*"[^>]*>[\s\S]*?<a\s+href='([^']+)'>([^<]+)<\/a>/i);
@@ -30,10 +31,22 @@ function parseProductListHtml(html: string): Array<{ brandName: string; composit
     
     const pageUrl = `https://cafoli.in/${slug}`;
     
-    // Extract composition from fixed-len class within the second td only
-    // The second td does NOT have first-all-p or last-all-p class
-    const secondTdMatch = row.match(/<td[^>]*class="text-center[^"]*"[^>]*>[\s\S]*?class="fixed-len">([^<]+)<\/a>/i);
-    const composition = secondTdMatch ? secondTdMatch[1].trim() : "";
+    // Extract composition from fixed-len class - must be in a td WITHOUT first-all-p or last-all-p
+    // Use a stricter pattern that only matches the composition td
+    const compMatch = row.match(/class="fixed-len">([^<]+)<\/a>/i);
+    const composition = compMatch ? compMatch[1].trim() : "";
+    
+    // Validate composition - reject if it looks like navigation/blog content
+    const isValidComposition = composition && 
+      composition.length < 200 && 
+      !composition.toLowerCase().includes("guide") &&
+      !composition.toLowerCase().includes("franchise") &&
+      !composition.toLowerCase().includes("pcd") &&
+      !composition.toLowerCase().includes("pharma") &&
+      !composition.toLowerCase().includes("business") &&
+      !composition.toLowerCase().includes("company");
+    
+    const finalComposition = isValidComposition ? composition : "";
     
     // Extract dosage form from third td (after composition)
     const tdMatches = [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)];
@@ -46,7 +59,7 @@ function parseProductListHtml(html: string): Array<{ brandName: string; composit
     const imgMatch = row.match(/src="(https:\/\/cafoli\.in\/Static\/V1\/OtherPageImages\/[^"]+\.webp)"/i);
     const imageUrl = imgMatch ? imgMatch[1] : "";
     
-    products.push({ brandName, composition, pageUrl, imageUrl, dosageForm });
+    products.push({ brandName, composition: finalComposition, pageUrl, imageUrl, dosageForm });
   }
   
   return products;
