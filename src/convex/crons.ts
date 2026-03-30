@@ -102,4 +102,28 @@ crons.cron(
   {}
 );
 
+// Cleanup activity logs older than 24 hours — runs every hour
+crons.interval(
+  "cleanup_activity_logs",
+  { minutes: 60 },
+  internal.activityLogs.cleanupOldLogs,
+  {}
+);
+
+// Cleanup stale chat sessions every hour
+crons.interval(
+  "cleanup_chat_sessions",
+  { minutes: 60 },
+  internal.activeChatSessions.cleanupStaleSessionsInternal,
+  {}
+);
+
+// Cleanup transient data (batchProcessControl, exportLogs, old campaignExecutions) daily
+crons.cron(
+  "cleanup_transient_data",
+  "0 2 * * *",
+  internal.migrations.cleanupTransientData,
+  {}
+);
+
 export default crons;

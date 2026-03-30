@@ -189,3 +189,18 @@ export const getLogStats = query({
     return { total: filtered.length, byCategory };
   },
 });
+
+export const cleanupOldLogs = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000; // 24 hours ago
+    const oldLogs = await ctx.db
+      .query("activityLogs")
+      .withIndex("by_timestamp", (q) => q.lt("timestamp", cutoff))
+      .take(500);
+    for (const log of oldLogs) {
+      await ctx.db.delete(log._id);
+    }
+    return { deleted: oldLogs.length };
+  },
+});

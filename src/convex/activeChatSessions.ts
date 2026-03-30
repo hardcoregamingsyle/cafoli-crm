@@ -1,4 +1,4 @@
-import { mutation, query, internalQuery } from "./_generated/server";
+import { mutation, query, internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 
 // Update active chat session (called when user opens/interacts with chat)
@@ -80,5 +80,22 @@ export const cleanupOldSessions = mutation({
         await ctx.db.delete(session._id);
       }
     }
+  },
+});
+
+export const cleanupStaleSessionsInternal = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const sessions = await ctx.db.query("activeChatSessions").collect();
+    const now = Date.now();
+    const staleThreshold = 5 * 60 * 1000; // 5 minutes
+    let deleted = 0;
+    for (const session of sessions) {
+      if (now - session.lastActivity > staleThreshold) {
+        await ctx.db.delete(session._id);
+        deleted++;
+      }
+    }
+    return { deleted };
   },
 });
