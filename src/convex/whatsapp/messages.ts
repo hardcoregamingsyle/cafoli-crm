@@ -274,8 +274,12 @@ export const sendMediaFromUrl = internalAction({
     try {
       const { accessToken, phoneNumberId } = getWhatsAppCredentials();
 
-      console.log(`[SEND_MEDIA_URL] Downloading ${args.url}`);
-      const fileResponse = await fetch(args.url, {
+      // URL-encode the URL to handle spaces in filenames (e.g., cafoli.in product images)
+      const encodedUrl = args.url.split("/").map((segment, i) => 
+        i < 3 ? segment : encodeURIComponent(decodeURIComponent(segment))
+      ).join("/");
+      console.log(`[SEND_MEDIA_URL] Downloading ${encodedUrl}`);
+      const fileResponse = await fetch(encodedUrl, {
         headers: { "User-Agent": "Mozilla/5.0 (compatible; CafoliBot/1.0)" },
         signal: AbortSignal.timeout(15000),
       });
