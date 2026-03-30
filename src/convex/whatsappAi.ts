@@ -516,18 +516,61 @@ Always return ONLY the JSON object. Do not include other text.`;
         if (webMatch) {
           logAiInfo("SEND_PRODUCT", `Found in web products DB: ${webMatch.brandName}`, { leadId: args.leadId });
 
-          // Use DB data directly — no need to re-fetch the page
-          // DB has correctly scraped imageUrl, imageUrls, pdfUrl, composition, mrp, packaging
-          const details = {
-            name: webMatch.brandName,
-            molecule: webMatch.composition || null,
-            mrp: webMatch.mrp || null,
-            packaging: webMatch.packaging || null,
-            description: webMatch.description || null,
-            imageUrl: webMatch.imageUrl || (webMatch.imageUrls && webMatch.imageUrls[0]) || null,
-            pdfUrl: webMatch.pdfUrl || null,
-            pageLink: webMatch.pageUrl,
-          };
+          // Check if DB data is corrupted or missing key fields
+          const isCorruptedComposition = webMatch.composition && (
+            webMatch.composition.toLowerCase().includes("guide") ||
+            webMatch.composition.toLowerCase().includes("franchise") ||
+            webMatch.composition.toLowerCase().includes("pcd pharma") ||
+            webMatch.composition.includes("'>") ||
+            webMatch.composition.includes("</") ||
+            webMatch.composition.length > 300
+          );
+          const hasGoodDbData = webMatch.imageUrl && !isCorruptedComposition;
+
+          let details: { name: string | null; molecule: string | null; mrp: string | null; packaging: string | null; description: string | null; imageUrl: string | null; pdfUrl: string | null; pageLink: string };
+
+          if (hasGoodDbData) {
+            // Use DB data directly — correctly scraped
+            details = {
+              name: webMatch.brandName,
+              molecule: webMatch.composition || null,
+              mrp: webMatch.mrp || null,
+              packaging: webMatch.packaging || null,
+              description: webMatch.description || null,
+              imageUrl: webMatch.imageUrl || (webMatch.imageUrls && webMatch.imageUrls[0]) || null,
+              pdfUrl: webMatch.pdfUrl || null,
+              pageLink: webMatch.pageUrl,
+            };
+          } else {
+            // DB data is stale/corrupted — fetch live from the product page
+            logAiInfo("SEND_PRODUCT", `DB data stale/corrupted, fetching live page: ${webMatch.pageUrl}`, { leadId: args.leadId });
+            const html = await fetchPageHtml(webMatch.pageUrl);
+            if (html) {
+              const liveDetails = extractProductDetailsFromHtml(html, webMatch.pageUrl);
+              details = {
+                name: liveDetails.name || webMatch.brandName,
+                molecule: isCorruptedComposition ? liveDetails.molecule : (webMatch.composition || liveDetails.molecule),
+                mrp: liveDetails.mrp || webMatch.mrp || null,
+                packaging: liveDetails.packaging || webMatch.packaging || null,
+                description: liveDetails.description || webMatch.description || null,
+                imageUrl: liveDetails.imageUrl || webMatch.imageUrl || null,
+                pdfUrl: liveDetails.pdfUrl || webMatch.pdfUrl || null,
+                pageLink: webMatch.pageUrl,
+              };
+            } else {
+              // Page fetch failed, use whatever DB data we have
+              details = {
+                name: webMatch.brandName,
+                molecule: isCorruptedComposition ? null : (webMatch.composition || null),
+                mrp: webMatch.mrp || null,
+                packaging: webMatch.packaging || null,
+                description: webMatch.description || null,
+                imageUrl: webMatch.imageUrl || null,
+                pdfUrl: webMatch.pdfUrl || null,
+                pageLink: webMatch.pageUrl,
+              };
+            }
+          }
 
           await sendWebsiteProductToLead(ctx, details, { leadId: args.leadId, phoneNumber: args.phoneNumber }, aiAction.text);
           productSent = true;

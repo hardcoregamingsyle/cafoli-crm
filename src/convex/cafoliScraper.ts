@@ -415,3 +415,66 @@ export const fixCorruptedCompositions = action({
     return { fixed, skipped, failed, hasMore, nextOffset };
   },
 });
+
+// Re-scrape all existing products to update their data (fixes stale/corrupted data)
+// Processes in batches to avoid timeouts
+export const fullRescrapeAllProducts = action({
+  args: {
+    offset: v.optional(v.number()),
+    batchSize: v.optional(v.number()),
+  },
+  handler: async (ctx, args): Promise<{ updated: number; failed: number; hasMore: boolean; nextOffset: number; total: number }> => {
+    const offset = args.offset || 0;
+    const batchSize = args.batchSize || 30;
+
+    const allProducts: any[] = await ctx.runQuery(internal.cafoliScraperDb.listWebProducts);
+    const batch = allProducts.slice(offset, offset + batchSize);
+    const hasMore = offset + batchSize < allProducts.length;
+    const nextOffset = offset + batchSize;
+
+    let updated = 0;
+    let failed = 0;
+
+    for (const product of batch) {
+      try {
+        const res = await fetch(product.pageUrl, {
+          headers: { "User-Agent": "Mozilla/5.0 (compatible; CafoliBot/1.0)" },
+          signal: AbortSignal.timeout(15000),
+        });
+
+        if (!res.ok) {
+          failed++;
+          continue;
+        }
+
+        const html = await res.text();
+        const details = extractProductPageDetails(html);
+
+        await ctx.runMutation(internal.cafoliScraperDb.upsertWebProduct, {
+          brandName: details.brandName || product.brandName,
+          composition: details.composition || undefined,
+          dosageForm: details.dosageForm || product.dosageForm || undefined,
+          pageUrl: product.pageUrl,
+          imageUrl: details.imageUrl || undefined,
+          imageUrls: details.imageUrls.length > 0 ? details.imageUrls : undefined,
+          pdfUrl: details.pdfUrl || undefined,
+          literaturePdfUrl: details.literaturePdfUrl || undefined,
+          mrp: details.mrp || undefined,
+          packaging: details.packaging || undefined,
+          packagingType: details.packagingType || undefined,
+          description: details.description || undefined,
+        });
+
+        updated++;
+        await new Promise(r => setTimeout(r, 200));
+      } catch (err) {
+        console.error(`[FULL_RESCRAPE] Failed for ${product.pageUrl}:`, err);
+        failed++;
+      }
+    }
+
+    console.log(`[FULL_RESCRAPE] Batch done: ${updated} updated, ${failed} failed. Total: ${allProducts.length}, hasMore: ${hasMore}`);
+
+    return { updated, failed, hasMore, nextOffset, total: allProducts.length };
+  },
+});
