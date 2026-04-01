@@ -239,6 +239,8 @@ function findWebProductByQuery(webProducts: any[], query: string): any | null {
 }
 
 // Send a website-sourced product to the lead
+// Note: cafoli.in images/PDFs are loaded via JS and cannot be scraped statically.
+// We send text info + page link only.
 async function sendWebsiteProductToLead(ctx: any, productDetails: {
   name: string | null;
   molecule: string | null;
@@ -249,62 +251,18 @@ async function sendWebsiteProductToLead(ctx: any, productDetails: {
   pdfUrl: string | null;
   pageLink: string;
 }, args: { leadId: any; phoneNumber: string }, introText?: string) {
-  if (introText) {
-    await ctx.runAction(internal.whatsapp.internal.sendMessage, {
-      leadId: args.leadId,
-      phoneNumber: args.phoneNumber,
-      message: introText,
-    });
-    await new Promise(resolve => setTimeout(resolve, 300));
-  }
-
-  // Send image if available
-  if (productDetails.imageUrl) {
-    try {
-      const imgUrl = productDetails.imageUrl;
-      const imgLower = imgUrl.toLowerCase();
-      const mimeType = imgLower.endsWith(".webp") ? "image/webp" : imgLower.endsWith(".png") ? "image/png" : "image/jpeg";
-      const safeName = (productDetails.name || "product").replace(/[^a-zA-Z0-9]/g, "_");
-      const ext = imgLower.split(".").pop()?.split("?")[0] || "jpg";
-      await ctx.runAction(internal.whatsapp.messages.sendMediaFromUrl, {
-        leadId: args.leadId,
-        phoneNumber: args.phoneNumber,
-        url: productDetails.imageUrl,
-        fileName: `${safeName}.${ext}`,
-        mimeType,
-      });
-      await new Promise(resolve => setTimeout(resolve, 800));
-    } catch (imgErr) {
-      logAiError("SEND_WEBSITE_PRODUCT_IMG", imgErr, { url: productDetails.imageUrl });
-    }
-  }
-
-  // Send PDF if available
-  if (productDetails.pdfUrl) {
-    try {
-      const safeName = (productDetails.name || "product").replace(/[^a-zA-Z0-9]/g, "_");
-      await ctx.runAction(internal.whatsapp.messages.sendMediaFromUrl, {
-        leadId: args.leadId,
-        phoneNumber: args.phoneNumber,
-        url: productDetails.pdfUrl,
-        fileName: `${safeName}.pdf`,
-        mimeType: "application/pdf",
-      });
-      await new Promise(resolve => setTimeout(resolve, 800));
-    } catch (pdfErr) {
-      logAiError("SEND_WEBSITE_PRODUCT_PDF", pdfErr, { url: productDetails.pdfUrl });
-    }
-  }
-
-  // Send product details text
-  const detailsMessage = [
+  // Build product details text
+  const lines = [
+    introText || null,
     productDetails.name ? `*${productDetails.name}*` : null,
     productDetails.molecule ? `Composition: ${productDetails.molecule}` : null,
     productDetails.mrp ? `MRP: ₹${productDetails.mrp}` : null,
     productDetails.packaging ? `Packaging: ${productDetails.packaging}` : null,
-    productDetails.description ? `\n${productDetails.description}` : null,
+    productDetails.description ? `\n${productDetails.description.substring(0, 300)}` : null,
     `\nMore info: ${productDetails.pageLink}`,
-  ].filter(Boolean).join("\n");
+  ].filter(Boolean);
+
+  const detailsMessage = lines.join("\n");
 
   await ctx.runAction(internal.whatsapp.internal.sendMessage, {
     leadId: args.leadId,
