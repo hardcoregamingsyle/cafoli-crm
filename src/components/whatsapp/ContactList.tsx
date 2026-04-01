@@ -29,7 +29,6 @@ export function ContactList({
 }: ContactListProps) {
   const [internalSearchQuery, setInternalSearchQuery] = useState("");
   const [unreadFilter, setUnreadFilter] = useState<string>("all");
-  // Sentinel placed at 80% of list to prefetch next page
   const prefetchRef = useRef<HTMLDivElement>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
@@ -62,11 +61,15 @@ export function ContactList({
     return matchesSearch;
   });
 
+  // Only allow load-more when not client-side filtering
+  const isClientSideFilter = unreadFilter === "replied" || unreadFilter === "unreplied" || unreadFilter === "unread";
+  const effectiveCanLoadMore = canLoadMore && !isClientSideFilter;
+
   // Prefetch sentinel — triggers at 80% scroll depth
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && canLoadMore && !isLoading) {
+        if (entries[0].isIntersecting && effectiveCanLoadMore && !isLoading) {
           onLoadMore();
         }
       },
@@ -76,13 +79,13 @@ export function ContactList({
     const el = prefetchRef.current;
     if (el) observer.observe(el);
     return () => { if (el) observer.unobserve(el); };
-  }, [canLoadMore, isLoading, onLoadMore]);
+  }, [effectiveCanLoadMore, isLoading, onLoadMore]);
 
   // Bottom sentinel — fallback trigger
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && canLoadMore && !isLoading) {
+        if (entries[0].isIntersecting && effectiveCanLoadMore && !isLoading) {
           onLoadMore();
         }
       },
@@ -92,7 +95,7 @@ export function ContactList({
     const el = loadMoreRef.current;
     if (el) observer.observe(el);
     return () => { if (el) observer.unobserve(el); };
-  }, [canLoadMore, isLoading, onLoadMore]);
+  }, [effectiveCanLoadMore, isLoading, onLoadMore]);
 
   const getInitials = (name: string) => {
     return name
@@ -103,7 +106,6 @@ export function ContactList({
       .slice(0, 2);
   };
 
-  // Index at which to place the prefetch sentinel (80% of list)
   const prefetchIndex = Math.max(0, Math.floor(filteredLeads.length * 0.8) - 1);
 
   return (
@@ -216,7 +218,7 @@ export function ContactList({
           )}
 
           {/* Bottom load-more sentinel */}
-          {canLoadMore && (
+          {effectiveCanLoadMore && (
             <div ref={loadMoreRef} className="flex justify-center py-4">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
