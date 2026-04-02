@@ -106,15 +106,40 @@ export const handleIncomingMessage = internalAction({
         }
 
         if (isNewLead) {
-          console.log(`📤 Sending welcome message to new lead ${leadId}`);
-          try {
-            await ctx.runAction(internal.whatsappTemplates.sendWelcomeMessage, {
-              leadId,
-              phoneNumber: args.from,
-            });
-            console.log("✅ Welcome message sent");
-          } catch (error) {
-            console.error("❌ Error sending welcome message:", error);
+          // Check if the message is a product list / catalogue request — if so, skip welcome and let AI handle
+          const msgLower = (args.text || "").toLowerCase();
+          const isProductListRequest = /product\s*list|catalogue|catalog|range\s*pdf|send\s*pdf|price\s*list|all\s*products|send\s*list|send\s*range/.test(msgLower);
+
+          if (isProductListRequest) {
+            console.log(`📤 New lead requested product list — skipping welcome, triggering AI for lead ${leadId}`);
+            try {
+              const allMessages = await ctx.runQuery(internal.whatsappQueries.getChatMessagesInternal, { leadId });
+              const contextMessages = allMessages.slice(-5).map((m: any) => ({
+                role: m.direction === "outbound" ? "assistant" : "user",
+                content: m.content || (m.messageType ? `[${m.messageType}]` : "[media]")
+              }));
+              const contactRequestMessage = await ctx.runQuery(internal.whatsappConfig.getContactRequestMessage);
+              await ctx.runAction(internal.whatsappAi.generateAndSendAiReplyInternal, {
+                leadId,
+                phoneNumber: args.from,
+                context: { recentMessages: contextMessages, contactRequestMessage },
+                prompt: args.text,
+                isAutoReply: true,
+              });
+            } catch (error) {
+              console.error("❌ Error triggering AI for product list request:", error);
+            }
+          } else {
+            console.log(`📤 Sending welcome message to new lead ${leadId}`);
+            try {
+              await ctx.runAction(internal.whatsappTemplates.sendWelcomeMessage, {
+                leadId,
+                phoneNumber: args.from,
+              });
+              console.log("✅ Welcome message sent");
+            } catch (error) {
+              console.error("❌ Error sending welcome message:", error);
+            }
           }
         } else {
             // Trigger AI for both text and media messages
