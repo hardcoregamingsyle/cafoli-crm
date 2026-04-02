@@ -435,6 +435,8 @@ PRODUCT QUERIES: When the user asks about any product — whether by Cafoli bran
 
 FOLLOW-UP QUESTIONS: If the lead asks for "image", "photo", "picture", "MRP", "price", "packaging" about a product already discussed in the conversation, use "send_product" again with that same product name to resend the full product info. Do NOT use "reply" to say you can't provide images — always use "send_product" to share the product page link where they can see images.
 
+PRODUCT LIST / CATALOGUE REQUESTS (CRITICAL): When the user asks for "product list", "product catalogue", "all products", "range", "price list", "full list", "send list", "send catalogue", "send range", "send PDF", "send all PDFs", or any similar request for a list/catalogue of products — ALWAYS use "send_full_catalogue" action. NEVER reply with a text message for these requests. The send_full_catalogue action will automatically send all Range PDFs.
+
 COMPETITOR BRAND MATCHING (CRITICAL):
 - Many leads will ask for competitor brand names (e.g., "Vonogate", "Pan D", "Pantop", "Omez", "Dolo", etc.)
 - You MUST identify the active molecule/composition of the competitor brand and find the Cafoli equivalent
@@ -457,7 +459,8 @@ RULES:
 - For send_product, resource_name MUST be the exact Cafoli brand name from the product list.
 - ALWAYS try competitor brand → molecule → Cafoli equivalent matching before giving up.
 - Only use intervention_request if NO Cafoli product matches the molecule at all.
-- When the user asks for "full catalogue", "complete catalogue", "all products", use send_full_catalogue.
+- When the user asks for "full catalogue", "complete catalogue", "all products", "product list", "price list", "range", "send list", "send PDF", "send range", use send_full_catalogue.
+- NEVER use "reply" action for product list/catalogue requests — always use send_full_catalogue.
 - For general questions not about products, use reply.
 
 Always return ONLY the JSON object. Do not include other text.`;
