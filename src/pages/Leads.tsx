@@ -344,7 +344,7 @@ export default function Leads() {
               />
 
               {state.selectedLeadId && (
-                <div className="overflow-hidden flex-shrink-0 border-l border-border w-[480px]">
+                <div className="overflow-hidden flex-1 border-l border-border min-w-0">
                   <LeadDetails
                     leadId={state.selectedLeadId}
                     onClose={() => state.setSelectedLeadId(null)}
