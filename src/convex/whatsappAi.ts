@@ -251,15 +251,18 @@ async function sendWebsiteProductToLead(ctx: any, productDetails: {
   pdfUrl: string | null;
   pageLink: string;
 }, args: { leadId: any; phoneNumber: string }, introText?: string) {
+  // Filter out invalid MRP values (0, "0", etc.)
+  const validMrp = productDetails.mrp && productDetails.mrp !== "0" && productDetails.mrp !== "0.00" ? productDetails.mrp : null;
+
   // Build product details text
   const lines = [
     introText || null,
     productDetails.name ? `*${productDetails.name}*` : null,
     productDetails.molecule ? `Composition: ${productDetails.molecule}` : null,
-    productDetails.mrp ? `MRP: ₹${productDetails.mrp}` : null,
+    validMrp ? `MRP: ₹${validMrp}` : `MRP: Contact us for pricing`,
     productDetails.packaging ? `Packaging: ${productDetails.packaging}` : null,
     productDetails.description ? `\n${productDetails.description.substring(0, 300)}` : null,
-    `\nMore info: ${productDetails.pageLink}`,
+    `\nMore info & images: ${productDetails.pageLink}`,
   ].filter(Boolean);
 
   const detailsMessage = lines.join("\n");
@@ -333,13 +336,14 @@ async function sendCatalogProductToLead(ctx: any, product: any, args: { leadId: 
     }
   }
 
+  const validMrpCatalog = product.mrp && product.mrp !== "0" && product.mrp !== "0.00" ? product.mrp : null;
   const detailsMessage = [
     `*${product.name}*`,
     product.molecule ? `Molecule: ${product.molecule}` : null,
-    product.mrp ? `MRP: ₹${product.mrp}` : null,
+    validMrpCatalog ? `MRP: ₹${validMrpCatalog}` : `MRP: Contact us for pricing`,
     product.packaging ? `Packaging: ${product.packaging}` : null,
     product.description ? `\n${product.description}` : null,
-    product.pageLink ? `\nMore info: ${product.pageLink}` : null,
+    product.pageLink ? `\nMore info & images: ${product.pageLink}` : null,
   ].filter(Boolean).join("\n");
 
   await ctx.runAction(internal.whatsapp.internal.sendMessage, {
@@ -429,6 +433,8 @@ Your goal is to assist the lead, answer questions, and provide product informati
 
 PRODUCT QUERIES: When the user asks about any product — whether by Cafoli brand name, molecule/composition, or a COMPETITOR brand name — use the "send_product" action with the EXACT Cafoli brand name from the product list above that best matches.
 
+FOLLOW-UP QUESTIONS: If the lead asks for "image", "photo", "picture", "MRP", "price", "packaging" about a product already discussed in the conversation, use "send_product" again with that same product name to resend the full product info. Do NOT use "reply" to say you can't provide images — always use "send_product" to share the product page link where they can see images.
+
 COMPETITOR BRAND MATCHING (CRITICAL):
 - Many leads will ask for competitor brand names (e.g., "Vonogate", "Pan D", "Pantop", "Omez", "Dolo", etc.)
 - You MUST identify the active molecule/composition of the competitor brand and find the Cafoli equivalent
@@ -509,7 +515,7 @@ Always return ONLY the JSON object. Do not include other text.`;
             webMatch.composition.includes("</") ||
             webMatch.composition.length > 300
           );
-          const hasGoodDbData = webMatch.imageUrl && !isCorruptedComposition;
+          const hasGoodDbData = !isCorruptedComposition;
 
           let details: { name: string | null; molecule: string | null; mrp: string | null; packaging: string | null; description: string | null; imageUrl: string | null; pdfUrl: string | null; pageLink: string };
 
