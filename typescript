@@ -1,358 +1,54 @@
-// ... keep existing code (imports and standardizePhoneNumber)
-export const processIndiamartLead = internalMutation({
-  args: {
-    uniqueQueryId: v.string(),
-    name: v.string(),
-    subject: v.string(),
-    mobile: v.string(),
-    altMobile: v.optional(v.string()),
-    email: v.string(),
-    altEmail: v.optional(v.string()),
-    phone: v.optional(v.string()),
-    altPhone: v.optional(v.string()),
-    agencyName: v.optional(v.string()),
-    address: v.optional(v.string()),
-    city: v.optional(v.string()),
-    state: v.optional(v.string()),
-    pincode: v.optional(v.string()),
-    message: v.string(),
-    metadata: v.object({
-      queryTime: v.string(),
-      queryType: v.string(),
-      mcatName: v.string(),
-      productName: v.string(),
-      countryIso: v.string(),
-      callDuration: v.optional(v.string()),
-    }),
-  },
-  handler: async (ctx, args) => {
-    // Standardize the mobile number before checking
-    const standardizedMobile = standardizePhoneNumber(args.mobile);
-    
-    // First check by mobile number (primary deduplication)
-    let existingLead = null;
-    if (standardizedMobile) {
-      existingLead = await ctx.db
-        .query(\"leads\")
-        .withIndex(\"by_mobile\", (q) => q.eq(\"mobile\", standardizedMobile))\
-        .first();
-    }
-    
-    if (!existingLead && args.uniqueQueryId) {
-      // Fallback: check by unique query ID (for legacy data)
-      existingLead = await ctx.db
-        .query(\"leads\")
-        .filter((q) => q.eq(q.field(\"indiamartUniqueId\"), args.uniqueQueryId))\
-        .first();
-    }
+import React, { useState } from 'react';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import MarkerClusterGroup from 'react-leaflet-cluster';
+import HeatmapLayer from 'react-leaflet-heatmap-layer-v3';
+import 'leaflet/dist/leaflet.css';
 
-    if (existingLead) {
-      // Update existing lead
-      await ctx.db
-        .query(\"leads\")
-        .filter((q) => q.eq(q.field(\"indiamartUniqueId\"), args.uniqueQueryId))
-        .update({
-          name: args.name,
-          subject: args.subject,
-          mobile: args.mobile,
-          altMobile: args.altMobile,
-          email: args.email,
-          altEmail: args.altEmail,
-          phone: args.phone,
-          altPhone: args.altPhone,
-          agencyName: args.agencyName,
-          address: args.address,
-          city: args.city,
-          state: args.state,
-          pincode: args.pincode,
-          message: args.message,
-          metadata: args.metadata,
-          updatedAt: new Date().toISOString(),
-        });
-      
-      return { status: \"updated\" };
-    }
+type MapMode = 'cluster' | 'heatmap';
 
-    // Create new lead
-    const newLead = await ctx.db
-      .query(\"leads\")
-      .insert({
-        name: args.name,
-        subject: args.subject,
-        mobile: args.mobile,
-        altMobile: args.altMobile,
-        email: args.email,
-        altEmail: args.altEmail,
-        phone: args.phone,
-        altPhone: args.altPhone,
-        agencyName: args.agencyName,
-        address: args.address,
-        city: args.city,
-        state: args.state,
-        pincode: args.pincode,
-        message: args.message,
-        metadata: args.metadata,
-        indiamartUniqueId: args.uniqueQueryId,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
+const LeadsMap: React.FC<{ leads: Lead[] }> = ({ leads }) => {
+  const [mode, setMode] = useState<MapMode>('cluster');
+  
+  const points = leads.map(lead => [lead.lat, lead.lng, 1.0]);
+  
+  return (
+    <div>
+      <div>
+        <button onClick={() => setMode('cluster')}>Cluster View</button>
+        <button onClick={() => setMode('heatmap')}>Heatmap View</button>
+      </div>
+      <MapContainer center={[20, 0]} zoom={2} style={{ height: '500px', width: '100%' }}>
+        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        {mode === 'cluster' ? (
+          <MarkerClusterGroup>
+            {leads.map((lead) => (
+              <Marker key={lead.id} position={[lead.lat, lead.lng]}>
+                <Popup>
+                  <h3>{lead.name}</h3>
+                  <p>{lead.city}, {lead.state}</p>
+                </Popup>
+              </Marker>
+            ))}
+          </MarkerClusterGroup>
+        ) : (
+          <HeatmapLayer
+            points={points}
+            longitudeExtractor={(m: any) => m[1]}
+            latitudeExtractor={(m: any) => m[0]}
+            intensityExtractor={(m: any) => m[2]}
+          />
+        )}
+      </MapContainer>
+    </div>
+  );
+};
 
-    return { status: \"created\", leadId: newLead.id };
-  },
-});
-
-// WhatsApp webhook for incoming messages and status updates (POST)
-http.route({
-  path: "/webhooks/whatsapp",
-  method: "POST",
-  handler: httpAction(async (ctx, req) => {
-    try {
-      const body = await req.json();
-      
-      // Process status updates (sent, delivered, read)
-      if (body.entry?.[0]?.changes?.[0]?.value?.statuses) {
-        const statuses = body.entry[0].changes[0].value.statuses;
-        
-        for (const statusUpdate of statuses) {
-          try {
-            await ctx.runAction(internal.whatsapp.webhook.handleStatusUpdate, {
-              messageId: statusUpdate.id,\n              status: statusUpdate.status,\n            });
-          } catch (e) {
-            console.error(\"Error handling status update:\", e);
-          }
-        }
-      }
-
-      // Process incoming messages
-      if (body.entry?.[0]?.changes?.[0]?.value?.messages) {
-        const value = body.entry[0].changes[0].value;
-        const messages = value.messages;
-        const contacts = value.contacts || [];
-        
-        for (const message of messages) {
-          try {
-            // Extract sender name from contacts
-            const contact = contacts.find((c: any) => c.wa_id === message.from);
-            const senderName = contact?.profile?.name;
-
-            // Extract text content - handle button replies and regular text
-            let textContent = \"\";
-            if (message.type === \"button\" && message.button) {\n              textContent = message.button.text || message.button.payload || \"\";\n            } else if (message.type === \"interactive\" && message.interactive) {\n              if (message.interactive.type === \"button_reply\") {\n                textContent = message.interactive.button_reply?.title || \"\";\n              } else if (message.interactive.type === \"list_reply\") {\n                textContent = message.interactive.list_reply?.title || \"\";\n              }\n            } else if (message.text?.body) {\n              textContent = message.text.body;\n            }
-
-            // Extract media information based on message type
-            let mediaId = null;
-            let mediaCaption = null;
-            let mediaMimeType = null;
-            let mediaFilename = null;
-
-            if (message.type === \"image\" && message.image) {\n              mediaId = message.image.id;\n              mediaCaption = message.image.caption;\n              mediaMimeType = message.image.mime_type;\n              textContent = textContent || mediaCaption || \"\";\n            } else if (message.type === \"document\" && message.document) {\n              mediaId = message.document.id;\n              mediaCaption = message.document.caption;\n              mediaMimeType = message.document.mime_type;\n              mediaFilename = message.document.filename;\n              textContent = textContent || mediaCaption || \"\";\n            } else if (message.type === \"video\" && message.video) {\n              mediaId = message.video.id;\n              mediaCaption = message.video.caption;\n              mediaMimeType = message.video.mime_type;\n              textContent = textContent || mediaCaption || \"\";\n            } else if (message.type === \"audio\" && message.audio) {\n              mediaId = message.audio.id;\n              mediaMimeType = message.audio.mime_type;\n            }
-
-            await ctx.runAction(internal.whatsapp.webhook.handleIncomingMessage, {
-              from: message.from,\n              messageId: message.id,\n              timestamp: message.timestamp,\n              text: textContent,\n              type: message.type,\n              mediaId: mediaId || undefined,\n              mediaMimeType: mediaMimeType || undefined,\n              mediaFilename: mediaFilename || undefined,\n              senderName,\n              quotedMessageExternalId: message.context?.id,\n            });
-          } catch (e) {
-            console.error(\"Error handling incoming message:\", e);
-          }
-        }
-      }
-
-      return new Response(JSON.stringify({ success: true }), {
-        status: 200,
-        headers: { \"Content-Type\": \"application/json\" },
-      });
-    } catch (error) {
-      console.error(\"❌ Webhook processing error:\", error);
-      return new Response(JSON.stringify({ error: \"Internal server error\" }), {
-        status: 500,
-        headers: { \"Content-Type\": \"application/json\" },
-      });
-    }
-  }),
-});
-
-// IndiaMART webhook for incoming leads (POST)
-http.route({
-  path: \"/webhooks/indiamart\",
-  method: \"POST\",
-  handler: httpAction(async (ctx, req) => {
-    try {
-      const body = await req.json();
-      
-      // Validate response structure
-      if (body.CODE !== 200 || body.STATUS !== \"SUCCESS\" || !body.RESPONSE) {\
-        return new Response(JSON.stringify({ error: \"Invalid payload\" }), {\
-          status: 400,
-          headers: { \"Content-Type\": \"application/json\" },
-        });
-      }
-
-      const response = body.RESPONSE;
-      const uniqueQueryId = response.UNIQUE_QUERY_ID;
-
-      try {
-        // Process the lead atomically to prevent race conditions
-        const result = await ctx.runMutation(internal.indiamartMutations.processIndiamartLead, {
-          uniqueQueryId: uniqueQueryId || `UNKNOWN_${Date.now()}`,\
-          name: response.SENDER_NAME || \"Unknown\",\
-          subject: response.SUBJECT || \"No Subject\",\
-          mobile: response.SENDER_MOBILE || \"\",\
-          altMobile: response.SENDER_MOBILE_ALT,\
-          email: response.SENDER_EMAIL || \"\",\n          altEmail: response.SENDER_EMAIL_ALT,\n          phone: response.SENDER_PHONE,\n          altPhone: response.SENDER_PHONE_ALT,\n          agencyName: response.SENDER_COMPANY,\n          address: response.SENDER_ADDRESS,\n          city: response.SENDER_CITY,\n          state: response.SENDER_STATE,\n          pincode: response.SENDER_PINCODE,\n          message: response.QUERY_MESSAGE || \"\",\n          metadata: {\n            queryTime: response.QUERY_TIME || new Date().toISOString(),\n            queryType: response.QUERY_TYPE || \"W\",\n            mcatName: response.QUERY_MCAT_NAME || \"\",\n            productName: response.QUERY_PRODUCT_NAME || \"\",\n            countryIso: response.SENDER_COUNTRY_ISO || \"IN\",\n            callDuration: response.CALL_DURATION || undefined,\n          },\n        });
-
-        return new Response(JSON.stringify({ success: true, message: `Lead ${result.status}` }), {\
-          status: 200,
-          headers: { \"Content-Type\": \"application/json\" },
-        });
-      } catch (mutationError: any) {\
-        console.error(\"IndiaMART mutation error:\", mutationError.message || mutationError);\
-        // Return 200 even on mutation failure to ensure webhook doesn't crash externally\
-        return new Response(JSON.stringify({ success: false, error: \"Mutation failed\", details: mutationError.message }), {\
-          status: 200, // Changed from 500 to 200\
-          headers: { \"Content-Type\": \"application/json\" },
-        });
-      }
-    } catch (error) {
-      console.error(\"IndiaMART webhook processing error:\", error);
-      return new Response(JSON.stringify({ error: \"Internal server error\" }), {
-        status: 500,
-        headers: { \"Content-Type\": \"application/json\" },
-      });
-    }
-  }),
-});
-
-export const simulateWebhooksAndTestR2 = action({
-  args: {},
-  handler: async (ctx): Promise<{
-    sendTimeMs: number;
-    verifyTimeMs: number;
-    offloadTimeMs: number;
-    loadTimeMs: number;
-    totalTestLeadsFound: number;
-    mismatchCount: number;
-    loadedCount: number;
-    success: boolean;
-  }> => {
-    const siteUrl = process.env.CONVEX_SITE_URL;
-    if (!siteUrl) throw new Error(\"CONVEX_SITE_URL not set\");
-
-    // 0. Clean up any leftover webhook leads from previous failed runs
-    await ctx.runMutation(internal.test_utils.forceCleanupWebhookLeads);
-
-    // 1. Ensure we have exactly 150 base R2 test leads in Convex
-    await ctx.runMutation(internal.test_utils.prepareBaseR2Leads);
-
-    const startSend = Date.now();
-    const fetchTasks = [];
-
-    // 75 IndiaMART leads
-    for (let i = 0; i < 75; i++) {
-      const payload = {
-        CODE: 200,
-        STATUS: \"SUCCESS\",
-        RESPONSE: {
-          UNIQUE_QUERY_ID: `R2_TEST_IM_${Date.now()}_${i}`,\
-          SENDER_NAME: `R2 Webhook IM Lead ${i}`,\
-          SUBJECT: \"R2 Test Subject\",\
-          SENDER_MOBILE: `919999888${i.toString().padStart(3, '0')}`,\
-          SENDER_EMAIL: `r2test${i}@example.com`,\
-          QUERY_MESSAGE: \"R2_TEST_MESSAGE\",\
-          QUERY_TIME: new Date().toISOString(),\
-          QUERY_TYPE: \"W\",\
-          QUERY_MCAT_NAME: \"Test Category\",\
-          QUERY_PRODUCT_NAME: \"Test Product\",\
-          SENDER_COUNTRY_ISO: \"IN\"\
-        }\
-      };
-      fetchTasks.push(() => fetch(`${siteUrl}/webhooks/indiamart`, {
-        method: \"POST\",
-        headers: { \"Content-Type\": \"application/json\" },
-        body: JSON.stringify(payload)\
-      }));
-    }
-
-    // 75 WhatsApp leads
-    for (let i = 0; i < 75; i++) {
-      const payload = {
-        entry: [{\
-          changes: [{\
-            value: {\
-              messages: [{\
-                from: `919999777${i.toString().padStart(3, '0')}`,\
-                id: `R2_TEST_WA_${Date.now()}_${i}`,\
-                timestamp: Math.floor(Date.now() / 1000).toString(),\
-                type: \"text\",\
-                text: { body: \"R2_TEST_MESSAGE\" }\
-              }],
-              contacts: [{\
-                wa_id: `919999777${i.toString().padStart(3, '0')}`,\
-                profile: { name: `R2 Webhook WA Lead ${i}` }\
-              }]\
-            }\
-          }]\
-        }]\
-      };
-      fetchTasks.push(() => fetch(`${siteUrl}/webhooks/whatsapp`, {
-        method: \"POST\",
-        headers: { \"Content-Type\": \"application/json\" },
-        body: JSON.stringify(payload)\
-      }));
-    }
-
-    // Execute in smaller batches with delays to avoid overwhelming the local fetch/network and OCC conflicts
-    const batchSize = 10;
-    for (let i = 0; i < fetchTasks.length; i += batchSize) {
-      const batch = fetchTasks.slice(i, i + batchSize);
-      const results = await Promise.all(batch.map(task => task()));
-      for (const res of results) {
-        if (!res.ok) {
-          const text = await res.text().catch(() => \"No text\");
-          console.error(`Webhook failed with status: ${res.status}, body: ${text}`);
-        }
-      }
-      // Add a small delay between batches to prevent rate limiting / OCC conflicts
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-
-    const endSend = Date.now();
-    const sendTimeMs = endSend - startSend;
-
-    // Poll for webhooks to process (up to 30 seconds)
-    let allTestLeads: any[] = [];
-    const startVerify = Date.now();
-    for (let attempt = 0; attempt < 15; attempt++) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      allTestLeads = await ctx.runQuery(internal.test_utils.getTestLeadsForOffload);
-      if (allTestLeads.length >= 300) {
-        break;
-      }
-    }
-    const verifyTimeMs = Date.now() - startVerify;
-
-    // Offload to R2
-    const startOffload = Date.now();
-    await ctx.runMutation(internal.test_utils.offloadTestLeads, { leads: allTestLeads });
-    const offloadTimeMs = Date.now() - startOffload;
-
-    // Load from R2
-    const startLoad = Date.now();
-    const { mismatchCount, loadedCount } = await ctx.runMutation(internal.test_utils.loadAndVerifyTestLeads, { offloadedLeads: allTestLeads });
-    const loadTimeMs = Date.now() - startLoad;
-
-    // Clean up webhook leads
-    const webhookLeads = allTestLeads.filter(l => l.source !== \"R2 Test\");
-    await ctx.runMutation(internal.test_utils.cleanupTestWebhookLeads, { webhookLeads });
-
-    return {
-      sendTimeMs,
-      verifyTimeMs,
-      offloadTimeMs,
-      loadTimeMs,
-      totalTestLeadsFound: allTestLeads.length,
-      mismatchCount,
-      loadedCount,
-      success: allTestLeads.length >= 300 && mismatchCount === 0
-    };
-  }
-});
-
-export default http;
+// Define Lead interface if not already defined elsewhere
+interface Lead {
+  id: number | string;
+  name: string;
+  lat: number;
+  lng: number;
+  city: string;
+  state: string;
+}

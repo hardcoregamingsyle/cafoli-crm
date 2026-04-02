@@ -17,6 +17,7 @@ import { useLeadsPageState } from "@/hooks/useLeadsPageState";
 import { LeadsToolbar } from "@/components/leads/LeadsToolbar";
 import { ActiveFiltersDisplay } from "@/components/leads/ActiveFiltersDisplay";
 import { LeadsListPanel } from "@/components/leads/LeadsListPanel";
+import { LeadsMapView } from "@/components/leads/LeadsMapView";
 
 export default function Leads() {
   const { user } = useAuth();
@@ -252,6 +253,7 @@ export default function Leads() {
                            state.selectedAiScoreTiers.length;
 
   const isSemanticMode = !!state.search && state.search.trim().length >= 2;
+  const [showMapView, setShowMapView] = useState(false);
 
   return (
     <AppLayout>
@@ -297,41 +299,58 @@ export default function Leads() {
           allUsers={allUsers}
         />
 
-        <div className="flex-1 flex gap-4 min-h-0">
-          <LeadsListPanel
-            leads={filteredLeads}
-            selectedLeadId={state.selectedLeadId}
-            filter={state.filter}
-            isAdmin={isAdmin}
-            allUsers={allUsers}
-            onSelect={handleLeadSelect}
-            onAssignToSelf={handleAssignToSelf}
-            onAssignToUser={handleAssignToUser}
-            onUnassign={handleUnassign}
-            onOpenWhatsApp={handleOpenWhatsApp}
-            loadMoreRef={loadMoreRef}
-            isLoadingMore={isSemanticMode ? false : (!!paginatedResult && !paginatedResult.isDone)}
-            isDone={isSemanticMode ? true : (!!paginatedResult?.isDone)}
-            r2Leads={[]}
-            onRestoreR2Lead={handleRestoreR2Lead}
-            isRestoring={false}
-          />
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 border border-border rounded-md overflow-hidden">
+            <button
+              onClick={() => setShowMapView(false)}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${!showMapView ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}
+            >
+              List View
+            </button>
+            <button
+              onClick={() => setShowMapView(true)}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${showMapView ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}
+            >
+              Map View
+            </button>
+          </div>
+        </div>
 
-          {state.selectedLeadId ? (
-            <div className="flex-1 min-w-0 max-w-2xl h-full">
-              <LeadDetails 
-                leadId={state.selectedLeadId} 
-                onClose={() => {
-                  const newParams = new URLSearchParams(state.searchParams);
-                  newParams.delete("leadId");
-                  state.setSearchParams(newParams);
-                  state.setSelectedLeadId(null);
-                }} 
+        <div className="flex flex-1 overflow-hidden gap-2">
+          {showMapView ? (
+            <div className="flex-1 overflow-hidden">
+              <LeadsMapView
+                leads={filteredLeads as any}
+                onLeadSelect={(id) => handleLeadSelect(id as any)}
+                selectedLeadId={state.selectedLeadId}
               />
             </div>
           ) : (
-            <div className="hidden md:flex flex-1 items-center justify-center border rounded-lg bg-muted/10 text-muted-foreground">
-              Select a lead to view details
+            <div className="flex flex-1 overflow-hidden gap-2">
+              <LeadsListPanel
+                leads={filteredLeads}
+                selectedLeadId={state.selectedLeadId}
+                filter={state.filter}
+                isAdmin={isAdmin}
+                allUsers={allUsers}
+                onSelect={handleLeadSelect}
+                onAssignToSelf={handleAssignToSelf}
+                onAssignToUser={handleAssignToUser}
+                onUnassign={handleUnassign}
+                onOpenWhatsApp={handleOpenWhatsApp}
+                loadMoreRef={loadMoreRef}
+                isLoadingMore={!paginatedResult?.isDone && !isResetting}
+                isDone={paginatedResult?.isDone ?? true}
+              />
+
+              {state.selectedLeadId && (
+                <div className="overflow-hidden flex-shrink-0 border-l border-border w-[480px]">
+                  <LeadDetails
+                    leadId={state.selectedLeadId}
+                    onClose={() => state.setSelectedLeadId(null)}
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>

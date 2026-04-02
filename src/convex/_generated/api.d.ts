@@ -37,6 +37,8 @@ import type * as emailActions from "../emailActions.js";
 import type * as emailTemplates from "../emailTemplates.js";
 import type * as fix_data from "../fix_data.js";
 import type * as geminiMutations from "../geminiMutations.js";
+import type * as geocoding from "../geocoding.js";
+import type * as geocodingDb from "../geocodingDb.js";
 import type * as get_user from "../get_user.js";
 import type * as http from "../http.js";
 import type * as indiamartMutations from "../indiamartMutations.js";
@@ -140,6 +142,8 @@ declare const fullApi: ApiFromModules<{
   emailTemplates: typeof emailTemplates;
   fix_data: typeof fix_data;
   geminiMutations: typeof geminiMutations;
+  geocoding: typeof geocoding;
+  geocodingDb: typeof geocodingDb;
   get_user: typeof get_user;
   http: typeof http;
   indiamartMutations: typeof indiamartMutations;

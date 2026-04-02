@@ -1,3 +1,2 @@
-export GH_TOKEN=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
-
-pnpm run electron:build
+npm install react-leaflet leaflet leaflet.markercluster react-leaflet-cluster leaflet.heat
+npm install @types/leaflet @types/leaflet.markercluster
