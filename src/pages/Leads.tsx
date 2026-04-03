@@ -135,13 +135,13 @@ export default function Leads() {
   const [isResetting, setIsResetting] = useState(false);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Only use paginated query when NOT in semantic search mode
+  // Use paginated query always — pass search term when present for text-based search
   const paginatedResult = useQuery(
     api.leads.queries.getPaginatedLeads,
-    user && !state.search ? {
+    user ? {
       userId: user._id,
       filter: state.viewIrrelevantLeads ? "irrelevant" : state.viewColdCallerLeads ? "cold_caller" : state.filter,
-      search: undefined,
+      search: state.search && state.search.trim().length >= 2 ? state.search.trim() : undefined,
       statuses: state.selectedStatuses.length > 0 ? state.selectedStatuses : undefined,
       sources: state.selectedSources.length > 0 ? state.selectedSources : undefined,
       tags: state.selectedTags.length > 0 ? state.selectedTags.map(t => t as Id<"tags">) : undefined,
@@ -226,9 +226,9 @@ export default function Leads() {
     return score;
   };
 
-  // Determine which leads to show: semantic results or paginated
+  // Determine which leads to show: semantic results (AI-ranked) or paginated (text search)
   const filteredLeads = useMemo(() => {
-    if (state.search && semanticResults !== null) {
+    if (state.search && state.search.trim().length >= 2 && semanticResults !== null) {
       const q = state.search.trim();
       return [...semanticResults].sort((a, b) => {
         return scoreLeadRelevance(b, q) - scoreLeadRelevance(a, q);
