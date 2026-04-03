@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Sparkles, TrendingUp, RefreshCw } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
+import { motion } from "framer-motion";
 
 interface LeadCardProps {
   lead: Doc<"leads"> & { 
@@ -59,119 +60,130 @@ export function LeadCard({
   };
   
   return (
-    <Card
-      className={`cursor-pointer transition-colors hover:bg-accent/50 ${
-        isSelected ? "border-primary bg-accent/50" : ""
-      } ${
-        lead.nextFollowUpDate && lead.nextFollowUpDate < Date.now() ? "border-red-300 bg-red-50/50" : ""
-      } ${
-        hasUnreadMessages ? "border-green-500 bg-green-0/30 shadow-lg" : ""
-      }`}
-      onClick={() => onSelect(lead._id)}
+    <motion.div
+      whileHover={{ scale: 1.01, y: -1 }}
+      whileTap={{ scale: 0.99 }}
+      transition={{ duration: 0.15, ease: "easeOut" }}
     >
-      <CardContent className="p-4">
-        <LeadCardHeader
-          name={lead.name}
-          creationTime={lead._creationTime}
-          hasUnreadMessages={hasUnreadMessages}
-          unreadCount={lead.unreadCount}
-        />
-        
-        <p className="text-sm text-muted-foreground truncate mb-2">{lead.subject}</p>
-        
-        {/* AI Summary - Full Display */}
-        {aiSummaryLoading ? (
-          <div className="mb-2 space-y-1">
-            <Skeleton className="h-3 w-full" />
-            <Skeleton className="h-3 w-3/4" />
-          </div>
-        ) : aiSummary ? (
-          <div className="mb-2 p-2 bg-purple-50 border border-purple-200 rounded text-xs text-purple-900 flex items-start gap-1">
-            <Sparkles className="h-3 w-3 mt-0.5 flex-shrink-0 text-purple-600" />
-            <span className="flex-1 whitespace-pre-wrap">{aiSummary}</span>
-            {onRegenerateSummary && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-5 w-5 p-0 hover:bg-purple-100"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRegenerateSummary(lead._id);
-                      }}
-                    >
-                      <RefreshCw className="h-3 w-3" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="text-xs">Regenerate AI Summary</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-          </div>
-        ) : onRegenerateSummary ? (
-          <Button
-            variant="outline"
-            size="sm"
-            className="mb-2 h-7 text-xs"
-            onClick={(e) => {
-              e.stopPropagation();
-              onRegenerateSummary(lead._id);
-            }}
-          >
-            <Sparkles className="h-3 w-3 mr-1" />
-            Generate AI Summary
-          </Button>
-        ) : null}
-
-        {/* AI Score Badge */}
-        {lead.aiScoreTier && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border mb-2 ${getScoreBadgeColor(lead.aiScoreTier)}`}>
-                  <TrendingUp className="h-3 w-3" />
-                  {lead.aiScoreTier} Priority
-                  {lead.aiScore && <span className="ml-1">({Math.round(lead.aiScore)})</span>}
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="text-xs max-w-xs">{lead.aiScoreRationale || "AI-generated priority score"}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
-
-        {/* Priority Score Badge */}
-        {lead.priorityScore !== undefined && (
-          <div className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border mb-2 bg-blue-50 text-blue-700 border-blue-200 ml-2">
-            <TrendingUp className="h-3 w-3" />
-            Score: {lead.priorityScore}
-          </div>
-        )}
-        
-        <LeadCardTags tags={lead.tagsData || []} />
-
-        <div className="flex gap-2 text-xs flex-wrap items-center">
-          <LeadCardBadges lead={lead} />
-          
-          <LeadCardActions
-            lead={lead}
-            isUnassignedView={isUnassignedView}
-            viewIrrelevant={viewIrrelevant}
-            isAdmin={isAdmin}
-            allUsers={allUsers}
+      <Card
+        className={`cursor-pointer transition-all duration-200 hover:shadow-md ${
+          isSelected ? "border-primary bg-accent/50 shadow-md" : ""
+        } ${
+          lead.nextFollowUpDate && lead.nextFollowUpDate < Date.now() ? "border-red-300 bg-red-50/50" : ""
+        } ${
+          hasUnreadMessages ? "border-green-500 bg-green-0/30 shadow-lg" : ""
+        }`}
+        onClick={() => onSelect(lead._id)}
+      >
+        <CardContent className="p-4">
+          <LeadCardHeader
+            name={lead.name}
+            creationTime={lead._creationTime}
             hasUnreadMessages={hasUnreadMessages}
-            onAssignToSelf={onAssignToSelf}
-            onAssignToUser={onAssignToUser}
-            onUnassign={onUnassign}
-            onOpenWhatsApp={onOpenWhatsApp}
+            unreadCount={lead.unreadCount}
           />
-        </div>
-      </CardContent>
-    </Card>
+          
+          <p className="text-sm text-muted-foreground truncate mb-2">{lead.subject}</p>
+          
+          {/* AI Summary - Full Display */}
+          {aiSummaryLoading ? (
+            <div className="mb-2 space-y-1">
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-3 w-3/4" />
+            </div>
+          ) : aiSummary ? (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              transition={{ duration: 0.3 }}
+              className="mb-2 p-2 bg-purple-50 border border-purple-200 rounded text-xs text-purple-900 flex items-start gap-1"
+            >
+              <Sparkles className="h-3 w-3 mt-0.5 flex-shrink-0 text-purple-600" />
+              <span className="flex-1 whitespace-pre-wrap">{aiSummary}</span>
+              {onRegenerateSummary && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 w-5 p-0 hover:bg-purple-100"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRegenerateSummary(lead._id);
+                        }}
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-xs">Regenerate AI Summary</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </motion.div>
+          ) : onRegenerateSummary ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="mb-2 h-7 text-xs"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRegenerateSummary(lead._id);
+              }}
+            >
+              <Sparkles className="h-3 w-3 mr-1" />
+              Generate AI Summary
+            </Button>
+          ) : null}
+
+          {/* AI Score Badge */}
+          {lead.aiScoreTier && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border mb-2 ${getScoreBadgeColor(lead.aiScoreTier)}`}>
+                    <TrendingUp className="h-3 w-3" />
+                    {lead.aiScoreTier} Priority
+                    {lead.aiScore && <span className="ml-1">({Math.round(lead.aiScore)})</span>}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs max-w-xs">{lead.aiScoreRationale || "AI-generated priority score"}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+
+          {/* Priority Score Badge */}
+          {lead.priorityScore !== undefined && (
+            <div className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border mb-2 bg-blue-50 text-blue-700 border-blue-200 ml-2">
+              <TrendingUp className="h-3 w-3" />
+              Score: {lead.priorityScore}
+            </div>
+          )}
+          
+          <LeadCardTags tags={lead.tagsData || []} />
+
+          <div className="flex gap-2 text-xs flex-wrap items-center">
+            <LeadCardBadges lead={lead} />
+            
+            <LeadCardActions
+              lead={lead}
+              isUnassignedView={isUnassignedView}
+              viewIrrelevant={viewIrrelevant}
+              isAdmin={isAdmin}
+              allUsers={allUsers}
+              hasUnreadMessages={hasUnreadMessages}
+              onAssignToSelf={onAssignToSelf}
+              onAssignToUser={onAssignToUser}
+              onUnassign={onUnassign}
+              onOpenWhatsApp={onOpenWhatsApp}
+            />
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
   );
 }

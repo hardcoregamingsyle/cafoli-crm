@@ -18,6 +18,7 @@ import { LeadsToolbar } from "@/components/leads/LeadsToolbar";
 import { ActiveFiltersDisplay } from "@/components/leads/ActiveFiltersDisplay";
 import { LeadsListPanel } from "@/components/leads/LeadsListPanel";
 import { LeadsMapView } from "@/components/leads/LeadsMapView";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function Leads() {
   const { user } = useAuth();
@@ -317,42 +318,67 @@ export default function Leads() {
         </div>
 
         <div className="flex flex-1 overflow-hidden gap-2">
-          {showMapView ? (
-            <div className="flex-1 overflow-hidden">
-              <LeadsMapView
-                leads={filteredLeads as any}
-                onLeadSelect={(id) => handleLeadSelect(id as any)}
-                selectedLeadId={state.selectedLeadId}
-              />
-            </div>
-          ) : (
-            <div className="flex flex-1 overflow-hidden gap-2">
-              <LeadsListPanel
-                leads={filteredLeads}
-                selectedLeadId={state.selectedLeadId}
-                filter={state.filter}
-                isAdmin={isAdmin}
-                allUsers={allUsers}
-                onSelect={handleLeadSelect}
-                onAssignToSelf={handleAssignToSelf}
-                onAssignToUser={handleAssignToUser}
-                onUnassign={handleUnassign}
-                onOpenWhatsApp={handleOpenWhatsApp}
-                loadMoreRef={loadMoreRef}
-                isLoadingMore={!paginatedResult?.isDone && !isResetting}
-                isDone={paginatedResult?.isDone ?? true}
-              />
+          <AnimatePresence mode="wait">
+            {showMapView ? (
+              <motion.div
+                key="map"
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98 }}
+                transition={{ duration: 0.2 }}
+                className="flex-1 overflow-hidden"
+              >
+                <LeadsMapView
+                  leads={filteredLeads as any}
+                  onLeadSelect={(id) => handleLeadSelect(id as any)}
+                  selectedLeadId={state.selectedLeadId}
+                />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="list"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="flex flex-1 overflow-hidden gap-2"
+              >
+                <LeadsListPanel
+                  leads={filteredLeads}
+                  selectedLeadId={state.selectedLeadId}
+                  filter={state.filter}
+                  isAdmin={isAdmin}
+                  allUsers={allUsers}
+                  onSelect={handleLeadSelect}
+                  onAssignToSelf={handleAssignToSelf}
+                  onAssignToUser={handleAssignToUser}
+                  onUnassign={handleUnassign}
+                  onOpenWhatsApp={handleOpenWhatsApp}
+                  loadMoreRef={loadMoreRef}
+                  isLoadingMore={!paginatedResult?.isDone && !isResetting}
+                  isDone={paginatedResult?.isDone ?? true}
+                />
 
-              {state.selectedLeadId && (
-                <div className="overflow-hidden flex-1 border-l border-border min-w-0">
-                  <LeadDetails
-                    leadId={state.selectedLeadId}
-                    onClose={() => state.setSelectedLeadId(null)}
-                  />
-                </div>
-              )}
-            </div>
-          )}
+                <AnimatePresence mode="wait">
+                  {state.selectedLeadId && (
+                    <motion.div
+                      key={state.selectedLeadId}
+                      initial={{ opacity: 0, x: 30 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 30 }}
+                      transition={{ duration: 0.25, ease: "easeOut" }}
+                      className="overflow-hidden flex-1 border-l border-border min-w-0"
+                    >
+                      <LeadDetails
+                        leadId={state.selectedLeadId}
+                        onClose={() => state.setSelectedLeadId(null)}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <LeadsFilterSidebar
