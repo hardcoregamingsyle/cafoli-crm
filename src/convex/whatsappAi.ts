@@ -425,6 +425,8 @@ export const generateAndSendAiReplyInternal = internalAction({
       const systemPrompt = `You are a helpful CRM assistant for Cafoli Lifecare, a pharmaceutical company (website: https://cafoli.in).
 You are chatting with a lead on WhatsApp.
 
+LANGUAGE RULE (CRITICAL): Always respond in the SAME language the lead is using. If they write in Hindi, respond in Hindi. If they write in English, respond in English. If they mix languages, match their style. Never switch languages unless the lead does first.
+
 ${webProductCount > 0 ? `Cafoli has ${webProductCount} products in their catalog. Full product list (BrandName | Composition):\n${productContextStr}` : "Cafoli has a large product range at https://cafoli.in"}
 
 Available Range PDFs: ${pdfNames}
@@ -432,6 +434,8 @@ Available Range PDFs: ${pdfNames}
 Your goal is to assist the lead, answer questions, and provide product information.
 
 PRODUCT QUERIES: When the user asks about any product — whether by Cafoli brand name, molecule/composition, or a COMPETITOR brand name — use the "send_product" action with the EXACT Cafoli brand name from the product list above that best matches.
+
+IMAGE / PHOTO MESSAGES: When the lead sends an image (e.g. "[User sent an image]"), they may be showing a product label or asking about a product in the image. Ask them to type the product name or composition so you can look it up. Use the "reply" action for this. Do NOT use "send_product" with a null or unknown resource_name.
 
 FOLLOW-UP QUESTIONS: If the lead asks for "image", "photo", "picture", "MRP", "price", "packaging" about a product already discussed in the conversation, use "send_product" again with that same product name to resend the full product info. Do NOT use "reply" to say you can't provide images — always use "send_product" to share the product page link where they can see images.
 
@@ -456,7 +460,8 @@ You can perform the following actions by returning a JSON object:
 6. Request contact (if they want a meeting/call): { "action": "contact_request", "text": "I've noted your request.", "reason": "reason" }
 
 RULES:
-- For send_product, resource_name MUST be the exact Cafoli brand name from the product list.
+- For send_product, resource_name MUST be the exact Cafoli brand name from the product list. NEVER use send_product with a null or empty resource_name.
+- If the user sends only an image with no text, use "reply" to ask them to type the product name.
 - ALWAYS try competitor brand → molecule → Cafoli equivalent matching before giving up.
 - Only use intervention_request if NO Cafoli product matches the molecule at all.
 - When the user asks for "full catalogue", "complete catalogue", "all products", "product list", "price list", "range", "send list", "send PDF", "send range", use send_full_catalogue.
@@ -472,7 +477,7 @@ Always return ONLY the JSON object. Do not include other text.`;
 
       let conversationHistory = "";
       if (recentMessages.length > 0) {
-        conversationHistory = "Recent conversation:\n" + recentMessages.map((m: any) => {
+        conversationHistory = "Conversation history (oldest to newest):\n" + recentMessages.map((m: any) => {
           const role = m.role === "assistant" ? "Agent" : "Lead";
           return `${role}: ${m.content}`;
         }).join("\n") + "\n\n";
@@ -500,6 +505,17 @@ Always return ONLY the JSON object. Do not include other text.`;
         });
 
       } else if (aiAction.action === "send_product") {
+        // Guard: if resource_name is null/empty, fall back to a reply asking for product name
+        if (!aiAction.resource_name || aiAction.resource_name === "null") {
+          logAiInfo("SEND_PRODUCT", "resource_name is null/empty, asking lead for product name", { leadId: args.leadId });
+          await ctx.runAction(internal.whatsapp.internal.sendMessage, {
+            leadId: args.leadId,
+            phoneNumber: args.phoneNumber,
+            message: "Could you please type the name of the product or its composition? I'll look it up for you right away! 😊",
+          });
+          return;
+        }
+
         logAiInfo("SEND_PRODUCT", `Looking up product: "${aiAction.resource_name}"`, { leadId: args.leadId });
 
         let productSent = false;
@@ -509,74 +525,66 @@ Always return ONLY the JSON object. Do not include other text.`;
         if (webMatch) {
           logAiInfo("SEND_PRODUCT", `Found in web products DB: ${webMatch.brandName}`, { leadId: args.leadId });
 
-          // Check if DB data is corrupted or missing key fields
-          const isCorruptedComposition = webMatch.composition && (
-            webMatch.composition.toLowerCase().includes("guide") ||
-            webMatch.composition.toLowerCase().includes("franchise") ||
-            webMatch.composition.toLowerCase().includes("pcd pharma") ||
-            webMatch.composition.includes("'>") ||
-            webMatch.composition.includes("</") ||
-            webMatch.composition.length > 300
-          );
-          const hasGoodDbData = !isCorruptedComposition;
-
           let details: { name: string | null; molecule: string | null; mrp: string | null; packaging: string | null; description: string | null; imageUrl: string | null; pdfUrl: string | null; pageLink: string };
 
-          if (hasGoodDbData) {
-            // Use DB data directly — correctly scraped
-            details = {
-              name: webMatch.brandName,
-              molecule: webMatch.composition || null,
-              mrp: webMatch.mrp || null,
-              packaging: webMatch.packaging || null,
-              description: webMatch.description || null,
-              imageUrl: webMatch.imageUrl || (webMatch.imageUrls && webMatch.imageUrls[0]) || null,
-              pdfUrl: webMatch.pdfUrl || null,
-              pageLink: webMatch.pageUrl,
-            };
-          } else {
-            // DB data is stale/corrupted — fetch live from the product page
-            logAiInfo("SEND_PRODUCT", `DB data stale/corrupted, fetching live page: ${webMatch.pageUrl}`, { leadId: args.leadId });
-            const html = await fetchPageHtml(webMatch.pageUrl);
-            if (html) {
-              const liveDetails = extractProductDetailsFromHtml(html, webMatch.pageUrl);
+          // Use cached data directly
+          details = {
+            name: webMatch.brandName || null,
+            molecule: webMatch.composition || null,
+            mrp: webMatch.mrp || null,
+            packaging: webMatch.packaging || null,
+            description: webMatch.description || null,
+            imageUrl: webMatch.imageUrl || (webMatch.imageUrls && webMatch.imageUrls[0]) || null,
+            pdfUrl: webMatch.pdfUrl || null,
+            pageLink: webMatch.pageUrl || `https://cafoli.in`,
+          };
+
+          // Try to enrich with live data if we have a page URL
+          if (webMatch.pageUrl) {
+            try {
+              const html = await fetchPageHtml(webMatch.pageUrl);
+              if (html) {
+                const liveDetails = extractProductDetailsFromHtml(html, webMatch.pageUrl);
+                // Merge: prefer live data but fall back to cached
+                const isCorruptedComposition = liveDetails.molecule && liveDetails.molecule.length > 200;
+                details = {
+                  name: liveDetails.name || webMatch.brandName || null,
+                  molecule: isCorruptedComposition ? null : (liveDetails.molecule || webMatch.composition || null),
+                  mrp: liveDetails.mrp || webMatch.mrp || null,
+                  packaging: liveDetails.packaging || webMatch.packaging || null,
+                  description: liveDetails.description || webMatch.description || null,
+                  imageUrl: liveDetails.imageUrl || webMatch.imageUrl || null,
+                  pdfUrl: liveDetails.pdfUrl || webMatch.pdfUrl || null,
+                  pageLink: webMatch.pageUrl,
+                };
+              }
+            } catch {
+              // Use cached data as fallback
               details = {
-                name: liveDetails.name || webMatch.brandName,
-                molecule: isCorruptedComposition ? liveDetails.molecule : (webMatch.composition || liveDetails.molecule),
-                mrp: liveDetails.mrp || webMatch.mrp || null,
-                packaging: liveDetails.packaging || webMatch.packaging || null,
-                description: liveDetails.description || webMatch.description || null,
-                imageUrl: liveDetails.imageUrl || webMatch.imageUrl || null,
-                pdfUrl: liveDetails.pdfUrl || webMatch.pdfUrl || null,
-                pageLink: webMatch.pageUrl,
-              };
-            } else {
-              // Page fetch failed, use whatever DB data we have
-              details = {
-                name: webMatch.brandName,
-                molecule: isCorruptedComposition ? null : (webMatch.composition || null),
+                name: webMatch.brandName || null,
+                molecule: webMatch.composition || null,
                 mrp: webMatch.mrp || null,
                 packaging: webMatch.packaging || null,
                 description: webMatch.description || null,
                 imageUrl: webMatch.imageUrl || null,
                 pdfUrl: webMatch.pdfUrl || null,
-                pageLink: webMatch.pageUrl,
+                pageLink: webMatch.pageUrl || `https://cafoli.in`,
               };
             }
           }
 
-          await sendWebsiteProductToLead(ctx, details, { leadId: args.leadId, phoneNumber: args.phoneNumber }, aiAction.text);
-          productSent = true;
+          if (details.name || details.imageUrl) {
+            await sendWebsiteProductToLead(ctx, details, { leadId: args.leadId, phoneNumber: args.phoneNumber }, aiAction.text);
+            productSent = true;
+          }
         }
 
-        // Step 2: If not in DB, try live sitemap lookup
+        // Step 2: Try sitemap search if not found in DB
         if (!productSent) {
-          logAiInfo("SEND_PRODUCT", `Not in DB, trying live sitemap lookup`, { leadId: args.leadId });
+          logAiInfo("SEND_PRODUCT", `Not in web products DB, trying sitemap`, { leadId: args.leadId });
           const sitemapUrls = await fetchCafoliSitemap();
-          
           if (sitemapUrls.length > 0) {
-            const productUrl = await findBestProductUrl(ctx, `${aiAction.resource_name} ${args.prompt}`, sitemapUrls);
-            
+            const productUrl = await findBestProductUrl(ctx, aiAction.resource_name || args.prompt, sitemapUrls);
             if (productUrl) {
               const html = await fetchPageHtml(productUrl);
               if (html) {

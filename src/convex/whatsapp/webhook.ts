@@ -125,7 +125,7 @@ export const handleIncomingMessage = internalAction({
             console.log(`📤 New lead also requested product list — triggering AI for lead ${leadId}`);
             try {
               const allMessages = await ctx.runQuery(internal.whatsappQueries.getChatMessagesInternal, { leadId });
-              const contextMessages = allMessages.slice(-5).map((m: any) => ({
+              const contextMessages = allMessages.slice(-20).map((m: any) => ({
                 role: m.direction === "outbound" ? "assistant" : "user",
                 content: m.content || (m.messageType ? `[${m.messageType}]` : "[media]")
               }));
@@ -149,7 +149,7 @@ export const handleIncomingMessage = internalAction({
                 console.log(`🤖 Triggering auto-reply for lead ${leadId} (chat not active, type: ${args.type})`);
                 
                 const allMessages = await ctx.runQuery(internal.whatsappQueries.getChatMessagesInternal, { leadId });
-                const contextMessages = allMessages.slice(-5).map((m: any) => ({
+                const contextMessages = allMessages.slice(-20).map((m: any) => ({
                     role: m.direction === "outbound" ? "assistant" : "user",
                     content: m.content || (m.messageType ? `[${m.messageType}]` : "[media]")
                 }));
