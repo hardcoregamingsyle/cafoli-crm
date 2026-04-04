@@ -126,10 +126,10 @@ crons.cron(
   {}
 );
 
-// Auto-geocode leads with location data every 30 minutes
+// Auto-geocode leads with location data every 5 minutes
 crons.interval(
   "auto_geocode_leads",
-  { minutes: 30 },
+  { minutes: 5 },
   internal.geocoding.batchGeocodeLeads,
   {}
 );
