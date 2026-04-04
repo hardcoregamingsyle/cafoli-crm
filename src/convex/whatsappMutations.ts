@@ -102,18 +102,20 @@ export const storeMessage = internalMutation({
 
     if (args.direction === "inbound") {
       updateFields.unreadCount = (chat.unreadCount || 0) + 1;
-    } else if ((chat.unreadCount || 0) > 0) {
-      // Fix ghost unread state for outbound/AI/template messages.
+    } else {
+      // For outbound/AI/template messages: always reset ghost unread state.
       // Only keep unread count if there are actual unread inbound messages.
-      const unreadInboundMessages = await ctx.db
-        .query("messages")
-        .withIndex("by_chat_status", (q) =>
-          q.eq("chatId", chat._id).eq("status", "received")
-        )
-        .take(1);
+      if ((chat.unreadCount || 0) > 0) {
+        const unreadInboundMessages = await ctx.db
+          .query("messages")
+          .withIndex("by_chat_status", (q) =>
+            q.eq("chatId", chat._id).eq("status", "received")
+          )
+          .take(1);
 
-      if (unreadInboundMessages.length === 0) {
-        updateFields.unreadCount = 0;
+        if (unreadInboundMessages.length === 0) {
+          updateFields.unreadCount = 0;
+        }
       }
     }
 
@@ -393,13 +395,12 @@ export const markChatAsRead = mutation({
       .first();
 
     if (chat) {
-      // Reset unread count
+      // Always reset unread count to 0
       await ctx.db.patch(chat._id, {
         unreadCount: 0,
       });
 
-      // Find unread inbound messages
-      // We look for messages with status "received" which implies they haven't been read yet
+      // Find unread inbound messages and mark them as read
       const unreadMessages = await ctx.db
         .query("messages")
         .withIndex("by_chat_status", (q) => q.eq("chatId", chat._id).eq("status", "received"))
@@ -409,15 +410,12 @@ export const markChatAsRead = mutation({
         const messageIds: string[] = [];
         
         for (const msg of unreadMessages) {
-          // Update status in DB to "read"
           await ctx.db.patch(msg._id, { status: "read" });
-          
           if (msg.externalId) {
             messageIds.push(msg.externalId);
           }
         }
 
-        // Schedule action to mark as read on WhatsApp
         if (messageIds.length > 0) {
           await ctx.scheduler.runAfter(0, internal.whatsapp.messages.markMessagesAsRead, {
             messageIds,

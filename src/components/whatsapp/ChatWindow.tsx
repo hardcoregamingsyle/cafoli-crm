@@ -156,12 +156,12 @@ export function ChatWindow({ selectedLeadId, selectedLead, onBack }: ChatWindowP
     }
   }, [messages, replyingTo]);
 
-  // Mark as read when selecting a lead
+  // Mark as read whenever a lead is selected or new messages arrive
   useEffect(() => {
-    if (selectedLeadId && (selectedLead?.unreadCount ?? 0) > 0) {
+    if (selectedLeadId) {
       markChatAsRead({ leadId: selectedLeadId });
     }
-  }, [selectedLeadId, selectedLead?.unreadCount, markChatAsRead]);
+  }, [selectedLeadId, markChatAsRead]);
 
   // Handle input change to detect slash commands
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
