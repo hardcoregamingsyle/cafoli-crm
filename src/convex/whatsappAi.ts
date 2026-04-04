@@ -193,7 +193,7 @@ function findWebProductByQuery(webProducts: any[], query: string): any | null {
   match = webProducts.find((p: any) => p.brandName?.toLowerCase().startsWith(q));
   if (match) return match;
   
-  // Query starts with brand name (e.g. "Lubicom Eye Drop" matches "Lubicom")
+  // Query starts with brand name
   match = webProducts.find((p: any) => {
     const bn = p.brandName?.toLowerCase() || "";
     return bn.length > 3 && q.startsWith(bn);
@@ -211,8 +211,7 @@ function findWebProductByQuery(webProducts: any[], query: string): any | null {
   });
   if (match) return match;
 
-  // Word-level match: first significant word of query matches first word of brand name
-  // e.g. "Spirazen 3 M.I.U. Tablets" → first word "spirazen" matches brand "Spirazen 3 M.I.U."
+  // Word-level match: first word of query matches first word of brand name
   const qFirstWord = q.split(/\s+/)[0];
   if (qFirstWord && qFirstWord.length > 3) {
     match = webProducts.find((p: any) => {
@@ -223,11 +222,12 @@ function findWebProductByQuery(webProducts: any[], query: string): any | null {
     if (match) return match;
   }
 
-  // Word-level match: first word of brand name appears in query
+  // Word-level match: first word of brand name (>6 chars) appears as whole word in query
   match = webProducts.find((p: any) => {
     const bn = p.brandName?.toLowerCase() || "";
     const bnFirstWord = bn.split(/\s+/)[0];
-    return bnFirstWord.length > 4 && q.includes(bnFirstWord);
+    if (bnFirstWord.length <= 6) return false;
+    return q.split(/\s+/).includes(bnFirstWord);
   });
   if (match) return match;
   
@@ -249,14 +249,13 @@ function findWebProductByQuery(webProducts: any[], query: string): any | null {
   match = webProducts.find((p: any) => {
     const comp = p.composition?.toLowerCase() || "";
     if (!comp || comp.length < 5) return false;
-    // Extract first molecule name (before + or ,)
     const firstMolecule = comp.split(/[+,]/)[0].trim();
     return firstMolecule.length > 5 && q.includes(firstMolecule);
   });
   if (match) return match;
 
   // Molecule word-level: any word in query matches first molecule word
-  const qWords = q.split(/\s+/).filter(w => w.length > 4);
+  const qWords = q.split(/\s+/).filter((w: string) => w.length > 4);
   match = webProducts.find((p: any) => {
     const comp = p.composition?.toLowerCase() || "";
     if (!comp) return false;
@@ -267,7 +266,6 @@ function findWebProductByQuery(webProducts: any[], query: string): any | null {
   
   return null;
 }
-
 // Use Gemini to fuzzy-match a product name against the full web products list
 async function geminiProductFuzzyMatch(ctx: any, query: string, webProducts: any[]): Promise<any | null> {
   if (!webProducts || webProducts.length === 0) return null;
@@ -277,8 +275,15 @@ async function geminiProductFuzzyMatch(ctx: any, query: string, webProducts: any
     ).join("\n");
     const systemPrompt = `You are a pharmaceutical expert. Given a product query, find the single best matching Cafoli brand name from the list below.
 Return ONLY a JSON object: { "brandName": "ExactBrandName" } or { "brandName": null } if no reasonable match exists.
-The query may be a competitor brand, molecule name, or partial Cafoli brand name.
-Match by: molecule/composition similarity, brand name similarity, or therapeutic equivalence.`;
+
+STRICT MATCHING RULES:
+- The query may be a competitor brand, molecule name, or partial Cafoli brand name.
+- Match ONLY by: exact molecule/composition match, or clear brand name similarity.
+- If the query is a molecule name (e.g. "Clonazepam"), ONLY match a product whose composition contains that exact molecule.
+- If the query is a brand name, ONLY match a product whose brand name is clearly similar.
+- Do NOT match based on vague therapeutic category alone.
+- If no product clearly matches the molecule or brand name, return { "brandName": null }.
+- NEVER return a product that doesn't contain the queried molecule in its composition.`;
     const { text } = await generateWithGemini(ctx, systemPrompt,
       `Query: "${query}"\n\nCafoli products (BrandName | Composition):\n${productList}`,
       { jsonMode: true }
