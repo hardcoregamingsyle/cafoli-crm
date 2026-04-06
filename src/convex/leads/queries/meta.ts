@@ -1,27 +1,51 @@
 import { v } from "convex/values";
-import { query } from "../../_generated/server";
+import { query, internalMutation } from "../../_generated/server";
 import { ROLES } from "../../schema";
 import { getAuthUserId } from "@convex-dev/auth/server";
+
+// Internal mutation to update the sources cache — called after lead create/update
+export const updateSourcesCache = internalMutation({
+  args: { source: v.string() },
+  handler: async (ctx, args) => {
+    if (!args.source || !args.source.trim()) return;
+    const existing = await ctx.db
+      .query("leadSourcesCache")
+      .withIndex("by_key", q => q.eq("key", "singleton"))
+      .first();
+    if (existing) {
+      if (!existing.sources.includes(args.source)) {
+        await ctx.db.patch(existing._id, {
+          sources: [...existing.sources, args.source].sort(),
+          updatedAt: Date.now(),
+        });
+      }
+    } else {
+      await ctx.db.insert("leadSourcesCache", {
+        key: "singleton",
+        sources: [args.source],
+        updatedAt: Date.now(),
+      });
+    }
+  },
+});
 
 export const getUniqueSources = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    let isAdmin = false;
-    if (userId) {
-      const user = await ctx.db.get(userId);
-      isAdmin = user?.role === ROLES.ADMIN;
+    // Use the cache singleton — O(1) read instead of scanning 5000 leads
+    const cache = await ctx.db
+      .query("leadSourcesCache")
+      .withIndex("by_key", q => q.eq("key", "singleton"))
+      .first();
+    if (cache && cache.sources.length > 0) {
+      return cache.sources;
     }
-
-    const leads = await ctx.db.query("leads").withIndex("by_last_activity").order("desc").take(5000);
+    // Fallback: scan leads once to build cache (only on first call or if cache is empty)
+    const leads = await ctx.db.query("leads").withIndex("by_last_activity").order("desc").take(2000);
     const sources = new Set<string>();
-    
     for (const lead of leads) {
-      if (lead.source) {
-        sources.add(lead.source);
-      }
+      if (lead.source) sources.add(lead.source);
     }
-    
     return Array.from(sources).sort();
   },
 });

@@ -2,51 +2,74 @@ import type { QueryCtx } from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
 
 export async function enrichLeads(ctx: QueryCtx, leads: any[]) {
-  return await Promise.all(
-    leads.map(async (lead) => {
-      let enriched = { ...lead };
-      
-      if (lead.assignedTo) {
-        const assignedUser = await ctx.db.get(lead.assignedTo);
-        if (assignedUser && '_id' in assignedUser) {
-          const userName = (assignedUser as any).name || (assignedUser as any).email || "Unknown User";
-          enriched.assignedToName = userName;
-        }
-      }
+  if (leads.length === 0) return [];
 
-      if (lead.coldCallerAssignedTo) {
-        const assignedUser = await ctx.db.get(lead.coldCallerAssignedTo);
-        if (assignedUser && '_id' in assignedUser) {
-          const userName = (assignedUser as any).name || (assignedUser as any).email || "Unknown User";
-          enriched.coldCallerAssignedToName = userName;
-        }
-      }
+  // Collect all unique IDs to batch-fetch
+  const userIds = new Set<string>();
+  const tagIds = new Set<string>();
+  const leadIds = new Set<string>();
 
-      if (lead.tags && lead.tags.length > 0) {
-        const tags = [];
-        for (const tagId of lead.tags) {
-          const tag = await ctx.db.get(tagId);
-          if (tag) tags.push(tag);
-        }
-        enriched.tagsData = tags;
-      }
+  for (const lead of leads) {
+    if (lead.assignedTo) userIds.add(lead.assignedTo);
+    if (lead.coldCallerAssignedTo) userIds.add(lead.coldCallerAssignedTo);
+    if (lead.tags) for (const t of lead.tags) tagIds.add(t);
+    if (lead._id && !lead._isR2) leadIds.add(lead._id);
+  }
 
-      // Enrich with unread message count from chats table
-      if (lead._id && !lead._isR2) {
-        const chat = await ctx.db
-          .query("chats")
-          .withIndex("by_lead", (q) => q.eq("leadId", lead._id))
-          .first();
-        if (chat) {
-          enriched.unreadCount = chat.unreadCount || 0;
-        } else {
-          enriched.unreadCount = 0;
-        }
-      }
+  // Batch fetch all users, tags, and chats in parallel
+  const [usersArr, tagsArr, chatsArr] = await Promise.all([
+    Promise.all([...userIds].map(id => ctx.db.get(id as Id<"users">))),
+    Promise.all([...tagIds].map(id => ctx.db.get(id as Id<"tags">))),
+    Promise.all([...leadIds].map(id =>
+      ctx.db.query("chats").withIndex("by_lead", q => q.eq("leadId", id as Id<"leads">)).first()
+    )),
+  ]);
 
-      return enriched;
-    })
-  );
+  // Build lookup Maps
+  const userMap = new Map<string, any>();
+  for (let i = 0; i < [...userIds].length; i++) {
+    const u = usersArr[i];
+    if (u) userMap.set([...userIds][i], u);
+  }
+
+  const tagMap = new Map<string, any>();
+  for (let i = 0; i < [...tagIds].length; i++) {
+    const t = tagsArr[i];
+    if (t) tagMap.set([...tagIds][i], t);
+  }
+
+  const chatMap = new Map<string, any>();
+  const leadIdsArr = [...leadIds];
+  for (let i = 0; i < leadIdsArr.length; i++) {
+    const c = chatsArr[i];
+    chatMap.set(leadIdsArr[i], c);
+  }
+
+  // Apply enrichment in one pass — no more N+1 queries
+  return leads.map(lead => {
+    const enriched = { ...lead };
+
+    if (lead.assignedTo) {
+      const u = userMap.get(lead.assignedTo);
+      if (u) enriched.assignedToName = u.name || u.email || "Unknown User";
+    }
+
+    if (lead.coldCallerAssignedTo) {
+      const u = userMap.get(lead.coldCallerAssignedTo);
+      if (u) enriched.coldCallerAssignedToName = u.name || u.email || "Unknown User";
+    }
+
+    if (lead.tags && lead.tags.length > 0) {
+      enriched.tagsData = lead.tags.map((id: string) => tagMap.get(id)).filter(Boolean);
+    }
+
+    if (lead._id && !lead._isR2) {
+      const chat = chatMap.get(lead._id);
+      enriched.unreadCount = chat?.unreadCount || 0;
+    }
+
+    return enriched;
+  });
 }
 
 export function applyFilters(leads: any[], args: any) {

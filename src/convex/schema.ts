@@ -429,4 +429,11 @@ export default defineSchema({
       searchField: "searchText",
     }),
 
+  // Singleton cache for unique lead sources — avoids scanning 5000 leads on every query
+  leadSourcesCache: defineTable({
+    key: v.string(), // always "singleton"
+    sources: v.array(v.string()),
+    updatedAt: v.number(),
+  }).index("by_key", ["key"]),
+
 }, { schemaValidation: false });

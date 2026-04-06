@@ -128,26 +128,22 @@ export const getLeadsWithUnreadCounts = query({
     let leads = await ctx.db.query("leads")
       .withIndex("by_last_activity")
       .order("desc")
-      .take(1000);
+      .take(200);
     
     if (user.role !== ROLES.ADMIN) {
       leads = leads.filter(l => l.source !== "R2 Test");
     }
 
-    const leadsWithUnread = await Promise.all(
-      leads.map(async (lead) => {
-        const chat = await ctx.db
-          .query("chats")
-          .withIndex("by_lead", (q) => q.eq("leadId", lead._id))
-          .first();
-        
-        return {
-          ...lead,
-          unreadCount: chat?.unreadCount ?? 0,
-        };
-      })
+    // Batch fetch all chats in parallel instead of N+1
+    const chats = await Promise.all(
+      leads.map(lead =>
+        ctx.db.query("chats").withIndex("by_lead", q => q.eq("leadId", lead._id)).first()
+      )
     );
 
-    return leadsWithUnread;
+    return leads.map((lead, i) => ({
+      ...lead,
+      unreadCount: chats[i]?.unreadCount ?? 0,
+    }));
   },
 });

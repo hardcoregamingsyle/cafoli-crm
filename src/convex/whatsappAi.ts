@@ -414,6 +414,22 @@ async function sendCatalogProductToLead(ctx: any, product: any, args: { leadId: 
   });
 }
 
+// ─── In-memory cache for web products (10-minute TTL) ────────────────────────
+let _webProductsCache: any[] | null = null;
+let _webProductsCacheTime = 0;
+const WEB_PRODUCTS_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+async function getCachedWebProducts(ctx: any): Promise<any[]> {
+  const now = Date.now();
+  if (_webProductsCache && now - _webProductsCacheTime < WEB_PRODUCTS_CACHE_TTL) {
+    return _webProductsCache;
+  }
+  const products = await ctx.runQuery("cafoliScraperDb:listWebProducts" as any);
+  _webProductsCache = products || [];
+  _webProductsCacheTime = now;
+  return _webProductsCache!;
+}
+
 // ─── Token-windowed context builder ───────────────────────────────────────────
 // Estimates tokens as chars/4. Keeps the last ~100k tokens as "recent".
 // Older messages are summarized with Gemini into a compact summary.
@@ -543,7 +559,7 @@ export const generateAndSendAiReplyInternal = internalAction({
       const pdfNames = rangePdfs.map((p: any) => p.name).join(", ");
 
       // Load cached web products for fast matching
-      const webProducts = await ctx.runQuery("cafoliScraperDb:listWebProducts" as any);
+      const webProducts = await getCachedWebProducts(ctx);
       const webProductCount = webProducts.length;
 
       // Build product list for AI context - include all products with brand + composition
