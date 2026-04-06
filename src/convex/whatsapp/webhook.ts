@@ -153,6 +153,7 @@ export const handleIncomingMessage = internalAction({
 
                 // Build a meaningful prompt for media messages
                 let prompt = args.text;
+                let imageUrlForAi: string | undefined = undefined;
                 if (args.type !== "text" || !args.text) {
                     const mediaTypeLabel: Record<string, string> = {
                         image: "an image",
@@ -166,6 +167,10 @@ export const handleIncomingMessage = internalAction({
                     prompt = args.text
                         ? `${args.text} [User also sent ${label}${filename}]`
                         : `[User sent ${label}${filename}]`;
+                    // Pass image URL for vision analysis
+                    if (args.type === "image" && mediaUrl) {
+                        imageUrlForAi = mediaUrl;
+                    }
                 }
 
                 await ctx.runAction(internal.whatsappAi.generateAndSendAiReplyInternal, {
@@ -173,7 +178,8 @@ export const handleIncomingMessage = internalAction({
                         phoneNumber: args.from,
                         context: { 
                             ...tokenContext,
-                            contactRequestMessage 
+                            contactRequestMessage,
+                            imageUrl: imageUrlForAi,
                         },
                         prompt,
                         isAutoReply: true

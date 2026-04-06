@@ -2,7 +2,7 @@
 import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { generateWithGemini, extractJsonFromMarkdown } from "./lib/gemini";
+import { generateWithGemini, generateWithGeminiVision, extractJsonFromMarkdown } from "./lib/gemini";
 
 function logAiError(context: string, error: unknown, extra?: Record<string, unknown>) {
   const message = error instanceof Error ? error.message : String(error);
@@ -628,7 +628,18 @@ Always return ONLY the JSON object. Do not include other text.`;
 
       const userPrompt = `${conversationHistory}${contactRequestNote}Latest message from lead: "${args.prompt}"`;
 
-      const { text: rawText } = await generateWithGemini(ctx, systemPrompt, userPrompt, { jsonMode: true });
+      // Use vision if an image URL is provided in context
+      const imageUrl: string | undefined = context.imageUrl;
+      let rawText: string;
+      if (imageUrl) {
+        logAiInfo("REPLY", "Using Gemini vision to analyze image", { leadId: args.leadId, imageUrl: imageUrl.substring(0, 80) });
+        const visionSystemPrompt = systemPrompt + `\n\nIMAGE ANALYSIS: The lead has sent an image. Analyze the image to identify any pharmaceutical product, medicine, or product label visible in it. If you can identify a product name or molecule, use "send_product" to look it up in the Cafoli catalog. If the image shows a product label, extract the brand name and/or molecule and use "send_product". If you cannot identify any product from the image, use "reply" to ask the lead to type the product name.`;
+        const result = await generateWithGeminiVision(ctx, visionSystemPrompt, userPrompt, imageUrl, { jsonMode: true });
+        rawText = result.text;
+      } else {
+        const result = await generateWithGemini(ctx, systemPrompt, userPrompt, { jsonMode: true });
+        rawText = result.text;
+      }
       logAiInfo("REPLY", "Raw AI response", { rawText: rawText.substring(0, 200) });
 
       const jsonStr = extractJsonFromMarkdown(rawText);

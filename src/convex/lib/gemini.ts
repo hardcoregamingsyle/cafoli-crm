@@ -112,3 +112,94 @@ export async function generateWithGemini(
 
   return { text: generatedText, model: usedModel };
 }
+
+// Vision-capable models (support image input)
+const visionModels = [
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
+  "gemini-2.5-flash-lite",
+];
+
+/**
+ * Generate content with Gemini using an image URL (vision capability).
+ * Downloads the image and passes it as inline data to Gemini.
+ */
+export async function generateWithGeminiVision(
+  ctx: ActionCtx,
+  systemPrompt: string,
+  userPrompt: string,
+  imageUrl: string,
+  config: { jsonMode?: boolean } = {}
+) {
+  const allKeys = await getGeminiKeys(ctx);
+
+  let lastError: any;
+  let success = false;
+  let generatedText = "";
+  let usedModel = "";
+
+  // Download the image
+  let imageData: { data: string; mimeType: string } | null = null;
+  try {
+    const response = await fetch(imageUrl, { signal: AbortSignal.timeout(15000) });
+    if (response.ok) {
+      const buffer = await response.arrayBuffer();
+      const base64 = Buffer.from(buffer).toString("base64");
+      const contentType = response.headers.get("content-type") || "image/jpeg";
+      const mimeType = contentType.split(";")[0].trim();
+      imageData = { data: base64, mimeType };
+    }
+  } catch (e) {
+    console.warn("Failed to download image for vision:", e);
+  }
+
+  if (!imageData) {
+    // Fall back to text-only if image download fails
+    return generateWithGemini(ctx, systemPrompt, userPrompt, config);
+  }
+
+  for (const modelName of visionModels) {
+    for (const key of allKeys) {
+      const genAI = new GoogleGenerativeAI(key.apiKey);
+      try {
+        const isJsonMode = config.jsonMode;
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: isJsonMode ? { responseMimeType: "application/json" } : undefined,
+        });
+
+        const result = await model.generateContent([
+          systemPrompt,
+          {
+            inlineData: {
+              data: imageData.data,
+              mimeType: imageData.mimeType,
+            },
+          },
+          userPrompt,
+        ]);
+
+        generatedText = result.response.text();
+
+        if (key.keyId) {
+          // @ts-ignore
+          await ctx.runMutation(internal.geminiMutations.incrementUsage, { keyId: key.keyId });
+        }
+
+        success = true;
+        usedModel = modelName;
+        break;
+      } catch (error) {
+        console.warn(`Vision model ${modelName} failed:`, error);
+        lastError = error;
+      }
+    }
+    if (success) break;
+  }
+
+  if (!success) {
+    throw lastError || new Error("Failed to generate vision content");
+  }
+
+  return { text: generatedText, model: usedModel };
+}
