@@ -1,32 +1,15 @@
 import { cronJobs } from "convex/server";
 import { internal as internalApi } from "./_generated/api";
 
-// Import internal with type bypass to avoid circular type instantiation
 const internal = internalApi as any;
 
 const crons = cronJobs();
 
-// Fetch leads from Google Sheet every 5 minutes
+// Fetch leads from Pharmavends every 5 minutes
 crons.interval(
   "fetch_pharmavends_leads",
   { minutes: 5 },
   internal.pharmavends.fetchPharmavendsLeads,
-  {}
-);
-
-// Mark cold caller leads every hour
-crons.interval(
-  "mark_cold_caller_leads",
-  { minutes: 60 },
-  internal.coldCallerLeads.markColdCallerLeads,
-  {}
-);
-
-// Allocate cold caller leads daily at 9 AM IST (3:30 AM UTC)
-crons.cron(
-  "allocate_cold_caller_leads",
-  "30 3 * * *",
-  internal.coldCallerLeads.allocateColdCallerLeads,
   {}
 );
 
@@ -38,7 +21,74 @@ crons.interval(
   {}
 );
 
-// Daily report at 7 PM IST (1:30 PM UTC same day)
+// Auto-geocode leads every 5 minutes
+crons.interval(
+  "auto_geocode_leads",
+  { minutes: 5 },
+  internal.geocoding.batchGeocodeLeads,
+  {}
+);
+
+// Daily maintenance at 1:30 AM IST (8 PM UTC): mark cold callers, cleanup bulk contacts, cleanup logs, cleanup sessions
+crons.cron(
+  "daily_maintenance",
+  "0 20 * * *",
+  internal.bulkMessaging.cleanupOldContacts,
+  {}
+);
+
+crons.cron(
+  "daily_mark_cold_callers",
+  "5 20 * * *",
+  internal.coldCallerLeads.markColdCallerLeads,
+  {}
+);
+
+crons.cron(
+  "daily_cleanup_logs",
+  "10 20 * * *",
+  internal.activityLogs.cleanupOldLogs,
+  {}
+);
+
+crons.cron(
+  "daily_cleanup_sessions",
+  "15 20 * * *",
+  internal.activeChatSessions.cleanupStaleSessionsInternal,
+  {}
+);
+
+crons.cron(
+  "daily_cleanup_transient",
+  "20 20 * * *",
+  internal.migrations.cleanupTransientData,
+  {}
+);
+
+// Allocate cold caller leads daily at 9 AM IST (3:30 AM UTC)
+crons.cron(
+  "allocate_cold_caller_leads",
+  "30 3 * * *",
+  internal.coldCallerLeads.allocateColdCallerLeads,
+  {}
+);
+
+// Score leads + regenerate summaries daily at 2 AM IST (8:30 PM UTC previous day)
+crons.cron(
+  "score_leads_daily",
+  "30 20 * * *",
+  internal.ai.scoreLeadsJob,
+  {}
+);
+
+crons.cron(
+  "regenerate_summaries_and_scores",
+  "0 21 * * *",
+  internal.ai.dailySummaryAndScoreRegeneration,
+  {}
+);
+
+// Daily report at 7 PM IST (1:30 PM UTC)
 crons.cron(
   "daily_report_email",
   "30 13 * * *",
@@ -54,7 +104,7 @@ crons.cron(
   { reportType: "weekly" }
 );
 
-// Monthly report on 2nd of every month at 12 AM IST (1st 6:30 PM UTC)
+// Monthly report on 1st of every month at 6:30 PM UTC
 crons.cron(
   "monthly_report_email",
   "30 18 1 * *",
@@ -62,7 +112,7 @@ crons.cron(
   { reportType: "monthly" }
 );
 
-// Quarterly report on 2nd of Jan, Apr, Jul, Oct at 12 AM IST
+// Quarterly report on 1st of Jan, Apr, Jul, Oct
 crons.cron(
   "quarterly_report_email",
   "30 18 1 1,4,7,10 *",
@@ -70,68 +120,12 @@ crons.cron(
   { reportType: "quarterly" }
 );
 
-// Yearly report on January 2nd at 12 AM IST
+// Yearly report on January 1st
 crons.cron(
   "yearly_report_email",
   "30 18 1 1 *",
   internal.reportPdfGenerator.sendScheduledReports,
   { reportType: "yearly" }
-);
-
-// Score leads daily at 2 AM IST (8:30 PM UTC previous day)
-crons.cron(
-  "score_leads_daily",
-  "30 20 * * *",
-  internal.ai.scoreLeadsJob,
-  {}
-);
-
-// Regenerate summaries and scores daily at 12 AM IST (6:30 PM UTC previous day)
-crons.cron(
-  "regenerate_summaries_and_scores",
-  "30 18 * * *",
-  internal.ai.dailySummaryAndScoreRegeneration,
-  {}
-);
-
-// Cleanup old bulk contacts daily at 1 AM IST (7:30 PM UTC previous day)
-crons.cron(
-  "cleanup_old_bulk_contacts",
-  "30 19 * * *",
-  internal.bulkMessaging.cleanupOldContacts,
-  {}
-);
-
-// Cleanup activity logs older than 24 hours — runs every hour
-crons.interval(
-  "cleanup_activity_logs",
-  { minutes: 60 },
-  internal.activityLogs.cleanupOldLogs,
-  {}
-);
-
-// Cleanup stale chat sessions every hour
-crons.interval(
-  "cleanup_chat_sessions",
-  { minutes: 60 },
-  internal.activeChatSessions.cleanupStaleSessionsInternal,
-  {}
-);
-
-// Cleanup transient data (batchProcessControl, exportLogs, old campaignExecutions) daily
-crons.cron(
-  "cleanup_transient_data",
-  "0 2 * * *",
-  internal.migrations.cleanupTransientData,
-  {}
-);
-
-// Auto-geocode leads with location data every 5 minutes
-crons.interval(
-  "auto_geocode_leads",
-  { minutes: 5 },
-  internal.geocoding.batchGeocodeLeads,
-  {}
 );
 
 export default crons;
