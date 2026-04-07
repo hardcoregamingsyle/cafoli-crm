@@ -55,7 +55,7 @@ export const createLead = mutation({
     });
 
     // Update sources cache
-    await ctx.scheduler.runAfter(0, internal.leads.queries.meta.updateSourcesCache, { source: args.source });
+    await ctx.scheduler.runAfter(0, internal.leads.mutations.updateSourcesCache, { source: args.source });
 
     // Log lead creation
     await ctx.scheduler.runAfter(0, internal.activityLogs.logActivity, {

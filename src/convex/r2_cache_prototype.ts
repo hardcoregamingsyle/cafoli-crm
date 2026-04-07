@@ -408,7 +408,8 @@ export const getPaginatedR2Leads = query({
 export const getCombinedStats = query({
   args: {},
   handler: async (ctx) => {
-    const convexLeads = await ctx.db.query("leads").take(5000);
+    // Use lightweight samples instead of full table scans
+    const convexLeads = await ctx.db.query("leads").withIndex("by_last_activity").order("desc").take(1000);
 
     const now = Date.now();
     const oneDayAgo = now - 86400000;
@@ -418,7 +419,7 @@ export const getCombinedStats = query({
       (l) => l.nextFollowUpDate && l.nextFollowUpDate < now
     ).length;
 
-    const r2Count = await ctx.db.query("r2_leads_mock").take(10000);
+    const r2Count = await ctx.db.query("r2_leads_mock").take(1000);
 
     return {
       totalLeads: convexLeads.length + r2Count.length,

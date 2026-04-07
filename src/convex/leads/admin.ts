@@ -186,7 +186,7 @@ export const bulkImportLeads = mutation({
       });
 
       // Update sources cache
-      await ctx.scheduler.runAfter(0, internal.leads.queries.meta.updateSourcesCache, { source });
+      await ctx.scheduler.runAfter(0, internal.leads.mutations.updateSourcesCache, { source });
 
       // Send welcome email if email exists
       if (leadData.email) {

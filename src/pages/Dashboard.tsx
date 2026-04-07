@@ -14,7 +14,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   const campaigns = useQuery(api.campaignQueries.getCampaigns, user ? { userId: user._id } : "skip") || [];
-  const leads = useQuery(api.leads.queries.getLeads, user ? { filter: "all", userId: user._id } : "skip") || [];
+  const dashStats = useQuery(api.leads.queries.getDashboardStats, user ? { userId: user._id } : "skip");
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -22,16 +22,11 @@ export default function Dashboard() {
     }
   }, [authLoading, isAuthenticated, navigate]);
 
-  const now = Date.now();
-  const oneDayAgo = now - 86400000;
-  const newLeadsToday = (leads as any[]).filter((l: any) => l._creationTime > oneDayAgo).length;
-  const pendingFollowUps = (leads as any[]).filter((l: any) => l.nextFollowUpDate && l.nextFollowUpDate < now).length;
-  
   const stats = useMemo(() => {
     return [
       {
         title: "Total Leads",
-        value: leads.length,
+        value: dashStats?.totalLeads ?? 0,
         icon: Users,
         description: "All leads in system",
       },
@@ -43,20 +38,20 @@ export default function Dashboard() {
       },
       {
         title: "New Leads Today",
-        value: newLeadsToday,
+        value: dashStats?.newLeadsToday ?? 0,
         icon: Activity,
         description: "Last 24 hours",
       },
       {
         title: "Pending Follow-ups",
-        value: pendingFollowUps,
+        value: dashStats?.pendingFollowUps ?? 0,
         icon: MessageSquare,
         description: "Needs attention",
       },
     ];
-  }, [leads, campaigns, newLeadsToday, pendingFollowUps]);
+  }, [dashStats, campaigns]);
 
-  const recentLeads = useMemo(() => leads.slice(0, 5), [leads]);
+  const recentLeads = useMemo(() => dashStats?.recentLeads ?? [], [dashStats]);
   const recentCampaigns = useMemo(() => campaigns.slice(0, 5), [campaigns]);
 
   if (authLoading || !user) {
@@ -114,7 +109,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                 ))}
-                {leads.length === 0 && (
+                {recentLeads.length === 0 && (
                   <p className="text-muted-foreground text-sm">No leads found.</p>
                 )}
               </div>
