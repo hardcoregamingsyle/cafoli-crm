@@ -29,6 +29,14 @@ crons.interval(
   {}
 );
 
+// Check for questionnaire reminders every hour
+crons.interval(
+  "questionnaire_reminders",
+  { minutes: 60 },
+  internal.questionnaire.processQuestionnaireReminders,
+  {}
+);
+
 // Daily maintenance at 1:30 AM IST (8 PM UTC): mark cold callers, cleanup bulk contacts, cleanup logs, cleanup sessions
 crons.cron(
   "daily_maintenance",

@@ -72,6 +72,7 @@ import type * as pharmavendsMutations from "../pharmavendsMutations.js";
 import type * as products from "../products.js";
 import type * as pushNotifications from "../pushNotifications.js";
 import type * as pushNotificationsActions from "../pushNotificationsActions.js";
+import type * as questionnaire from "../questionnaire.js";
 import type * as quickReplies from "../quickReplies.js";
 import type * as r2_cache_prototype from "../r2_cache_prototype.js";
 import type * as rangePdfs from "../rangePdfs.js";
@@ -177,6 +178,7 @@ declare const fullApi: ApiFromModules<{
   products: typeof products;
   pushNotifications: typeof pushNotifications;
   pushNotificationsActions: typeof pushNotificationsActions;
+  questionnaire: typeof questionnaire;
   quickReplies: typeof quickReplies;
   r2_cache_prototype: typeof r2_cache_prototype;
   rangePdfs: typeof rangePdfs;

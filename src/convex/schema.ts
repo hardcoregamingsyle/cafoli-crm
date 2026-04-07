@@ -56,6 +56,14 @@ export default defineSchema({
     indiamartMetadata: v.optional(v.any()),
     searchText: v.optional(v.string()),
     welcomeEmailSent: v.optional(v.boolean()),
+    // Questionnaire tracking
+    questionnaireSentAt: v.optional(v.number()),
+    questionnaireAnswered: v.optional(v.boolean()),
+    questionnaireReminderSentAt: v.optional(v.number()),
+    // Questionnaire answers stored in lead profile
+    businessType: v.optional(v.string()), // Wholesaler / Retailer / Doctor / Hospital / Distributor
+    marketingArea: v.optional(v.string()),
+    preferredCallTime: v.optional(v.string()),
   }).index("by_mobile", ["mobile"])
     .index("by_assignedTo", ["assignedTo"])
     .index("by_status", ["status"])
@@ -66,6 +74,7 @@ export default defineSchema({
     .index("by_source", ["source"])
     .index("by_source_and_last_activity", ["source", "lastActivity"])
     .index("by_indiamart_id", ["indiamartUniqueId"])
+    .index("by_questionnaire_sent", ["questionnaireSentAt"])
     .searchIndex("search_all", {
       searchField: "searchText",
       filterFields: ["assignedTo", "status"],

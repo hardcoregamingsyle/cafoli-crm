@@ -678,9 +678,7 @@ Always return ONLY the JSON object. Do not include other text.`;
           leadId: args.leadId,
           phoneNumber: args.phoneNumber,
           message: aiAction.text,
-          quotedMessageExternalId: args.replyingToExternalId,
         });
-
       } else if (aiAction.action === "send_product") {
         logAiInfo("SEND_PRODUCT", `Looking up product: "${aiAction.resource_name}"`, { leadId: args.leadId });
 
@@ -943,6 +941,33 @@ Always return ONLY the JSON object. Do not include other text.`;
       }
 
       logAiInfo("REPLY", "AI reply generation complete", { action: aiAction.action, leadId: args.leadId });
+
+      // ─── Questionnaire: send after first AI reply if not yet sent ───────────
+      // Only send for auto-replies (not manual staff replies), and only once per lead
+      if (args.isAutoReply) {
+        try {
+          const lead = await ctx.runQuery(internal.leads.queries.basic.getLeadByIdInternal, { leadId: args.leadId });
+          if (lead && !lead.questionnaireSentAt) {
+            // Check if there's been at least 1 prior exchange (recentMessages has content)
+            const hasExchange = recentMessages.length >= 1;
+            if (hasExchange) {
+              logAiInfo("QUESTIONNAIRE", "Sending questionnaire to lead", { leadId: args.leadId });
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              await ctx.runAction(internal.whatsapp.internal.sendMessage, {
+                leadId: args.leadId,
+                phoneNumber: args.phoneNumber,
+                message: `Thank you for contacting us 🙏\n\nTo assist you better, kindly share the following details:\n\n1️⃣ Agency / Firm Name\n2️⃣ Marketing Area / Location\n3️⃣ Business Type (Wholesaler / Retailer / Doctor / Hospital / Distributor)\n4️⃣ Preferred Time for Call\n5️⃣ Alternate Contact Number (if any)\n6️⃣ Email ID\n\nOnce we receive your details, our team will connect with you shortly 👍`,
+              });
+              await ctx.runMutation(internal.questionnaire.markQuestionnaireSent, {
+                leadId: args.leadId,
+              });
+            }
+          }
+        } catch (qErr) {
+          logAiError("QUESTIONNAIRE", qErr, { leadId: args.leadId });
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────────
 
     } catch (error) {
       logAiError("GENERATE_REPLY", error, { leadId: args.leadId, phoneNumber: args.phoneNumber, prompt: args.prompt.substring(0, 100) });
