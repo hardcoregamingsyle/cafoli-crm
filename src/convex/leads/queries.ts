@@ -19,4 +19,5 @@ export {
   getUniqueSources,
   getAllLeadsForExport,
   getNextDownloadNumber,
+  getDashboardStats,
 } from "./queries/index";
