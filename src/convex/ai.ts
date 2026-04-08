@@ -126,24 +126,16 @@ export const generateLeadSummaryWithChatInternal = internalAction({
     leadId: v.id("leads"),
   },
   handler: async (ctx, args) => {
-    // Fetch lead data
-    const lead = await ctx.runQuery(internal.aiBackgroundHelpers.getLeadByIdInternal, {
+    // Single consolidated query instead of 3 separate queries
+    const context = await ctx.runQuery(internal.aiBackgroundHelpers.getFullLeadContextInternal, {
       leadId: args.leadId,
     });
 
-    if (!lead) {
+    if (!context || !context.lead) {
       throw new Error("Lead not found");
     }
 
-    // Fetch WhatsApp messages
-    const whatsappMessages = await ctx.runQuery(internal.aiBackgroundHelpers.getWhatsAppMessagesInternal, {
-      leadId: args.leadId,
-    });
-
-    // Fetch comments
-    const comments = await ctx.runQuery(internal.aiBackgroundHelpers.getCommentsInternal, {
-      leadId: args.leadId,
-    });
+    const { lead, messages: whatsappMessages, comments } = context;
 
     const systemPrompt = `You are a CRM assistant. Generate a concise 1-2 sentence summary of this lead for quick prioritization. Focus on: lead quality, urgency, key action needed, and recent engagement. Be brief and actionable.`;
 
@@ -181,7 +173,6 @@ export const generateLeadSummaryWithChat: any = action({
     leadId: v.id("leads"),
   },
   handler: async (ctx, args): Promise<string> => {
-    // Just delegate to the internal version
     return await ctx.runAction(internal.ai.generateLeadSummaryWithChatInternal, {
       leadId: args.leadId,
     });
@@ -260,30 +251,16 @@ export const scoreLeadWithContextInternal = internalAction({
     leadId: v.id("leads"),
   },
   handler: async (ctx, args) => {
-    // Fetch lead data
-    const lead = await ctx.runQuery(internal.aiBackgroundHelpers.getLeadByIdInternal, {
+    // Single consolidated query instead of 4 separate queries
+    const context = await ctx.runQuery(internal.aiBackgroundHelpers.getFullLeadContextInternal, {
       leadId: args.leadId,
     });
 
-    if (!lead) {
+    if (!context || !context.lead) {
       throw new Error("Lead not found");
     }
 
-    // Fetch WhatsApp messages
-    const whatsappMessages = await ctx.runQuery(internal.aiBackgroundHelpers.getWhatsAppMessagesInternal, {
-      leadId: args.leadId,
-    });
-
-    // Fetch comments
-    const comments = await ctx.runQuery(internal.aiBackgroundHelpers.getCommentsInternal, {
-      leadId: args.leadId,
-    });
-
-    // Try to get existing summary
-    const existingSummary = await ctx.runQuery(internal.aiBackgroundHelpers.getSummaryInternal, {
-      leadId: args.leadId,
-      lastActivityHash: `${lead.lastActivity}`,
-    });
+    const { lead, messages: whatsappMessages, comments, summary: existingSummary } = context;
 
     const systemPrompt = `You are an AI lead scoring expert for pharmaceutical CRM. Score leads 0-100 based on:
     - Engagement (comments, messages, follow-ups)
@@ -347,7 +324,6 @@ export const scoreLeadWithContext: any = action({
     leadId: v.id("leads"),
   },
   handler: async (ctx, args): Promise<any> => {
-    // Just delegate to the internal version
     return await ctx.runAction(internal.ai.scoreLeadWithContextInternal, {
       leadId: args.leadId,
     });

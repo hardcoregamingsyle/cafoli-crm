@@ -219,3 +219,40 @@ export const getLeadsNeedingScores = internalQuery({
     return leadsNeedingScores;
   },
 });
+
+// Consolidated context fetcher — replaces 4 separate queries with 1
+export const getFullLeadContextInternal = internalQuery({
+  args: { leadId: v.id("leads") },
+  handler: async (ctx, args) => {
+    const lead = await ctx.db.get(args.leadId);
+    if (!lead) return null;
+
+    const chat = await ctx.db
+      .query("chats")
+      .withIndex("by_lead", (q) => q.eq("leadId", args.leadId))
+      .first();
+
+    const messages = chat
+      ? (await ctx.db
+          .query("messages")
+          .withIndex("by_chat", (q) => q.eq("chatId", chat._id))
+          .order("desc")
+          .take(20))
+          .map((m) => ({ direction: m.direction, content: m.content, timestamp: m._creationTime }))
+      : [];
+
+    const cmts = await ctx.db
+      .query("comments")
+      .withIndex("by_lead", (q) => q.eq("leadId", args.leadId))
+      .order("desc")
+      .take(10);
+    const comments = cmts.map((c) => c.content || "").filter(Boolean);
+
+    const summary = await ctx.db
+      .query("leadSummaries")
+      .withIndex("by_lead", (q) => q.eq("leadId", args.leadId))
+      .first();
+
+    return { lead, messages, comments, summary };
+  },
+});

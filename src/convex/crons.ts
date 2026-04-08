@@ -5,26 +5,26 @@ const internal = internalApi as any;
 
 const crons = cronJobs();
 
-// Fetch leads from Pharmavends every 5 minutes
+// Fetch leads from Pharmavends every 30 minutes
 crons.interval(
   "fetch_pharmavends_leads",
-  { minutes: 5 },
+  { minutes: 30 },
   internal.pharmavends.fetchPharmavendsLeads,
   {}
 );
 
-// Process campaign executions every 5 minutes
+// Process campaign executions every 15 minutes
 crons.interval(
   "process_campaign_executions",
-  { minutes: 5 },
+  { minutes: 15 },
   internal.campaignExecutor.processCampaignExecutions,
   {}
 );
 
-// Auto-geocode leads every 5 minutes
+// Auto-geocode leads every 30 minutes
 crons.interval(
   "auto_geocode_leads",
-  { minutes: 5 },
+  { minutes: 30 },
   internal.geocoding.batchGeocodeLeads,
   {}
 );
