@@ -2,7 +2,7 @@
 import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { generateWithGemini, generateWithGeminiVision, extractJsonFromMarkdown } from "./lib/gemini";
+import { generateWithGemini, generateWithGeminiVision, analyzeMedia, extractJsonFromMarkdown } from "./lib/gemini";
 
 function logAiError(context: string, error: unknown, extra?: Record<string, unknown>) {
   const message = error instanceof Error ? error.message : String(error);
@@ -644,14 +644,47 @@ Always return ONLY the JSON object. Do not include other text.`;
 
       const userPrompt = `${conversationHistory}${contactRequestNote}Latest message from lead: "${args.prompt}"`;
 
-      // Use vision if an image URL is provided in context
+      // Universal media analysis — handles images, audio, video, documents
       const imageUrl: string | undefined = context.imageUrl;
+      const mediaUrl: string | undefined = context.mediaUrl;
+      const mediaType: string | undefined = context.mediaType;
+      const mediaMimeType: string | undefined = context.mediaMimeType;
+
+      // Determine the effective media URL and type
+      const effectiveMediaUrl = mediaUrl || imageUrl;
+      const effectiveMediaType = mediaType || (imageUrl ? "image" : undefined);
+
       let rawText: string;
-      if (imageUrl) {
-        logAiInfo("REPLY", "Using Gemini vision to analyze image", { leadId: args.leadId, imageUrl: imageUrl.substring(0, 80) });
-        const visionSystemPrompt = systemPrompt + `\n\nIMAGE ANALYSIS: The lead has sent an image. Analyze the image to identify any pharmaceutical product, medicine, or product label visible in it. If you can identify a product name or molecule, use "send_product" to look it up in the Cafoli catalog. If the image shows a product label, extract the brand name and/or molecule and use "send_product". If you cannot identify any product from the image, use "reply" to ask the lead to type the product name.`;
-        const result = await generateWithGeminiVision(ctx, visionSystemPrompt, userPrompt, imageUrl, { jsonMode: true });
+      if (effectiveMediaUrl && effectiveMediaType) {
+        logAiInfo("REPLY", `Analyzing ${effectiveMediaType} media with Claude`, { leadId: args.leadId, mediaType: effectiveMediaType });
+
+        // Build media-type-specific system prompt additions
+        const mediaSystemAdditions: Record<string, string> = {
+          image: `\n\nIMAGE ANALYSIS: The lead has sent an image. Analyze it to identify any pharmaceutical product, medicine, or product label. If you can identify a product name or molecule, use "send_product". If the image shows a product label, extract the brand name and/or molecule. If you cannot identify any product, use "reply" to ask the lead to type the product name.`,
+          audio: `\n\nAUDIO MESSAGE: The lead has sent a voice/audio message. The transcription is included in the analysis. Respond based on what they said. If they mentioned a product name or molecule, use "send_product". If they asked for a catalogue, use "send_full_catalogue".`,
+          document: `\n\nDOCUMENT: The lead has sent a document/PDF. Analyze its content. If it contains product names, prescriptions, or order details, respond accordingly. If they want product info, use "send_product".`,
+          video: `\n\nVIDEO MESSAGE: The lead has sent a video. Acknowledge it warmly and ask them to describe what they're looking for or send a clearer image/text of the product they're interested in.`,
+          file: `\n\nFILE: The lead has sent a file. Acknowledge it and ask how you can help them.`,
+        };
+
+        const mediaAddition = mediaSystemAdditions[effectiveMediaType] || mediaSystemAdditions.file;
+        const mediaSystemPrompt = systemPrompt + mediaAddition;
+
+        const result = await analyzeMedia(
+          ctx,
+          mediaSystemPrompt,
+          userPrompt,
+          effectiveMediaUrl,
+          effectiveMediaType as "image" | "audio" | "video" | "document" | "file",
+          mediaMimeType,
+          { jsonMode: true }
+        );
         rawText = result.text;
+
+        // Log transcription for audio messages
+        if (effectiveMediaType === "audio" && result.transcription) {
+          logAiInfo("AUDIO_TRANSCRIPTION", `Transcribed: ${result.transcription.substring(0, 200)}`, { leadId: args.leadId });
+        }
       } else {
         const result = await generateWithGemini(ctx, systemPrompt, userPrompt, { jsonMode: true });
         rawText = result.text;

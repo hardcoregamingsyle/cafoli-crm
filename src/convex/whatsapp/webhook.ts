@@ -21,7 +21,7 @@ export const handleIncomingMessage = internalAction({
   },
   handler: async (ctx, args) => {
     try {
-      console.log("🔵 handleIncomingMessage called", { from: args.from, messageId: args.messageId, text: args.text });
+      console.log("🔵 handleIncomingMessage called", { from: args.from, messageId: args.messageId, text: args.text, type: args.type });
       
       const { leadId, isNewLead } = await ctx.runMutation(internal.whatsappMutations.processWhatsAppLead, {
         phoneNumber: args.from,
@@ -74,30 +74,35 @@ export const handleIncomingMessage = internalAction({
           }
         }
 
+        // Determine message type for storage
         let messageType = "text";
         if (args.type === "image") {
           messageType = "image";
-        } else if (args.type === "document" || args.type === "video" || args.type === "audio") {
-          messageType = "file";
+        } else if (args.type === "audio") {
+          messageType = "audio";
+        } else if (args.type === "video") {
+          messageType = "video";
+        } else if (args.type === "document") {
+          messageType = "document";
+        } else if (args.type === "sticker") {
+          messageType = "image";
         }
 
         // storeMessage handles deduplication internally via by_external_id index
-        {
-          await ctx.runMutation(internal.whatsappMutations.storeMessage, {
-            leadId,
-            phoneNumber: args.from,
-            content: args.text,
-            direction: "inbound",
-            status: "received",
-            externalId: args.messageId,
-            messageType: messageType !== "text" ? messageType : undefined,
-            mediaUrl: mediaUrl || undefined,
-            mediaName: args.mediaFilename || undefined,
-            mediaMimeType: args.mediaMimeType || undefined,
-            quotedMessageExternalId: args.quotedMessageExternalId,
-          });
-          console.log("✅ Message stored in database");
-        }
+        await ctx.runMutation(internal.whatsappMutations.storeMessage, {
+          leadId,
+          phoneNumber: args.from,
+          content: args.text,
+          direction: "inbound",
+          status: "received",
+          externalId: args.messageId,
+          messageType: messageType !== "text" ? messageType : undefined,
+          mediaUrl: mediaUrl || undefined,
+          mediaName: args.mediaFilename || undefined,
+          mediaMimeType: args.mediaMimeType || undefined,
+          quotedMessageExternalId: args.quotedMessageExternalId,
+        });
+        console.log("✅ Message stored in database");
 
         if (isNewLead) {
           // Always send welcome message to new leads
@@ -136,52 +141,59 @@ export const handleIncomingMessage = internalAction({
             }
           }
         } else {
-            // Trigger AI for both text and media messages
-            const isChatActive = await ctx.runQuery(internal.activeChatSessions.isLeadChatActive, { leadId });
+          // Trigger AI for both text and media messages
+          const isChatActive = await ctx.runQuery(internal.activeChatSessions.isLeadChatActive, { leadId });
+          
+          if (!isChatActive) {
+            console.log(`🤖 Triggering auto-reply for lead ${leadId} (chat not active, type: ${args.type})`);
             
-            if (!isChatActive) {
-                console.log(`🤖 Triggering auto-reply for lead ${leadId} (chat not active, type: ${args.type})`);
-                
-                const tokenContext = await ctx.runAction(internal.whatsappAi.buildTokenWindowedContext, { leadId });
-                const contactRequestMessage = await ctx.runQuery(internal.whatsappConfig.getContactRequestMessage);
+            const tokenContext = await ctx.runAction(internal.whatsappAi.buildTokenWindowedContext, { leadId });
+            const contactRequestMessage = await ctx.runQuery(internal.whatsappConfig.getContactRequestMessage);
 
-                // Build a meaningful prompt for media messages
-                let prompt = args.text;
-                let imageUrlForAi: string | undefined = undefined;
-                if (args.type !== "text" || !args.text) {
-                    const mediaTypeLabel: Record<string, string> = {
-                        image: "an image",
-                        document: "a document",
-                        video: "a video",
-                        audio: "a voice message / audio",
-                        sticker: "a sticker",
-                    };
-                    const label = mediaTypeLabel[args.type] || "a media file";
-                    const filename = args.mediaFilename ? ` (${args.mediaFilename})` : "";
-                    prompt = args.text
-                        ? `${args.text} [User also sent ${label}${filename}]`
-                        : `[User sent ${label}${filename}]`;
-                    // Pass image URL for vision analysis
-                    if (args.type === "image" && mediaUrl) {
-                        imageUrlForAi = mediaUrl;
-                    }
-                }
+            // Build a meaningful prompt for media messages
+            let prompt = args.text;
+            let mediaUrlForAi: string | undefined = undefined;
+            let mediaTypeForAi: string | undefined = undefined;
 
-                await ctx.runAction(internal.whatsappAi.generateAndSendAiReplyInternal, {
-                        leadId,
-                        phoneNumber: args.from,
-                        context: { 
-                            ...tokenContext,
-                            contactRequestMessage,
-                            imageUrl: imageUrlForAi,
-                        },
-                        prompt,
-                        isAutoReply: true
-                });
-                console.log("✅ Auto-reply sent");
-            } else {
-                console.log(`⏭️ Skipping auto-reply for lead ${leadId} (chat is actively being viewed)`);
+            if (args.type !== "text" || !args.text) {
+              const mediaTypeLabel: Record<string, string> = {
+                image: "an image",
+                document: "a document",
+                video: "a video",
+                audio: "a voice message / audio",
+                sticker: "a sticker",
+              };
+              const label = mediaTypeLabel[args.type] || "a media file";
+              const filename = args.mediaFilename ? ` (${args.mediaFilename})` : "";
+              prompt = args.text
+                ? `${args.text} [User also sent ${label}${filename}]`
+                : `[User sent ${label}${filename}]`;
+              
+              // Pass media URL and type for AI analysis
+              if (mediaUrl) {
+                mediaUrlForAi = mediaUrl;
+                mediaTypeForAi = args.type;
+              }
             }
+
+            await ctx.runAction(internal.whatsappAi.generateAndSendAiReplyInternal, {
+              leadId,
+              phoneNumber: args.from,
+              context: { 
+                ...tokenContext,
+                contactRequestMessage,
+                imageUrl: args.type === "image" ? mediaUrlForAi : undefined,
+                mediaUrl: mediaUrlForAi,
+                mediaType: mediaTypeForAi,
+                mediaMimeType: args.mediaMimeType,
+              },
+              prompt,
+              isAutoReply: true
+            });
+            console.log("✅ Auto-reply sent");
+          } else {
+            console.log(`⏭️ Skipping auto-reply for lead ${leadId} (chat is actively being viewed)`);
+          }
         }
 
         console.log(`✅ Successfully processed incoming message from ${args.from} for lead ${leadId}`);
